@@ -632,7 +632,10 @@ ExternalProject_Get_Property(crabnet SOURCE_DIR BINARY_DIR)
 set(CRABNET_SOURCE_DIR ${SOURCE_DIR})
 set(CRABNET_BINARY_DIR ${BINARY_DIR})
 
-# Isowind: the engine is this repository (two levels up), exported clean so the build folder isn't copied into itself
+# Isowind: the engine is this repository (two levels up), exported clean so the build folder isn't copied into itself,
+# with its git tree hash as the version (multiplayer only lets the same version play together)
+execute_process(COMMAND git -C ${CMAKE_SOURCE_DIR}/../.. rev-parse HEAD^{tree}
+        OUTPUT_VARIABLE ISOWIND_SOURCE_HASH OUTPUT_STRIP_TRAILING_WHITESPACE)
 ExternalProject_Add(openmw
         DEPENDS boost openal osg mygui ffmpeg sdl2 bullet lz4 luajit libicu crabnet
 
@@ -644,6 +647,7 @@ ExternalProject_Add(openmw
         ${COMMON_CMAKE_ARGS}
         ${OPENMW_COMMON}
         -DBUILD_OPENMW_MP=OFF
+        -DISOWIND_SOURCE_HASH=${ISOWIND_SOURCE_HASH}
         -DRakNet_INCLUDES=${CRABNET_SOURCE_DIR}/include
         -DRakNet_LIBRARY_RELEASE=${CRABNET_BINARY_DIR}/lib/libRakNetLibStatic.a
         -DRakNet_LIBRARY_DEBUG=${CRABNET_BINARY_DIR}/lib/libRakNetLibStatic.a

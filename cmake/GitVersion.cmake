@@ -6,8 +6,11 @@ execute_process (
     OUTPUT_STRIP_TRAILING_WHITESPACE
     ERROR_QUIET)
 
+# Isowind: the hash of the source tree rather than of the commit. Multiplayer only lets the same version play
+# together (the hash is part of the connection password), and the tree is the same wherever that source is built:
+# here, and from the snapshot commits pushed to GitHub for the Linux and Android builds.
 execute_process (
-    COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
+    COMMAND ${GIT_EXECUTABLE} rev-parse HEAD^{tree}
     WORKING_DIRECTORY ${OpenMW_SOURCE_DIR}
     RESULT_VARIABLE EXITCODE2
     OUTPUT_VARIABLE COMMITHASH
