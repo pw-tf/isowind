@@ -206,15 +206,21 @@ eventHandler.InitializeDefaultHandlers = function()
 
 		else
 
-			-- Isowind: each player's own kill counts - the killer's, their allies' and those of the players who hit
-			-- it in the last 10 minutes - each sent only to them
+			-- Isowind: each player's own kill counts - the killer's, their allies' (party's) and those of the players
+			-- who hit it in the last 10 minutes - each sent only to them. The killer, not the player whose game
+			-- reported the death (whoever's game runs that cell): someone standing by gets no credit.
 			for uniqueIndex, actor in pairs(actors) do
 
-				local recipients = { pid }
+				local recipients = {}
 				local names = {}
+				local killerPid = actor.killer ~= nil and actor.killer.pid or nil
 
-				for _, alliedName in ipairs(Players[pid].data.alliedPlayers or {}) do
-					table.insert(names, alliedName)
+				if killerPid ~= nil and Players[killerPid] ~= nil and Players[killerPid]:IsLoggedIn() then
+					table.insert(recipients, killerPid)
+
+					for _, alliedName in ipairs(Players[killerPid].data.alliedPlayers or {}) do
+						table.insert(names, alliedName)
+					end
 				end
 
 				if sendKills[uniqueIndex] ~= nil and os.time() - sendKills[uniqueIndex].timestamp < 600 then

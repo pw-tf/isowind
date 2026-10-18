@@ -7,7 +7,7 @@
 -- * Quests, topics, factions, bounties, reputation and kill counts are each player's own, and so is what quest scripts
 --   do to the world's own people and things: enabling or disabling them (isowindStates) or deleting them (isowindTaken),
 --   so a quest that removes someone for one player leaves them there for the others.
--- * Enemies and NPCs come back after they die, once no player is in or next to their cell, after a time from how
+-- * Enemies and NPCs come back after they die, players there or not, after a time from how
 --   tough they were (WoW-like tiers, from their health): trash 1.5 minutes, normal 5, elite 15, bosses 20, divided by
 --   the host's respawn speed. Ones from the game's files are reset on each client ("isowind respawn", a console
 --   command packet the game handles itself); leveled-list ones are spawned again where they first appeared.
@@ -53,7 +53,6 @@ local regrowPatterns = { "^flora_", "^rock_", "^egg_kwama" }
 local seenCells = {}
 local regrown = {}
 
-local isAreaEmpty
 
 local function playerKey(pid)
     return string.lower(Players[pid].accountName)
@@ -348,6 +347,30 @@ local function onObjectState(eventStatus, pid, cellDescription, objects)
     return customEventHooks.makeEventStatus(false, true)
 end
 
+-- Plants and ore that grew back, to a player's game that still has them harvested: { uniqueIndex = { refId, items } }
+local function sendRegrown(pid, cellDescription, grown)
+    tes3mp.ClearObjectList()
+    tes3mp.SetObjectListPid(pid)
+    tes3mp.SetObjectListCell(cellDescription)
+    for uniqueIndex, entry in pairs(grown) do
+        local refNum, mpNum = splitIndex(uniqueIndex)
+        tes3mp.SetObjectRefNum(refNum)
+        tes3mp.SetObjectMpNum(mpNum)
+        tes3mp.SetObjectRefId(entry.refId)
+        for _, item in pairs(entry.items) do
+            tes3mp.SetContainerItemRefId(item.refId)
+            tes3mp.SetContainerItemCount(-item.count)
+            tes3mp.SetContainerItemCharge(item.charge)
+            tes3mp.SetContainerItemEnchantmentCharge(item.enchantmentCharge)
+            tes3mp.SetContainerItemSoul(item.soul)
+            tes3mp.AddContainerItem()
+        end
+        tes3mp.AddObject()
+    end
+    tes3mp.SetObjectListAction(enumerations.container.ADD)
+    tes3mp.SendContainer(false, false)
+end
+
 -- A player loading a cell gets their own loot and pickups there on top of the shared state just sent
 local function onCellLoad(eventStatus, pid, cellDescription)
     local cell = LoadedCells[cellDescription]
@@ -431,26 +454,7 @@ local function onCellLoad(eventStatus, pid, cellDescription)
     -- What grew back since their game last had this cell loaded (their game still has it harvested)
     local grown = regrown[name] ~= nil and regrown[name][cellDescription] or nil
     if grown ~= nil then
-        tes3mp.ClearObjectList()
-        tes3mp.SetObjectListPid(pid)
-        tes3mp.SetObjectListCell(cellDescription)
-        for uniqueIndex, entry in pairs(grown) do
-            local refNum, mpNum = splitIndex(uniqueIndex)
-            tes3mp.SetObjectRefNum(refNum)
-            tes3mp.SetObjectMpNum(mpNum)
-            tes3mp.SetObjectRefId(entry.refId)
-            for _, item in pairs(entry.items) do
-                tes3mp.SetContainerItemRefId(item.refId)
-                tes3mp.SetContainerItemCount(-item.count)
-                tes3mp.SetContainerItemCharge(item.charge)
-                tes3mp.SetContainerItemEnchantmentCharge(item.enchantmentCharge)
-                tes3mp.SetContainerItemSoul(item.soul)
-                tes3mp.AddContainerItem()
-            end
-            tes3mp.AddObject()
-        end
-        tes3mp.SetObjectListAction(enumerations.container.ADD)
-        tes3mp.SendContainer(false, false)
+        sendRegrown(pid, cellDescription, grown)
         regrown[name][cellDescription] = nil
     end
 
@@ -458,7 +462,8 @@ local function onCellLoad(eventStatus, pid, cellDescription)
     seenCells[name][cellDescription] = true
 end
 
--- Plants and ore due to grow back, for players not near them: their harvest is forgotten, and a player whose game has
+-- Plants and ore due to grow back: the player's harvest is forgotten, and their game gets the plant back now if they're
+-- there, else the next time it loads the cell (if it has it loaded this session); the first line goes on as before:
 -- the cell loaded this session gets the plant back the next time they load it
 local function checkRegrowth()
     local regrowths = getRegrowths()
@@ -473,15 +478,24 @@ local function checkRegrowth()
                 end
             end
         end
-        if #ready > 0 and isAreaEmpty(cellDescription) then
+        if #ready > 0 then
             withCell(cellDescription, function(cell)
                 local loot = cell.data.isowindLoot or {}
                 for _, entry in ipairs(ready) do
                     local record = loot[entry.uniqueIndex]
                     local mine = record ~= nil and record.players[entry.name] or nil
+                    local here = nil
+                    for _, visitor in pairs(cell.visitors) do
+                        if Players[visitor] ~= nil and playerKey(visitor) == entry.name then
+                            here = visitor
+                        end
+                    end
                     if mine ~= nil then
                         record.players[entry.name] = nil
-                        if seenCells[entry.name] ~= nil and seenCells[entry.name][cellDescription] then
+                        if here ~= nil then
+                            sendRegrown(here, cellDescription, { [entry.uniqueIndex] = { refId = record.refId,
+                                items = mine } })
+                        elseif seenCells[entry.name] ~= nil and seenCells[entry.name][cellDescription] then
                             regrown[entry.name] = regrown[entry.name] or {}
                             regrown[entry.name][cellDescription] = regrown[entry.name][cellDescription] or {}
                             regrown[entry.name][cellDescription][entry.uniqueIndex] =
@@ -571,31 +585,6 @@ local function onActorDeath(eventStatus, pid, cellDescription, actors)
     WorldInstance:QuicksaveToDrive()
 end
 
--- No player in the cell, or (outdoors) in the cells around it that their game has loaded
-function isAreaEmpty(cellDescription)
-    local loaded = LoadedCells[cellDescription]
-    if loaded ~= nil and tableHelper.getCount(loaded.visitors) > 0 then
-        return false
-    end
-    local x, y = cellDescription:match("^(%-?%d+), (%-?%d+)$")
-    for _, player in pairs(Players) do
-        if player:IsLoggedIn() and player.data.location ~= nil then
-            local playerCell = player.data.location.cell
-            if playerCell == cellDescription then
-                return false
-            end
-            if x ~= nil then
-                local px, py = playerCell:match("^(%-?%d+), (%-?%d+)$")
-                if px ~= nil and math.abs(tonumber(px) - tonumber(x)) <= 1 and
-                    math.abs(tonumber(py) - tonumber(y)) <= 1 then
-                    return false
-                end
-            end
-        end
-    end
-    return true
-end
-
 local function respawnInCell(cellDescription, uniqueIndexes)
     local fromGameFiles = {}
     local leveled = {}
@@ -670,7 +659,7 @@ local function checkRespawns()
                 table.insert(ready, uniqueIndex)
             end
         end
-        if #ready > 0 and isAreaEmpty(cellDescription) then
+        if #ready > 0 then
             respawnInCell(cellDescription, ready)
             for _, uniqueIndex in ipairs(ready) do
                 due[uniqueIndex] = nil

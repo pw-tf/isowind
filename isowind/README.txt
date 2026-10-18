@@ -50,9 +50,11 @@ Hosting a server
    - Name, port (25565 unless you change it), most players, and a password (empty: anyone can join).
    - Game: Co-op is one shared world, as in single player. MMO gives everyone their own loot
      (containers, corpses, plants, items lying around) and their own quests, and enemies and NPCs
-     come back after they die once no one is nearby: weak ones after 1.5 minutes, normal ones 5,
+     come back after they die, players there or not: weak ones after 1.5 minutes, normal ones 5,
      tough ones 15, bosses 20 ("Enemy respawns" speeds that up or slows it down). Plants and ore
      you harvested grow back for you after 10 minutes; chests don't refill.
+     Quests that count kills (like the Fighters Guild's rats) count the kills you made yourself,
+     or your party made; someone else killing them first doesn't take them from you, they come back.
    - PvP (whether players can hurt each other), difficulty and how fast the time of day goes.
    Then a server window opens; close it to stop the server.
 2. Press Join (the address is set to this computer) to play on it yourself.

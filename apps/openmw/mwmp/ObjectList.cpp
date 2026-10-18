@@ -1005,7 +1005,7 @@ void ObjectList::runConsoleCommands(MWWorld::CellStore* cellStore)
                     if (consoleCommand == "isowind respawn")
                     {
                         if (!MechanicsHelper::respawnActor(ptrFound))
-                            LOG_APPEND(TimedLog::LOG_INFO, "-- Not respawned here (its cell is in use)");
+                            LOG_APPEND(TimedLog::LOG_INFO, "-- Not respawned here (not an actor)");
                         continue;
                     }
 

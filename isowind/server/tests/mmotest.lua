@@ -162,7 +162,7 @@ local function runTests()
     -- A dead mudcrab comes back after 1.5 minutes, once no one is near
     cell.data.objectData["999-0"] = { refId = "mudcrab", stats = { healthBase = 35 } }
     customEventHooks.triggerHandlers("OnActorDeath", customEventHooks.makeEventStatus(true, true),
-        { pid, CELL, { ["999-0"] = { refId = "mudcrab", killer = {} } } })
+        { pid, CELL, { ["999-0"] = { refId = "mudcrab", killer = { pid = pid } } } })
     local due = WorldInstance.data.isowindRespawns[CELL]["999-0"]
     check("mudcrab due in about 90 seconds", due ~= nil and math.abs(due - os.time() - 90) <= 2)
 
@@ -217,21 +217,13 @@ local function runTests()
         { pid, CELL, { ["996-0"] = { refId = "quest_npc", killer = {} } } })
     WorldInstance.data.isowindRespawns[CELL]["996-0"] = os.time() - 1
 
-    -- Not while the player is there
-    WorldInstance.data.isowindRespawns[CELL]["999-0"] = os.time() - 1
+    -- Not before its time
     sent = {}
     IsowindMmoRespawnTimer()
-    check("no respawn with the player in the cell", lastSent("SendConsoleCommand") == nil)
+    check("no respawn before its time", lastSent("SendConsoleCommand") == nil)
 
-    -- The player walks off, next to the cell: still not
-    Players[pid].data.location.cell = "-2, 6"
-    cell.visitors = {}
-    IsowindMmoRespawnTimer()
-    check("no respawn with the player next door", lastSent("SendConsoleCommand") == nil)
-
-    -- Far away: it respawns
-    Players[pid].data.location.cell = "10, 10"
-    logicHandler.UnloadCell(CELL)
+    -- On time, with the player standing in the cell
+    WorldInstance.data.isowindRespawns[CELL]["999-0"] = os.time() - 1
     IsowindMmoRespawnTimer()
     local respawn = lastSent("SendConsoleCommand")
     check("respawn sent to everyone", respawn ~= nil and respawn.command == "isowind respawn" and
@@ -239,12 +231,26 @@ local function runTests()
     check("respawn names the mudcrab", respawn ~= nil and respawn.objects[1] ~= nil and
         respawn.objects[1].refNum == "999" or (respawn ~= nil and respawn.objects[1] ~= nil and
         tostring(respawn.objects[1].refNum) == "999"))
-    logicHandler.LoadCell(CELL)
     cell = LoadedCells[CELL]
     check("mudcrab's death forgotten", cell.data.objectData["999-0"] == nil)
     check("disabled one not brought back", cell.data.objectData["996-0"] ~= nil and
         cell.data.objectData["996-0"].state == false)
     check("boss still waiting", WorldInstance.data.isowindRespawns[CELL]["998-0"] ~= nil)
+
+    -- A plant grows back in front of its harvester: their game gets it at once
+    receive({ action = REMOVE, objects = { { refNum = 4322, mpNum = 0, refId = "flora_marshmerrow_01",
+        items = { { refId = "ingred_marshmerrow_01", count = 2, actionCount = 2 } } } } })
+    validate("OnContainer", { pid, CELL, {} })
+    WorldInstance.data.isowindRegrow[CELL]["4322-0"].alpha = os.time() - 1
+    cell.visitors = { pid }
+    sent = {}
+    IsowindMmoRespawnTimer()
+    local grownHere = nil
+    for _, packet in ipairs(sent) do
+        if packet.name == "SendContainer" and packet.action == ADD then grownHere = packet end
+    end
+    check("plant given back at once to the harvester standing there", grownHere ~= nil and
+        grownHere.objects[1].items[1].count == 2)
 
     -- Plants grow back for the harvester
     Players[pid].data.location.cell = CELL

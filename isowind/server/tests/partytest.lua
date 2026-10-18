@@ -138,7 +138,7 @@ local function runTests()
     beta.data.kills = nil
     cell.data.objectData["555-0"] = { refId = "mudcrab", stats = { healthBase = 35 } }
     customEventHooks.triggerHandlers("OnActorDeath", customEventHooks.makeEventStatus(true, true),
-        { 0, "-3, 6", { ["555-0"] = { refId = "mudcrab", killer = {} } } })
+        { 0, "-3, 6", { ["555-0"] = { refId = "mudcrab", killer = { pid = 0 } } } })
     check("party member gets the kill", beta.data.kills ~= nil and beta.data.kills.mudcrab == 1)
 
     -- Catching up at login
@@ -153,6 +153,22 @@ local function runTests()
     check("two-player party ends when one leaves", next(WorldInstance.data.isowindParties.list) == nil)
     check("no longer allies", #alpha.data.alliedPlayers == 0 and #beta.data.alliedPlayers == 0)
     check("Beta keeps the quests", hasJournal(beta, "a1_1_findspymaster", 1))
+
+    -- Not in a party: Beta's game (running the cell) reports a rat Alpha killed; Alpha gets it, not Beta
+    alpha.data.kills = {}
+    beta.data.kills = {}
+    cell.data.objectData["556-0"] = { refId = "rat_cave_fgrh", stats = { healthBase = 8 } }
+    customEventHooks.triggerHandlers("OnActorDeath", customEventHooks.makeEventStatus(true, true),
+        { 1, "-3, 6", { ["556-0"] = { refId = "rat_cave_fgrh", killer = { pid = 0 } } } })
+    check("the killer gets the kill", alpha.data.kills.rat_cave_fgrh == 1)
+    check("whoever's game reported it doesn't", beta.data.kills.rat_cave_fgrh == nil)
+
+    -- A rat killed by a guard: no one's
+    cell.data.objectData["557-0"] = { refId = "rat_cave_fgrh", stats = { healthBase = 8 } }
+    customEventHooks.triggerHandlers("OnActorDeath", customEventHooks.makeEventStatus(true, true),
+        { 1, "-3, 6", { ["557-0"] = { refId = "rat_cave_fgrh", killer = { refId = "imperial guard", name = "Guard" } } } })
+    check("a kill by someone else counts for no player", alpha.data.kills.rat_cave_fgrh == 1 and
+        beta.data.kills.rat_cave_fgrh == nil)
 
     -- Alone again: a quest script is just theirs
     customEventHooks.triggerValidators("OnObjectState", { 0, "-3, 6", { ["7778-0"] = { refId = "quest_npc2",

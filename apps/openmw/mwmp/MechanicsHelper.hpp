@@ -16,7 +16,8 @@ namespace MechanicsHelper
 
     void spawnLeveledCreatures(MWWorld::CellStore* cellStore);
     /// Isowind MMO: an actor the server brings back (respawns), alive and fresh at its starting place, as when
-    /// Morrowind respawns one. Only for cells nobody here is in; returns whether it was done.
+    /// Morrowind respawns one, in front of the players there too. Returns whether it was done (not for cells this
+    /// game hasn't loaded, where it's as it starts anyway).
     bool respawnActor(const MWWorld::Ptr& ptr);
 
     bool isUsingRangedWeapon(const MWWorld::Ptr& ptr);
