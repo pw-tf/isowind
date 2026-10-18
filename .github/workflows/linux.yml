@@ -22,10 +22,11 @@ jobs:
       - name: Dependencies
         run: sudo CI/install_debian_deps.sh gcc openmw-deps openmw-deps-dynamic
 
-      - uses: actions/cache@v4
+      # The compiler cache, saved after every run, failed or not, so a failing build doesn't start over next time
+      - uses: actions/cache/restore@v4
         with:
           path: .ccache
-          key: linux-ccache-${{ github.sha }}
+          key: linux-ccache-${{ github.run_id }}
           restore-keys: linux-ccache-
 
       # The multiplayer's networking (TES3MP's CrabNet), at the commit the Windows build uses
@@ -53,6 +54,12 @@ jobs:
       - name: Build
         # -k: report every file that fails, not just the first
         run: cmake --build build -j$(nproc) -- -k
+
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: .ccache
+          key: linux-ccache-${{ github.run_id }}
 
       # The bundled mods (third-party, so not in git): bundled-mods.zip on this repository's "bundled-mods" release
       - name: Bundled mods

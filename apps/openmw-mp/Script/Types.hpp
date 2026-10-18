@@ -98,14 +98,20 @@ struct CallbackIdentity
 
 struct ScriptFunctionPointer : public ScriptIdentity
 {
+    // Isowind: only what the function takes and returns. A constexpr table can't hold a function pointer cast to
+    // void* (only MSVC and older GCC let that through), so the addresses are in ScriptFunctions::addresses.
+    template<typename R, typename... Types>
+    constexpr ScriptFunctionPointer(Function<R, Types...> addr) : ScriptIdentity(addr) {}
+};
+
+// A script function's address, for calling it: ScriptFunctions::addresses, in the order of ScriptFunctions::functions,
+// filled in at startup from the same list
+struct ScriptFunctionAddress
+{
     void *addr;
-#if (!defined(__clang__) && defined(__GNUC__))
+
     template<typename R, typename... Types>
-    constexpr ScriptFunctionPointer(Function<R, Types...> addr) : ScriptIdentity(addr), addr((void*)(addr)) {}
-#else
-    template<typename R, typename... Types>
-    constexpr ScriptFunctionPointer(Function<R, Types...> addr) : ScriptIdentity(addr), addr(addr) {}
-#endif
+    ScriptFunctionAddress(const char*, Function<R, Types...> function) : addr(reinterpret_cast<void*>(function)) {}
 };
 
 struct ScriptFunctionData

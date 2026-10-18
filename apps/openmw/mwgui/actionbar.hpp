@@ -7,6 +7,8 @@
 #include <components/esm/refid.hpp>
 #include <components/esm3/quickkeys.hpp>
 
+#include <MyGUI_MouseButton.h>
+
 #include "../mwworld/ptr.hpp"
 
 namespace MyGUI

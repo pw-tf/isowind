@@ -152,10 +152,9 @@ if pp_init_marker not in text:
     )
     text = replace_once(
         text,
-        '''    {
-        auto& shaderManager = mRendering.getResourceSystem()->getSceneManager()->getShaderManager();''',
-        '''    {
-#ifdef ANDROID
+        # Isowind: anchored on the line alone (Isowind sets up its pixel art scale just before it)
+        '''        auto& shaderManager = mRendering.getResourceSystem()->getSceneManager()->getShaderManager();''',
+        '''#ifdef ANDROID
         // OPENMW_ANDROID_051_GATE_G_PP_INIT
         // Establish the actual Android render size before setViewport()
         // and before createObjectsForFrame() allocates PP textures/FBOs.
@@ -240,9 +239,9 @@ if wetworld_water_marker not in text:
     )
     text = replace_once(
         text,
+        # Isowind: anchored on the line alone (Isowind's noCutaway uniform follows it)
         '''        osg::ref_ptr<osg::StateSet> stateset = SceneUtil::createSimpleWaterStateSet(alpha, MWRender::RenderBin_Water);
-
-        node->setStateSet(stateset);''',
+''',
         '''        osg::ref_ptr<osg::StateSet> stateset = SceneUtil::createSimpleWaterStateSet(alpha, MWRender::RenderBin_Water);
 
 #ifdef ANDROID
@@ -253,8 +252,7 @@ if wetworld_water_marker not in text:
                 osg::BlendFunc::ZERO, osg::BlendFunc::ZERO),
             osg::StateAttribute::ON);
 #endif
-
-        node->setStateSet(stateset);''',
+''',
         'water.cpp/simple-water alpha marker',
     )
     text = replace_once(

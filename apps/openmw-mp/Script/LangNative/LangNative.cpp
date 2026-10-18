@@ -2,6 +2,7 @@
     #include <dlfcn.h>
 #endif
 
+#include <iterator>
 #include <stdexcept>
 #include "LangNative.hpp"
 #include <Script/SystemInterface.hpp>
@@ -42,9 +43,12 @@ void LangNative::LoadProgram(const char *filename)
         const char *prefix = SystemInterface<const char *>(lib, "prefix").result;
         std::string pf(prefix);
 
-        for (const auto &function : ScriptFunctions::functions)
-            if (!SetScript(lib, std::string(pf + function.name).c_str(), function.func.addr))
-                LOG_MESSAGE_SIMPLE(TimedLog::LOG_WARN, "Script function pointer not found: %s", function.name);
+        for (size_t i = 0; i < std::size(ScriptFunctions::functions); ++i)
+        {
+            const char *name = ScriptFunctions::functions[i].name;
+            if (!SetScript(lib, std::string(pf + name).c_str(), ScriptFunctions::addresses[i].addr))
+                LOG_MESSAGE_SIMPLE(TimedLog::LOG_WARN, "Script function pointer not found: %s", name);
+        }
     }
     catch (...)
     {

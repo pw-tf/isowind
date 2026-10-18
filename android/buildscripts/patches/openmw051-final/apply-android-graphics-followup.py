@@ -148,15 +148,13 @@ text = pingpong_cpp.read_text(encoding='utf-8').replace('\r\n', '\n')
 if GAMMA_MARKER not in text:
     text = replace_once(
         text,
+        # Isowind: anchored on <cassert> alone (Isowind includes <cmath> after it)
         '''#include <cassert>
-
-#include <components/shader/shadermanager.hpp>''',
+''',
         '''#include <cassert>
 #include <cstdlib>
-
 #include <osg/Shader>
-
-#include <components/shader/shadermanager.hpp>''',
+''',
         'pingpongcanvas.cpp/gamma includes',
     )
 
