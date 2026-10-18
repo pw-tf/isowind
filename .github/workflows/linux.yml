@@ -4,6 +4,11 @@ on:
   push:
   workflow_dispatch:
 
+# A newer push replaces a run still going
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-24.04
