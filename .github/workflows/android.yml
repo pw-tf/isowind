@@ -1,7 +1,9 @@
 name: Android
 
 on:
+  # Branches only: tags (like the bundled-mods release's) don't build
   push:
+    branches: ['**']
   workflow_dispatch:
 
 # A newer push replaces a run still going
@@ -44,7 +46,20 @@ jobs:
           key: android-deps-${{ github.run_id }}
           restore-keys: android-deps-
 
+      # The bundled mods (third-party, so not in git): bundled-mods.zip on this repository's "bundled-mods" release
+      - name: Bundled mods
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release download bundled-mods -p bundled-mods.zip; then
+            unzip -q bundled-mods.zip -d bundled-mods
+          else
+            echo "::warning::No bundled-mods release: the APK goes without the bundled mods"
+          fi
+
       - name: Engine and libraries (arm64)
+        env:
+          ISOWIND_MODS: ${{ github.workspace }}/bundled-mods
         run: |
           rm -rf android/buildscripts/build/arm64/openmw-prefix
           cd android/buildscripts && ./build.sh --arch arm64

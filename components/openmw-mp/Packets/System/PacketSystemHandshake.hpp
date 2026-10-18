@@ -1,6 +1,7 @@
 #ifndef OPENMW_PACKETSYSTEMHANDSHAKE_HPP
 #define OPENMW_PACKETSYSTEMHANDSHAKE_HPP
 
+#include <cstdint>
 #include <components/openmw-mp/Packets/System/SystemPacket.hpp>
 
 namespace mwmp

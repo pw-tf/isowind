@@ -574,6 +574,8 @@ class MainActivity : AppCompatActivity() {
                 groundcovers.mods
                     .filter { it.enabled && ModsPaths.fileExistsIn(it.filename, activeDataFilesList) }
                     .forEach { append("groundcover=${it.filename}\n") }
+
+                append(isowindCfgLines())
             }
 
             // Write only the real launcher configuration. Keep unrelated
@@ -588,6 +590,56 @@ class MainActivity : AppCompatActivity() {
             Log.e(TAG, "Failed to generate openmw.cfg.", e)
             return false
         }
+    }
+
+    // Isowind's look on Android: pixel art (the engine renders at low resolution, which also suits phones; the retro
+    // textures the desktop launchers build aren't made here yet)
+    private val isowindLook = "pixelart"
+
+    // What the Android launcher sets itself, so the Isowind profile leaves it alone
+    private val isowindLauncherSections = setOf("Post Processing", "Shadows")
+
+    /**
+     * Isowind: the profile's data folders (its mod and the bundled mods) after every other one, and its plugins after
+     * Morrowind's, in the order the multiplayer server expects. Its data paths are relative to the profile's folder.
+     */
+    private fun isowindCfgLines(): String {
+        val profile = File(Constants.ISOWIND, "profiles/$isowindLook")
+        val cfg = File(profile, "openmw.cfg")
+        if (!cfg.isFile) return ""
+        return buildString {
+            cfg.readLines().map { it.trim() }.forEach { line ->
+                when {
+                    line.startsWith("data=") ->
+                        append("data=\"${File(profile, line.removePrefix("data=").trim('"')).canonicalPath}\"\n")
+                    line.startsWith("content=") -> append(line).append('\n')
+                }
+            }
+        }
+    }
+
+    /**
+     * Isowind: the profile's settings (what the top-down camera, the pixel art look and the HUD need) over the
+     * user's settings.cfg on every start, except what the Android launcher owns: post-processing, shadows, the GUI
+     * scaling it works out for the screen.
+     */
+    private fun applyIsowindSettings() {
+        val profileSettings = File(Constants.ISOWIND, "profiles/$isowindLook/settings.cfg")
+        if (!profileSettings.isFile) return
+        val sections = linkedMapOf<String, LinkedHashMap<String, String?>>()
+        var section = ""
+        profileSettings.readLines().map { it.trim() }.forEach { line ->
+            when {
+                line.isEmpty() || line.startsWith("#") -> {}
+                line.startsWith("[") && line.endsWith("]") -> section = line.substring(1, line.length - 1)
+                "=" in line && section !in isowindLauncherSections
+                    && !(section == "GUI" && line.startsWith("scaling factor")) ->
+                    sections.getOrPut(section) { linkedMapOf() }[line.substringBefore('=').trim()] =
+                        line.substringAfter('=').trim()
+            }
+        }
+        val settingsFile = File(Constants.USER_CONFIG, "settings.cfg")
+        sections.forEach { (name, values) -> updateSettingsSection(settingsFile, name, values) }
     }
 
     /**
@@ -782,6 +834,7 @@ class MainActivity : AppCompatActivity() {
         val assetCopier = CopyFilesFromAssets(this)
         assetCopier.copy("libopenmw/resources", Constants.RESOURCES)
         assetCopier.copy("libopenmw/openmw", Constants.GLOBAL_CONFIG)
+        assetCopier.copy("isowind", Constants.ISOWIND)
 
         // The non-OMWFX path uses OpenMW 0.51's bundled adjustments.omwfx.
         // The standalone Android/OMWFX shader assets remain isolated and are
@@ -798,6 +851,11 @@ class MainActivity : AppCompatActivity() {
         File(Constants.USER_CONFIG).mkdirs()
         if (!File(Constants.USER_OPENMW_CFG).exists())
             File(Constants.USER_OPENMW_CFG).writeText("# This is the user openmw.cfg. Feel free to modify it as you wish.\n")
+        // Isowind's key and controller bindings, unless the player has their own
+        val isowindBindings = File(Constants.ISOWIND, "profiles/input_v3.xml")
+        val userBindings = File(Constants.USER_CONFIG, "input_v3.xml")
+        if (!userBindings.exists() && isowindBindings.isFile)
+            isowindBindings.copyTo(userBindings)
 
         // create user custom icon folder as a hint
         File(Constants.USER_FILE_STORAGE + "/icons").mkdirs()
@@ -818,6 +876,7 @@ class MainActivity : AppCompatActivity() {
 
         deleteRecursive(File(Constants.GLOBAL_CONFIG))
         deleteRecursive(File(Constants.RESOURCES))
+        deleteRecursive(File(Constants.ISOWIND))
     }
 
     /**
@@ -2166,6 +2225,9 @@ class MainActivity : AppCompatActivity() {
                 // Android shadows remain launcher-controlled. OMWFX forces the
                 // transparent postpass for WetWorld and the optical stack.
                 applyOpenMw051RuntimeSettings()
+
+                // Isowind's look and HUD over the user's settings
+                applyIsowindSettings()
 
                 //val displayInCutoutArea = PreferenceManager.getDefaultSharedPreferences(this).getBoolean("pref_display_cutout_area", false)
                 obtainFixedScreenResolution()

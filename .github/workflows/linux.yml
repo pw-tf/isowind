@@ -1,7 +1,9 @@
 name: Linux
 
 on:
+  # Branches only: tags (like the bundled-mods release's) don't build
   push:
+    branches: ['**']
   workflow_dispatch:
 
 # A newer push replaces a run still going

@@ -20,7 +20,13 @@ float calcLambert(vec3 viewNormal, vec3 lightDir, vec3 viewDir)
     return lambert;
 }
 
-// 'light bands': snap light intensity to a few hard steps (toon / pixel art lighting).
+// Isowind: how much farther than Morrowind's own radius point lights (torches, lanterns, spells) reach, their falloff
+// stretched to match, so their light spreads wide and fades softly. Objects only receive a light within 'light bounds
+// multiplier' times its radius, so the profiles set that to twice this (where the light has faded out).
+#define ISOWIND_LIGHT_REACH 1.75
+
+// 'light bands': snap light intensity to a few hard steps (toon / pixel art lighting). Sunlight only: point lights
+// stay smooth.
 float lightBand(float x)
 {
 #if @lightBands > 0
@@ -77,16 +83,16 @@ void doLighting(vec3 viewPos, vec3 viewNormal, float shininess, out vec3 diffuse
 
         // cull point lighting by radius, light is guaranteed to not fall outside this bound with our cutoff
 #if !@classicFalloff
-        if (lightDistance > lcalcRadius(lightIndex) * 2.0)
+        if (lightDistance > lcalcRadius(lightIndex) * 2.0 * ISOWIND_LIGHT_REACH)
             continue;
 #endif
 
         vec3 lightDir = lightPos / lightDistance;
 
-        float illumination = lcalcIllumination(lightIndex, lightDistance);
-        diffuseLight += lcalcDiffuse(lightIndex) * lightBand(calcLambert(viewNormal, lightDir, viewDir) * illumination);
-        ambientLight += lcalcAmbient(lightIndex) * lightBand(illumination);
-        specularLight += lcalcSpecular(lightIndex).xyz * lightBand(calcSpecIntensity(viewNormal, viewDir, shininess, lightDir) * illumination);
+        float illumination = lcalcIllumination(lightIndex, lightDistance / ISOWIND_LIGHT_REACH);
+        diffuseLight += lcalcDiffuse(lightIndex) * calcLambert(viewNormal, lightDir, viewDir) * illumination;
+        ambientLight += lcalcAmbient(lightIndex) * illumination;
+        specularLight += lcalcSpecular(lightIndex).xyz * calcSpecIntensity(viewNormal, viewDir, shininess, lightDir) * illumination;
     }
 }
 

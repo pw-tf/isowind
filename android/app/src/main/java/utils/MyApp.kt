@@ -66,6 +66,7 @@ class MyApp : Application() {
         Constants.RESOURCES = File(filesDir, "resources").absolutePath
         Constants.GLOBAL_CONFIG = File(filesDir, "config").absolutePath
         Constants.VERSION_STAMP = File(filesDir, "stamp").absolutePath
+        Constants.ISOWIND = File(filesDir, "isowind").absolutePath
 
         Log.i(TAG, "OpenMW user storage: ${Constants.USER_FILE_STORAGE}")
     }

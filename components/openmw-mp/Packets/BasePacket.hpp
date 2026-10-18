@@ -1,6 +1,7 @@
 #ifndef OPENMW_BASEPACKET_HPP
 #define OPENMW_BASEPACKET_HPP
 
+#include <cstdint>
 #include <string>
 #include <type_traits>
 #include <variant>

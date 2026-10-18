@@ -1,6 +1,7 @@
 #ifndef OPENMW_PACKETPREINIT_HPP
 #define OPENMW_PACKETPREINIT_HPP
 
+#include <cstdint>
 #include <vector>
 #include "BasePacket.hpp"
 

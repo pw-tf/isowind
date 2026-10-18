@@ -231,6 +231,20 @@ EOF
 
 	# licensing info
 	cp "$DIR/../3rdparty-licenses.txt" "$DST"
+
+	# Isowind: the mod, pixel art and profiles, plus the bundled mods from $ISOWIND_MODS when given, laid out as in
+	# the desktop packages (MainActivity copies them out and adds the profile to openmw.cfg)
+	echo "==> Deploying Isowind"
+	ISO="$DIR/../../isowind"
+	ISO_DST="$DIR/../app/src/main/assets/isowind"
+	rm -rf "$ISO_DST" && mkdir -p "$ISO_DST/profiles"
+	cp -r "$ISO/mod" "$ISO/pixelart" "$ISO_DST/"
+	cp -r "$ISO/profiles/pixelart" "$ISO/profiles/normal" "$ISO/profiles/input_v3.xml" "$ISO_DST/profiles/"
+	if [[ -n "$ISOWIND_MODS" && -d "$ISOWIND_MODS" ]]; then
+		cp -r "$ISOWIND_MODS" "$ISO_DST/mods"
+	else
+		echo "warning: no bundled mods (ISOWIND_MODS); servers require their plugins"
+	fi
 fi
 
 echo "==> Making your debugging life easier"

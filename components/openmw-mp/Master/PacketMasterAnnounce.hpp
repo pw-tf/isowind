@@ -1,6 +1,7 @@
 #ifndef OPENMW_PACKETMASTERANNOUNCE_HPP
 #define OPENMW_PACKETMASTERANNOUNCE_HPP
 
+#include <cstdint>
 #include "../Packets/BasePacket.hpp"
 #include "MasterData.hpp"
 

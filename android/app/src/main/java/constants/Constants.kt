@@ -61,4 +61,9 @@ object Constants {
 
     // Contains app version code for currently deployed internal resources.
     var VERSION_STAMP = ""
+
+    // Isowind's files copied from APK assets: the mod, the bundled mods, pixel art and the profiles, laid out as in
+    // the desktop packages (the profiles' openmw.cfg data paths are relative to their own folder).
+    // e.g. /data/user/0/tf.pw.isowind/files/isowind
+    var ISOWIND = ""
 }

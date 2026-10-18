@@ -5,6 +5,7 @@
 #ifndef OPENMW_PROXYMASTERPACKET_HPP
 #define OPENMW_PROXYMASTERPACKET_HPP
 
+#include <cstdint>
 #include <components/openmw-mp/Packets/BasePacket.hpp>
 #include "MasterData.hpp"
 #include <iostream>
