@@ -80,6 +80,20 @@ namespace mwmp
 
         int windowState;
         bool editState;
+        /// Isowind: the chat's input was just closed by Enter (sending, or with nothing typed); that same key press
+        /// mustn't open it again (takeClosedByEnter)
+        bool closedByEnter = false;
+
+    public:
+        /// Closes the input line (Escape while typing)
+        void closeInput();
+
+        bool takeClosedByEnter()
+        {
+            const bool closed = closedByEnter;
+            closedByEnter = false;
+            return closed;
+        }
         float delay;
         float curTime;
     };

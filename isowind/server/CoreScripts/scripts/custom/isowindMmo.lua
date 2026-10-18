@@ -8,7 +8,7 @@
 --   do to the world's own people and things: enabling or disabling them (isowindStates) or deleting them (isowindTaken),
 --   so a quest that removes someone for one player leaves them there for the others.
 -- * Enemies and NPCs come back after they die, once no player is in or next to their cell, after a time from how
---   tough they were (WoW-like tiers, from their health): trash 1.5 minutes, normal 5, elite 15, bosses 60, divided by
+--   tough they were (WoW-like tiers, from their health): trash 1.5 minutes, normal 5, elite 15, bosses 20, divided by
 --   the host's respawn speed. Ones from the game's files are reset on each client ("isowind respawn", a console
 --   command packet the game handles itself); leveled-list ones are spawned again where they first appeared.
 
@@ -33,10 +33,13 @@ local tiers = {
     { name = "trash", maxHealth = 60, minutes = 1.5 },
     { name = "normal", maxHealth = 200, minutes = 5 },
     { name = "elite", maxHealth = 500, minutes = 15 },
-    { name = "boss", minutes = 60 }
+    { name = "boss", minutes = 20 }
 }
 -- Bosses whatever their health
 local bossPatterns = { "^dagoth", "^vivec_god", "^almalexia", "^karstaag", "^lich_", "^heart_akulakhan" }
+-- Weak creatures, for when their health never reached the server (killed in a hit or two)
+local trashPatterns = { "^rat", "mudcrab", "scrib", "kwama forager", "cliff racer", "slaughterfish", "^nix",
+    "^skeleton", "ancestor_ghost", "^guar" }
 
 local CHECK_SECONDS = 10
 
@@ -54,6 +57,27 @@ local isAreaEmpty
 
 local function playerKey(pid)
     return string.lower(Players[pid].accountName)
+end
+
+-- Whose world a player's quest scripts change: theirs, or their whole party's (isowindParty.lua)
+local function questSharers(pid)
+    local name = playerKey(pid)
+    if IsowindParty ~= nil then
+        return IsowindParty.GetMemberNames(name)
+    end
+    return { name }
+end
+
+-- The pids of the others among names who are on
+local function otherOnlinePids(pid, names)
+    local pids = {}
+    for otherPid, player in pairs(Players) do
+        if otherPid ~= pid and player:IsLoggedIn() and
+            tableHelper.containsValue(names, string.lower(player.accountName)) then
+            table.insert(pids, otherPid)
+        end
+    end
+    return pids
 end
 
 local function splitIndex(uniqueIndex)
@@ -242,17 +266,26 @@ local function onObjectDelete(eventStatus, pid, cellDescription, objects)
         return
     end
 
-    local name = playerKey(pid)
+    -- A quest's deletion is the whole party's; a pickup only the player's
+    local names = fromScript and questSharers(pid) or { playerKey(pid) }
     cell.data.isowindTaken = cell.data.isowindTaken or {}
-    tes3mp.ClearObjectList()
-    tes3mp.SetObjectListPid(pid)
-    tes3mp.SetObjectListCell(cellDescription)
     for uniqueIndex, object in pairs(mine) do
         cell.data.isowindTaken[uniqueIndex] = cell.data.isowindTaken[uniqueIndex] or {}
-        cell.data.isowindTaken[uniqueIndex][name] = true
-        packetBuilder.AddObjectDelete(uniqueIndex, object)
+        for _, name in ipairs(names) do
+            cell.data.isowindTaken[uniqueIndex][name] = true
+        end
     end
-    tes3mp.SendObjectDelete(false)
+    local recipients = otherOnlinePids(pid, names)
+    table.insert(recipients, pid)
+    for _, recipient in ipairs(recipients) do
+        tes3mp.ClearObjectList()
+        tes3mp.SetObjectListPid(recipient)
+        tes3mp.SetObjectListCell(cellDescription)
+        for uniqueIndex, object in pairs(mine) do
+            packetBuilder.AddObjectDelete(uniqueIndex, object)
+        end
+        tes3mp.SendObjectDelete(false)
+    end
 
     -- The rest as the default handler does
     if next(shared) ~= nil then
@@ -263,7 +296,7 @@ local function onObjectDelete(eventStatus, pid, cellDescription, objects)
     return customEventHooks.makeEventStatus(false, true)
 end
 
--- A quest script enabling or disabling one of the game's own people or things: for that player only
+-- A quest script enabling or disabling one of the game's own people or things: for that player (and their party) only
 local function onObjectState(eventStatus, pid, cellDescription, objects)
     if eventStatus.validDefaultHandler == false or not isFromScript(tes3mp.GetObjectListOrigin()) then
         return
@@ -286,12 +319,24 @@ local function onObjectState(eventStatus, pid, cellDescription, objects)
         return
     end
 
-    local name = playerKey(pid)
+    local names = questSharers(pid)
     cell.data.isowindStates = cell.data.isowindStates or {}
     for uniqueIndex, object in pairs(mine) do
         local record = cell.data.isowindStates[uniqueIndex] or { refId = object.refId, players = {} }
-        record.players[name] = object.state
+        for _, name in ipairs(names) do
+            record.players[name] = object.state
+        end
         cell.data.isowindStates[uniqueIndex] = record
+    end
+    -- The party's others who are on see it now (the player's own game already made the change)
+    for _, recipient in ipairs(otherOnlinePids(pid, names)) do
+        tes3mp.ClearObjectList()
+        tes3mp.SetObjectListPid(recipient)
+        tes3mp.SetObjectListCell(cellDescription)
+        for uniqueIndex, object in pairs(mine) do
+            packetBuilder.AddObjectState(uniqueIndex, object)
+        end
+        tes3mp.SendObjectState(false)
     end
 
     -- The rest as the default handler does
@@ -477,6 +522,11 @@ local function respawnMinutes(refId, objectData)
     end
     local health = objectData ~= nil and objectData.stats ~= nil and objectData.stats.healthBase or nil
     if health == nil then
+        for _, pattern in ipairs(trashPatterns) do
+            if refId:find(pattern) then
+                return tiers[1].minutes
+            end
+        end
         return tiers[2].minutes
     end
     for _, tier in ipairs(tiers) do

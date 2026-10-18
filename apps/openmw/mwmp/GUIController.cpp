@@ -219,6 +219,12 @@ bool mwmp::GUIController::pressedKey(int key)
     MWBase::WindowManager *windowManager = MWBase::Environment::get().getWindowManager();
     if (mChat == nullptr || windowManager->isConsoleMode() || windowManager->getMode() != MWGui::GM_None)
         return false;
+    // Isowind: Escape while typing closes the chat's input line, not opens the menu
+    if (key == SDL_SCANCODE_ESCAPE && mChat->editState)
+    {
+        mChat->closeInput();
+        return true;
+    }
     if (key == keyChatMode)
     {
         mChat->pressedChatMode();
@@ -226,6 +232,9 @@ bool mwmp::GUIController::pressedKey(int key)
     }
     else if (key == keySay)
     {
+        // The Enter that just sent a message (or closed the empty input) doesn't open it again
+        if (mChat->takeClosedByEnter())
+            return true;
         if (mMenuWasOpen)
             return false;
         mChat->pressedSay();

@@ -51,7 +51,7 @@ Hosting a server
    - Game: Co-op is one shared world, as in single player. MMO gives everyone their own loot
      (containers, corpses, plants, items lying around) and their own quests, and enemies and NPCs
      come back after they die once no one is nearby: weak ones after 1.5 minutes, normal ones 5,
-     tough ones 15, bosses 60 ("Enemy respawns" speeds that up or slows it down). Plants and ore
+     tough ones 15, bosses 20 ("Enemy respawns" speeds that up or slows it down). Plants and ore
      you harvested grow back for you after 10 minutes; chests don't refill.
    - PvP (whether players can hurt each other), difficulty and how fast the time of day goes.
    Then a server window opens; close it to stop the server.
@@ -71,6 +71,15 @@ In multiplayer
 Enter          Talk in the chat; F2 hides or shows the chat window.
 The world never pauses, not even in menus. Saving and loading are off: the server keeps everything.
 When you die you wake up at the nearest temple.
+
+Parties (MMO servers): players in a party share their quests as on a co-op server - journal,
+topics, quest progress, kill credit and what quests change in the world - while each keeps their
+own loot. Type in the chat:
+   /party invite NAME     invite a player (their name, or the number before it in the player list)
+   /party accept          join the party you were invited to (or /party decline)
+   /party                 who is in your party
+   /p MESSAGE             talk to your party
+   /party leave           leave it; you keep the quests you have
 
 Looks
 -----

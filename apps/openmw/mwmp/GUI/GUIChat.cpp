@@ -80,6 +80,7 @@ namespace mwmp
         {
             mCommandLine->setCaption("");
             setEditState(false);
+            closedByEnter = true;
             return;
         }
 
@@ -97,6 +98,7 @@ namespace mwmp
         // during the actual command execution
         mCommandLine->setCaption("");
         setEditState(false);
+        closedByEnter = true;
         send(cm);
     }
 
@@ -241,8 +243,16 @@ namespace mwmp
 
     }
 
+    void GUIChat::closeInput()
+    {
+        mCommandLine->setCaption("");
+        setEditState(false);
+    }
+
     void GUIChat::update(float dt)
     {
+        closedByEnter = false;
+
         if (windowState == CHAT_HIDDENMODE && !editState && isVisible())
         {
             curTime += dt;

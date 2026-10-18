@@ -132,7 +132,7 @@ ask_host_settings() {
         "$(get_server_setting Isowind difficulty 0)" '-?[0-9]{1,3}'
     set_setting "$FILE" Isowind difficulty "$REPLY"
     if [ "$MODE" = mmo ]; then
-        ask "How fast enemies come back: 0.5, 1, 2 or 4 (1: 1.5 minutes for the weakest, 60 for bosses)" \
+        ask "How fast enemies come back: 0.5, 1, 2 or 4 (1: 1.5 minutes for the weakest, 20 for bosses)" \
             "$(get_server_setting Isowind respawnSpeed 1)" '0\.5|1|2|4'
         set_setting "$FILE" Isowind respawnSpeed "$REPLY"
     fi

@@ -1,6 +1,6 @@
--- How to run: copy this into a copy of the server folder as CoreScripts/scripts/custom/mmotest.lua, add
+-- How to run: copy this into a copy of the server folder as CoreScripts/scripts/custom/, add
 -- require("custom/mmotest") at the end of customScripts.lua, put mode = mmo under [Isowind] in tes3mp-server.cfg and
--- start tes3mp-server for a few seconds; the log shows "[mmotest] PASS/FAIL ..." and "done, N failed".
+-- start tes3mp-server for a few seconds; the log shows PASS/FAIL lines and "done, N failed".
 -- Tests of isowindMmo.lua inside a real server: fake players and packets, real cells and world data.
 local log = function(text) tes3mp.LogMessage(enumerations.log.INFO, "[mmotest] " .. text) end
 local failures = 0
@@ -171,8 +171,8 @@ local function runTests()
     customEventHooks.triggerHandlers("OnActorDeath", customEventHooks.makeEventStatus(true, true),
         { pid, CELL, { ["998-0"] = { refId = "dagoth gares", killer = {} },
             ["997-0"] = { refId = "ordinator", killer = {} } } })
-    check("Dagoth is a boss (60 minutes)",
-        math.abs(WorldInstance.data.isowindRespawns[CELL]["998-0"] - os.time() - 3600) <= 2)
+    check("Dagoth is a boss (20 minutes)",
+        math.abs(WorldInstance.data.isowindRespawns[CELL]["998-0"] - os.time() - 1200) <= 2)
     check("250 health is elite (15 minutes)",
         math.abs(WorldInstance.data.isowindRespawns[CELL]["997-0"] - os.time() - 900) <= 2)
 
@@ -203,6 +203,13 @@ local function runTests()
     cell:SaveContainers(pid)
     local refused = lastSent("SetContainerItemActionCountByIndex")
     check("take of something known not to be there still refused", refused ~= nil and refused.args[3] == 0)
+
+    -- A rat killed before its health reached the server is still trash
+    cell.data.objectData["995-0"] = { refId = "Rat" }
+    customEventHooks.triggerHandlers("OnActorDeath", customEventHooks.makeEventStatus(true, true),
+        { pid, CELL, { ["995-0"] = { refId = "Rat", killer = {} } } })
+    check("rat with unknown health is trash (90 seconds)",
+        math.abs(WorldInstance.data.isowindRespawns[CELL]["995-0"] - os.time() - 90) <= 2)
 
     -- One a quest script disabled after it died
     cell.data.objectData["996-0"] = { refId = "quest_npc", state = false, stats = { healthBase = 40 } }
