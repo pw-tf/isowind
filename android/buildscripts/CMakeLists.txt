@@ -600,7 +600,10 @@ set(OPENMW_COMMON
         -DSDL2_DIR=${prefix}/lib/cmake/SDL2
 )
 
+# Isowind: first, the Android port's final shaders (its GL4ES fog, normal and shadow fixes, from its 0.51.0-11
+# release) merged onto Isowind's: the scripts below then find their shader markers present and leave them alone.
 set(OPENMW_PATCH
+        patch -d <SOURCE_DIR>/files/shaders -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/isowind/android-shaders.patch &&
         patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/openmw051-final/0001-ndk-r26-stringstream-compat.patch &&
         patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/patches/openmw051-final/0002-static-osg-link.patch &&
         python3 ${CMAKE_SOURCE_DIR}/patches/openmw051-final/apply-ndk-r26-format.py <SOURCE_DIR> &&
@@ -633,9 +636,12 @@ set(CRABNET_SOURCE_DIR ${SOURCE_DIR})
 set(CRABNET_BINARY_DIR ${BINARY_DIR})
 
 # Isowind: the engine is this repository (two levels up), exported clean so the build folder isn't copied into itself,
-# with its git tree hash as the version (multiplayer only lets the same version play together)
-execute_process(COMMAND git -C ${CMAKE_SOURCE_DIR}/../.. rev-parse HEAD^{tree}
-        OUTPUT_VARIABLE ISOWIND_SOURCE_HASH OUTPUT_STRIP_TRAILING_WHITESPACE)
+# with the engine source's hash as the version, as cmake/GitVersion.cmake computes it (multiplayer only lets the same
+# version play together)
+execute_process(COMMAND git -C ${CMAKE_SOURCE_DIR}/../.. rev-parse HEAD:apps HEAD:components HEAD:files HEAD:extern
+        HEAD:cmake HEAD:CMakeLists.txt
+        OUTPUT_VARIABLE ISOWIND_ENGINE_TREES OUTPUT_STRIP_TRAILING_WHITESPACE)
+string(SHA1 ISOWIND_SOURCE_HASH "${ISOWIND_ENGINE_TREES}")
 ExternalProject_Add(openmw
         DEPENDS boost openal osg mygui ffmpeg sdl2 bullet lz4 luajit libicu crabnet
 

@@ -767,6 +767,17 @@ android {
         jvmTarget = '17'
     }
 
+    // Isowind: every build signed with the same debug key (app/isowind-debug.keystore), so a new APK installs over
+    // the last one and keeps the player's data; the key Gradle makes on each fresh CI runner would need an uninstall
+    signingConfigs {
+        debug {
+            storeFile file('isowind-debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false

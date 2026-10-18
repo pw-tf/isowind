@@ -6,15 +6,18 @@ execute_process (
     OUTPUT_STRIP_TRAILING_WHITESPACE
     ERROR_QUIET)
 
-# Isowind: the hash of the source tree rather than of the commit. Multiplayer only lets the same version play
-# together (the hash is part of the connection password), and the tree is the same wherever that source is built:
-# here, and from the snapshot commits pushed to GitHub for the Linux and Android builds.
+# Isowind: a hash of the engine's source rather than of the commit. Multiplayer only lets the same version play
+# together (the hash is part of the connection password), and this is the same wherever that source is built: here,
+# from the snapshot commits pushed to GitHub, and from the Android build's export (android/buildscripts/CMakeLists.txt
+# computes it the same way). Only the engine's folders count, so changes to the Android app, CI or Isowind's data
+# files don't split players.
 execute_process (
-    COMMAND ${GIT_EXECUTABLE} rev-parse HEAD^{tree}
+    COMMAND ${GIT_EXECUTABLE} rev-parse HEAD:apps HEAD:components HEAD:files HEAD:extern HEAD:cmake HEAD:CMakeLists.txt
     WORKING_DIRECTORY ${OpenMW_SOURCE_DIR}
     RESULT_VARIABLE EXITCODE2
-    OUTPUT_VARIABLE COMMITHASH
+    OUTPUT_VARIABLE ENGINE_TREES
     OUTPUT_STRIP_TRAILING_WHITESPACE)
+string(SHA1 COMMITHASH "${ENGINE_TREES}")
 
 string (COMPARE EQUAL "${EXITCODE1}:${EXITCODE2}" "0:0" FULL_SUCCESS)
 string (COMPARE EQUAL "${EXITCODE2}" "0" COMMIT_SUCCESS)

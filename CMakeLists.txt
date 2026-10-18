@@ -85,7 +85,8 @@ set(OPENMW_VERSION_RELEASE 0)
 set(OPENMW_LUA_API_REVISION 129)
 set(OPENMW_POSTPROCESSING_API_REVISION 5)
 
-# Isowind: builds from an exported source tree (no .git, e.g. Android) pass its git tree hash as ISOWIND_SOURCE_HASH
+# Isowind: builds from an exported source tree (no .git, e.g. Android) pass the engine source hash as ISOWIND_SOURCE_HASH
+# (see cmake/GitVersion.cmake)
 set(OPENMW_VERSION_COMMITHASH "${ISOWIND_SOURCE_HASH}")
 set(OPENMW_VERSION_TAGHASH "")
 set(OPENMW_VERSION_COMMITDATE "")
