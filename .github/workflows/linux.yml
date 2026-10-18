@@ -31,6 +31,8 @@ jobs:
         run: |
           git clone https://github.com/TES3MP/CrabNet.git crabnet
           git -C crabnet checkout 19e6619
+          # Newer compilers don't pull in <cstdint> for it
+          sed -i '1i #include <cstdint>' crabnet/Source/Utils/_FindFirst.h
           cmake -S crabnet -B crabnet/build -DCMAKE_BUILD_TYPE=Release -DCRABNET_ENABLE_DLL=OFF \
             -DCRABNET_ENABLE_SAMPLES=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON
           cmake --build crabnet/build -j$(nproc)

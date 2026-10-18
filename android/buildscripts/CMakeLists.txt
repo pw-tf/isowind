@@ -615,6 +615,8 @@ set(OPENMW_PATCH
 ExternalProject_Add(crabnet
         GIT_REPOSITORY https://github.com/TES3MP/CrabNet.git
         GIT_TAG 19e66190e83f53bcdcbcd6513238ed2e54878a21
+        # Newer compilers don't pull in <cstdint> for it
+        PATCH_COMMAND sed -i "1i #include <cstdint>" <SOURCE_DIR>/Source/Utils/_FindFirst.h
 
         CONFIGURE_COMMAND ${wrapper_command} cmake <SOURCE_DIR>
         ${COMMON_CMAKE_ARGS}

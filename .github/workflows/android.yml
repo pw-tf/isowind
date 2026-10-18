@@ -31,8 +31,9 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      # The NDK, downloaded sources and built dependencies; the engine itself is always rebuilt
-      - uses: actions/cache@v4
+      # The NDK, downloaded sources and built dependencies (the engine itself is always rebuilt). Saved after every
+      # run, failed or not, so a failing engine build doesn't cost the hour the libraries take.
+      - uses: actions/cache/restore@v4
         with:
           path: |
             android/buildscripts/downloads
@@ -40,12 +41,24 @@ jobs:
             android/buildscripts/prefix
             android/buildscripts/build
             !android/buildscripts/build/arm64/openmw-prefix
-          key: android-deps-${{ hashFiles('android/buildscripts/CMakeLists.txt', 'android/buildscripts/include/**', 'android/buildscripts/patches/**') }}
+          key: android-deps-${{ github.run_id }}
+          restore-keys: android-deps-
 
       - name: Engine and libraries (arm64)
         run: |
           rm -rf android/buildscripts/build/arm64/openmw-prefix
           cd android/buildscripts && ./build.sh --arch arm64
+
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            android/buildscripts/downloads
+            android/buildscripts/toolchain
+            android/buildscripts/prefix
+            android/buildscripts/build
+            !android/buildscripts/build/arm64/openmw-prefix
+          key: android-deps-${{ github.run_id }}
 
       - name: APK
         run: cd android && ./gradlew --no-daemon assembleMainlineDebug

@@ -89,3 +89,6 @@ venv/
 ## operating system files
 .DS_Store
 Thumbs.db
+
+# Isowind: the Android build scripts (build*/ above would skip them)
+!android/buildscripts/
