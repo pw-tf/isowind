@@ -1,0 +1,67 @@
+#ifndef OPENMW_UTILS_HPP
+#define OPENMW_UTILS_HPP
+
+#include <cstddef>
+#include <regex>
+#include <vector>
+
+#include <boost/any.hpp>
+
+#include <components/esm3/loadcell.hpp>
+
+#include <components/openmw-mp/Utils.hpp>
+#include <components/openmw-mp/TimedLog.hpp>
+
+#if (!defined(DEBUG_PRINTF) && defined(DEBUG))
+#define DEBUG_PRINTF(...) LOG_MESSAGE_SIMPLE(TimedLog::LOG_VERBOSE, __VA_ARGS__)
+#else
+#define DEBUG_PRINTF(...)
+#endif
+
+
+namespace Utils
+{
+    const std::vector<std::string> split(const std::string &str, int delimiter);
+
+    ESM::Cell getCellFromDescription(std::string cellDescription);
+
+    // A record id for the script API, which hands out C strings as TES3MP did. String ids are interned by OpenMW, so
+    // the pointer stays valid; other kinds of id are formatted into a per-thread buffer (valid until the next call).
+    const char *refIdCStr(const ESM::RefId &id);
+
+    void getArguments(std::vector<boost::any> &params, va_list args, const std::string &def);
+
+    template<size_t N>
+    constexpr unsigned int hash(const char(&str)[N], size_t I = N)
+    {
+        return (I == 1 ? ((2166136261u ^ str[0]) * 16777619u) : ((hash(str, I - 1) ^ str[I - 1]) * 16777619u));
+    }
+
+    inline unsigned int hash(const char *str, std::size_t I)
+    {
+        return (I == 1 ? ((2166136261u ^ str[0]) * 16777619u) : ((hash(str, I - 1) ^ str[I - 1]) * 16777619u));
+    }
+
+    template<typename F, typename T, typename E = void>
+    struct is_static_castable : std::false_type
+    {
+    };
+    template<typename F, typename T>
+    struct is_static_castable<F, T, typename std::conditional<true, void, decltype(static_cast<T>(std::declval<F>()))>::type>
+            : std::true_type
+    {
+    };
+
+    template<typename T, typename F>
+    inline static typename std::enable_if<is_static_castable<F *, T *>::value, T *>::type static_or_dynamic_cast(
+            F *from)
+    { return static_cast<T *>(from); }
+
+    template<typename T, typename F>
+    inline static typename std::enable_if<!is_static_castable<F *, T *>::value, T *>::type static_or_dynamic_cast(
+            F *from)
+    { return dynamic_cast<T *>(from); }
+}
+
+
+#endif //OPENMW_UTILS_HPP

@@ -1,0 +1,139 @@
+uniform_float flare_strength {
+    default = 0.27;
+    min = 0.0;
+    max = 1.0;
+    step = 0.01;
+    display_name = "Flare strength";
+    description = "Overall strength of the OpenMW 0.51 Android lens flare.";
+}
+
+uniform_float halo_size {
+    default = 0.18;
+    min = 0.05;
+    max = 0.35;
+    step = 0.01;
+    display_name = "Halo size";
+    description = "Size of the soft halo around the sun.";
+}
+
+uniform_float ghost_strength {
+    default = 0.13;
+    min = 0.0;
+    max = 0.40;
+    step = 0.01;
+    display_name = "Ghost strength";
+    description = "Strength of the two lens ghosts.";
+}
+
+shared {
+    vec3 getSunView051()
+    {
+        // OpenMW 0.51 distinguishes the visual sun-disc position (sunPos)
+        // from the sunlight direction (sunVec). Treat sunPos as a direction
+        // from the camera and force w=0 so camera translation can never enter
+        // the projection math.
+        vec3 disc = omw.sunPos.xyz;
+        float discLength = length(disc);
+        if (omw.sunPos.z <= 0.0 || discLength < 0.0001)
+            return vec3(0.5, 0.5, 0.0);
+
+        vec3 discDir = disc / discLength;
+        vec4 viewDir = omw.viewMatrix * vec4(discDir, 0.0);
+        vec4 clip = omw.projectionMatrix * viewDir;
+
+        float valid = 1.0;
+        if (abs(clip.w) < 0.0001 || clip.w <= 0.0)
+            valid = 0.0;
+
+        float safeW = max(abs(clip.w), 0.0001);
+        vec2 uv = clip.xy / safeW;
+        uv = uv * 0.5 + 0.5;
+        return vec3(uv, valid);
+    }
+
+    float edgeFade051(vec2 uv)
+    {
+        float x = smoothstep(-0.18, 0.03, uv.x) * (1.0 - smoothstep(0.97, 1.18, uv.x));
+        float y = smoothstep(-0.18, 0.03, uv.y) * (1.0 - smoothstep(0.97, 1.18, uv.y));
+        return x * y;
+    }
+
+    float aspectDistance051(vec2 uv, vec2 center, float aspect)
+    {
+        vec2 d = uv - center;
+        d.x *= aspect;
+        return length(d);
+    }
+
+    float softDisc051(vec2 uv, vec2 center, float radius, float aspect)
+    {
+        float d = aspectDistance051(uv, center, aspect);
+        return 1.0 - smoothstep(radius * 0.18, radius, d);
+    }
+}
+
+fragment main {
+    omw_In vec2 omw_TexCoord;
+
+    void main()
+    {
+        vec4 base = omw_GetLastShader(omw_TexCoord);
+        vec3 sunView = getSunView051();
+
+        if (sunView.z < 0.5 || omw.sunVis <= 0.001)
+        {
+            omw_FragColor = base;
+            return;
+        }
+
+        vec2 sunUv = sunView.xy;
+        float aspect = omw.resolution.x / max(omw.resolution.y, 1.0);
+        vec2 center = vec2(0.5);
+        vec2 axis = center - sunUv;
+
+        vec2 ghost1Pos = sunUv + axis * 1.28;
+        vec2 ghost2Pos = sunUv + axis * 1.72;
+
+        float halo = softDisc051(omw_TexCoord, sunUv, halo_size, aspect);
+        float innerGlow = softDisc051(omw_TexCoord, sunUv, halo_size * 0.40, aspect);
+        float ghost1 = softDisc051(omw_TexCoord, ghost1Pos, 0.082, aspect);
+        float ghost2 = softDisc051(omw_TexCoord, ghost2Pos, 0.052, aspect);
+        float flareMask = halo + innerGlow + ghost1 + ghost2;
+
+        if (flareMask <= 0.0001)
+        {
+            omw_FragColor = base;
+            return;
+        }
+
+        // Gate H2g keeps the device-proven Patch-22/Patch-25 flare projection and
+        // consumes only the native CPU scene-ray visibility. No PP depth sampling.
+        float visibility = omw.sunVis * clamp(omw.sunOcclusion, 0.0, 1.0) * edgeFade051(sunUv);
+        if (visibility <= 0.001)
+        {
+            omw_FragColor = base;
+            return;
+        }
+
+        vec3 sunColor = max(omw.sunColor.rgb, vec3(0.05));
+        vec3 warmColor = sunColor * vec3(1.00, 0.88, 0.68);
+        vec3 coolColor = sunColor * vec3(0.60, 0.78, 1.00);
+
+        vec3 flare = vec3(0.0);
+        flare += sunColor * halo * flare_strength * 0.52;
+        flare += warmColor * innerGlow * flare_strength * 0.66;
+        flare += warmColor * ghost1 * ghost_strength * 1.10;
+        flare += coolColor * ghost2 * ghost_strength * 0.68;
+
+        base.rgb += flare * visibility * 1.28;
+        omw_FragColor = base;
+    }
+}
+
+technique {
+    passes = main;
+    description = "OpenMW 0.51 Android lens flare with CPU scene-ray sun occlusion; builtin sunglare remains enabled.";
+    author = "OpenMW Android project";
+    version = "2.1-051-rayocc";
+    flags = Disable_Interiors, Disable_Underwater;
+}

@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='utf-8'?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:title="@string/l10n_gs_animations_animations_title">
+        <CheckBoxPreference android:key="gs_use_magic_item_animation" android:title="@string/gs_use_magic_item_animation_title" android:summary="@string/gs_use_magic_item_animation_summary" />
+        <CheckBoxPreference android:key="gs_use_additional_animation_sources" android:title="@string/gs_use_additional_animation_sources_title" android:summary="@string/gs_use_additional_animation_sources_summary" />
+        <CheckBoxPreference android:key="gs_weapon_sheating" android:title="@string/gs_weapon_sheating_title" android:summary="@string/gs_weapon_sheating_summary" />
+        <CheckBoxPreference android:key="gs_shield_sheating" android:title="@string/gs_shield_sheating_title" android:summary="@string/gs_shield_sheating_summary" />
+        <CheckBoxPreference android:key="gs_enable_graphics_herbalism" android:title="@string/gs_enable_graphics_herbalism_title" android:defaultValue="true" android:summary="@string/gs_enable_graphics_herbalism_summary" />
+        <CheckBoxPreference android:key="gs_smooth_movement" android:title="@string/gs_smooth_movement_title" android:summary="@string/gs_smooth_movement_summary" />
+        <CheckBoxPreference android:key="gs_smooth_animation_transitions" android:title="@string/gs_smooth_animation_transitions_title" android:defaultValue="false" android:summary="@string/gs_smooth_animation_transitions_summary" />
+        <CheckBoxPreference android:key="gs_turn_to_movement_direction" android:title="@string/gs_turn_to_movement_direction_title" android:summary="@string/gs_turn_to_movement_direction_summary" />
+    </PreferenceCategory>
+</PreferenceScreen>

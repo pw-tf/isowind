@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:title="@string/l10n_gs_miscellaneous_saves_title">
+        <CheckBoxPreference android:key="gs_add_time_to_saves" android:title="@string/gs_add_time_to_saves_title" android:summary="@string/gs_add_time_to_saves_summary" />
+        <EditTextPreference android:key="gs_maximum_quicksaves" android:title="@string/gs_maximum_quicksaves_title" android:dialogTitle="@string/gs_maximum_quicksaves_dialogtitle" android:inputType="numberDecimal" android:hint="1" android:defaultValue="1" android:summary="@string/gs_maximum_quicksaves_summary" />
+    </PreferenceCategory>
+</PreferenceScreen>

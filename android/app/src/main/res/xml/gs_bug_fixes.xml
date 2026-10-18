@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:title="@string/l10n_gs_bug_fixes_miscellaneous_title">
+        <CheckBoxPreference android:key="gs_merchant_equipping_fix" android:title="@string/gs_merchant_equipping_fix_title" android:summary="@string/gs_merchant_equipping_fix_summary" />
+        <CheckBoxPreference android:key="gs_trainers_bs" android:title="@string/gs_trainers_bs_title" android:summary="@string/gs_trainers_bs_summary" />
+    </PreferenceCategory>
+</PreferenceScreen>

@@ -1,0 +1,63 @@
+name: Linux
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencies
+        run: sudo CI/install_debian_deps.sh gcc openmw-deps openmw-deps-dynamic
+
+      - uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: linux-ccache-${{ github.sha }}
+          restore-keys: linux-ccache-
+
+      # The multiplayer's networking (TES3MP's CrabNet), at the commit the Windows build uses
+      - name: CrabNet
+        run: |
+          git clone https://github.com/TES3MP/CrabNet.git crabnet
+          git -C crabnet checkout 19e6619
+          cmake -S crabnet -B crabnet/build -DCMAKE_BUILD_TYPE=Release -DCRABNET_ENABLE_DLL=OFF \
+            -DCRABNET_ENABLE_SAMPLES=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+          cmake --build crabnet/build -j$(nproc)
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=mold \
+            -DUSE_SYSTEM_TINYXML=ON -DOPENMW_USE_SYSTEM_RECASTNAVIGATION=ON \
+            -DBUILD_OPENCS=OFF -DBUILD_BSATOOL=OFF -DBUILD_ESMTOOL=OFF -DBUILD_ESSIMPORTER=OFF -DBUILD_NIFTEST=OFF \
+            -DBUILD_NAVMESHTOOL=OFF -DBUILD_BULLETOBJECTTOOL=OFF \
+            -DRakNet_INCLUDES=$PWD/crabnet/include \
+            -DRakNet_LIBRARY_RELEASE=$(find $PWD/crabnet/build -name 'libRakNetLibStatic.a' | head -1) \
+            -DRakNet_LIBRARY_DEBUG=$(find $PWD/crabnet/build -name 'libRakNetLibStatic.a' | head -1)
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      # Runs from its own folder like the Windows engine folder: the executables, their configs and resources
+      - name: Package
+        run: |
+          mkdir -p isowind-linux
+          cd build
+          cp -r resources openmw.cfg defaults.bin gamecontrollerdb.txt ../isowind-linux/
+          for f in openmw openmw-launcher openmw-wizard openmw-iniimporter tes3mp-server; do
+            [ -f "$f" ] && cp "$f" ../isowind-linux/
+          done
+          cp -n *.cfg ../isowind-linux/ 2>/dev/null || true
+          cd ..
+          tar -czf isowind-linux-x86_64.tar.gz isowind-linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: isowind-linux-x86_64
+          path: isowind-linux-x86_64.tar.gz

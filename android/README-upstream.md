@@ -1,0 +1,84 @@
+<div align="center">
+
+<img width="1541" height="333" alt="image" src="https://github.com/user-attachments/assets/15a5cc0d-9210-4ce6-b8a2-09304a1b72c9" />
+
+**OpenMW (Morrowind) for Android and ChromeOS with improved controls and enhanced OMWFX shaders**
+
+![OS](https://img.shields.io/badge/up%20to-Android%2016-green)
+![Architecture](https://img.shields.io/badge/architecture-64bit-orange.svg)
+![ChromeOS](https://img.shields.io/badge/ChromeOS-Supported-4285F4?logo=googlechrome&logoColor=white)
+![AI Assisted Coding](https://img.shields.io/badge/AI-Assisted%20Coding-white)
+![Controller](https://img.shields.io/badge/Controls-Joypad/Touch/Keyb-blueviolet)
+
+</div>
+
+# OpenMW Android and ChromeOS
+
+## ✨ About
+
+This project is an **OpenMW Android and ChromeOS port for The Elder Scrolls III: Morrowind**. It is based on the [CaveBros openmw-android project](https://gitlab.com/cavebros/openmw-android/-/releases) and extends it with **OpenMW 0.51**, additional Android/ChromeOS improvements and enhanced post-processing shaders.  
+This is not meant to be the umpteenth OpenMW port; rather, this fork is about continuing the clear and simple launcher user interface of the CaveBros port, combined with a more up-to-date OpenMW base and more modern shaders.
+
+The goal is a clean, controller-friendly Morrowind experience on **Android handhelds, tablets and ChromeOS** while staying close to the upstream OpenMW engine.
+
+## ⚔️ Highlights
+
+- ⚙️ **OpenMW 0.51.0 Final** engine integrated into the Android port
+- 📱 Optimized for **Android handhelds, tablets, TV devices and ChromeOS**
+- 🎮 Improved **gamepad, touch, keyboard and physical mouse** support
+- 🖥️ Extended launcher with direct access to **gameplay, visual, shadow, interface and engine settings**
+- 📐 Configurable **resolution, UI scaling, framerate and performance options**
+- 🌑 Android-compatible **dynamic shadows** with selectable quality and distance presets
+- 🎨 Four shader presets: **Original, Modified, Zesterer and OMWFX**
+- ✨ Enhanced **OMWFX post-processing** with **WetWorld, RainLens, Godrays, Bloom and Lens Flare**
+- 🧩 Support for **mods, custom data files, shader presets and environment flags**
+- 🔧 Android-specific fixes for **GLES2/GL4ES, post-processing and depth handling**
+
+<img width="1920" height="1080" alt="openmw0" src="https://github.com/user-attachments/assets/993327f9-ee20-466c-b1bc-ef19c0cc1d00" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/1a742936-ebb4-4199-a565-fd7ff30a30f5" />
+<img width="1920" height="1080" alt="openmw1" src="https://github.com/user-attachments/assets/ace8b873-e704-45e8-b4a5-760e4994f347" />
+<img width="1920" height="1080" alt="openmw2" src="https://github.com/user-attachments/assets/97bbf06b-b6d9-4fcd-8d79-bd9f36ab7db3" />
+<img width="1920" height="1080" alt="openmw4" src="https://github.com/user-attachments/assets/cb9b06d6-265c-495c-ad78-f7464ac5b541" />
+
+
+## 🎨 OMWFX Shaders
+
+The project includes an enhanced OMWFX shader option based on the OpenMW post-processing framework and the community [OMWFX Shaders collection](https://gitlab.com/vtastek/omwfx-shaders).
+
+The bundled preset adds a more modern visual presentation while remaining optional, including the project's additional **Lens Flare** effect.
+
+## 🧩 Project Base
+
+| Component | Source |
+|---|---|
+| Android port | [CaveBros / openmw-android](https://gitlab.com/cavebros/openmw-android/-/releases) |
+| OpenMW engine | [OpenMW / openmw](https://github.com/OpenMW/openmw) |
+| Shader framework | [OMWFX Shaders](https://gitlab.com/vtastek/omwfx-shaders) |
+
+## 📦 Requirements
+
+You need your own legally obtained **The Elder Scrolls III: Morrowind** game data. Bethesda game files are **not included** in this repository.
+
+## ❤️ Support
+
+If you enjoy this project and would like to support my work, you can make a small contribution via PayPal.
+
+Your support helps me spend more time maintaining existing projects, fixing bugs, improving compatibility, and working on new features.
+
+[![Support via PayPal](https://img.shields.io/badge/Support%20via-PayPal-0070BA?logo=paypal\&logoColor=white)](https://paypal.me/andiweli)
+
+Thank you for your support!
+
+## 📜 Credits & Disclaimer
+
+OpenMW is an independent open-source reimplementation of the Morrowind engine. This Android/ChromeOS project builds upon the work of the **OpenMW**, **CaveBros** and **OMWFX shader** contributors.
+
+This project is not affiliated with or endorsed by Bethesda Softworks. **The Elder Scrolls**, **Morrowind** and related trademarks belong to their respective owners.
+
+---
+
+<div align="center">
+
+**OpenMW • Morrowind • Android • ChromeOS • OMWFX**
+
+</div>

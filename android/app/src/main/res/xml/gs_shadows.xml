@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='utf-8'?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:title="@string/l10n_gs_shadows_general_title">
+        <CheckBoxPreference android:key="gs_enable_shadows" android:title="@string/gs_enable_shadows_title" android:defaultValue="false" android:summary="@string/gs_enable_shadows_summary" />
+    </PreferenceCategory>
+    <PreferenceCategory android:title="@string/l10n_gs_shadows_shadow_casters_title">
+        <CheckBoxPreference android:key="gs_player_shadows" android:title="@string/gs_player_shadows_title" android:defaultValue="true" android:dependency="gs_enable_shadows" android:summary="@string/gs_player_shadows_summary" />
+        <CheckBoxPreference android:key="gs_actor_shadows" android:title="@string/gs_actor_shadows_title" android:defaultValue="true" android:dependency="gs_enable_shadows" android:summary="@string/gs_actor_shadows_summary" />
+        <CheckBoxPreference android:key="gs_object_shadows" android:title="@string/gs_object_shadows_title" android:defaultValue="true" android:dependency="gs_enable_shadows" android:summary="@string/gs_object_shadows_summary" />
+        <CheckBoxPreference android:key="gs_terrain_shadows" android:title="@string/gs_terrain_shadows_title" android:defaultValue="true" android:dependency="gs_enable_shadows" android:summary="@string/gs_terrain_shadows_summary" />
+        <CheckBoxPreference android:key="gs_indoor_shadows" android:title="@string/gs_indoor_shadows_title" android:defaultValue="true" android:dependency="gs_enable_shadows" android:summary="@string/gs_indoor_shadows_summary" />
+    </PreferenceCategory>
+    <PreferenceCategory android:title="@string/l10n_gs_shadows_quality_distance_title">
+        <ListPreference android:key="gs_shadow_quality" android:title="@string/gs_shadow_quality_title" android:dialogTitle="@string/gs_shadow_quality_dialogtitle" android:entries="@array/gs_shadow_quality_entries" android:entryValues="@array/gs_shadow_quality_values" android:defaultValue="medium" android:dependency="gs_enable_shadows" android:summary="%s" />
+        <ListPreference android:key="gs_shadow_distance" android:title="@string/gs_shadow_distance_title" android:dialogTitle="@string/gs_shadow_distance_dialogtitle" android:entries="@array/gs_shadow_distance_entries" android:entryValues="@array/gs_shadow_distance_values" android:defaultValue="medium" android:dependency="gs_enable_shadows" android:summary="%s" />
+    </PreferenceCategory>
+</PreferenceScreen>

@@ -1,0 +1,178 @@
+uniform_float rainlens_strength_v34 {
+    default = 0.72;
+    min = 0.0;
+    max = 1.25;
+    step = 0.05;
+    static = true;
+    display_name = "RainLens strength";
+    header = "RainLens";
+    description = "Overall visibility of lens raindrops during rain and thunderstorms.";
+}
+
+uniform_float rainlens_refraction_v34 {
+    default = 0.92;
+    min = 0.0;
+    max = 1.50;
+    step = 0.05;
+    static = true;
+    display_name = "RainLens refraction";
+    header = "RainLens";
+    description = "Strength of local scene refraction inside each droplet.";
+}
+
+uniform_float rainlens_density_v34 {
+    default = 0.90;
+    min = 0.0;
+    max = 1.0;
+    step = 0.05;
+    static = true;
+    display_name = "RainLens density";
+    header = "RainLens";
+    description = "Number of visible lens droplets. The default is calibrated to twice the Patch-33 population.";
+}
+
+fragment main {
+    omw_In vec2 omw_TexCoord;
+
+    float rainForWeather051(int weatherId)
+    {
+        if (weatherId == 4)
+            return 0.82;
+        if (weatherId == 5)
+            return 1.0;
+        return 0.0;
+    }
+
+    float rainFactor051()
+    {
+        float currentRain = rainForWeather051(omw.weatherID);
+        float nextRain = rainForWeather051(omw.nextWeatherID);
+        return mix(currentRain, nextRain, clamp(omw.weatherTransition, 0.0, 1.0));
+    }
+
+    float hash21051(vec2 p)
+    {
+        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+    }
+
+    // Direct OpenMW 0.50 RainLens v1.2 port. One coherent moving teardrop:
+    // xy = refraction vector, z = body mask, w = edge mask.
+    vec4 movingDrop051(vec2 uv, float cells, float speed, float seed,
+        float timeValue, float wind, float density)
+    {
+        float aspect = omw.resolution.x / max(omw.resolution.y, 1.0);
+
+        vec2 p = uv;
+        p.x = (p.x - 0.5) * aspect + 0.5;
+        p *= cells;
+
+        p.y += timeValue * speed;
+        p.x -= timeValue * wind * 0.018;
+
+        vec2 id = floor(p);
+        vec2 gv = fract(p) - 0.5;
+
+        float rx = hash21051(id + vec2(seed, seed * 1.73));
+        float ry = hash21051(id + vec2(seed * 2.31, seed * 0.61));
+        float rs = hash21051(id + vec2(seed * 0.37, seed * 3.17));
+        float ra = hash21051(id + vec2(seed * 3.91, seed * 0.29));
+
+        // Patch 34 keeps the exact v1.2 drop geometry but doubles the expected
+        // active-cell population: 12.28% in Patch 33 becomes 24.40% here.
+        float threshold = mix(0.94, 0.72, clamp(density, 0.0, 1.0));
+        float dropEnabled = smoothstep(threshold, min(0.995, threshold + 0.028), ra);
+
+        gv.x -= (rx - 0.5) * 0.58;
+        gv.y -= (ry - 0.5) * 0.24;
+
+        float size = mix(0.88, 1.22, rs);
+        vec2 q = gv / size;
+        q.x -= sin((q.y + 0.16) * 7.0 + rx * 6.28318) * 0.010;
+
+        vec2 bulbPosition = vec2(q.x / 0.108, (q.y + 0.105) / 0.145);
+        float bulbDistance = length(bulbPosition);
+        float bulb = 1.0 - smoothstep(0.88, 1.04, bulbDistance);
+
+        float taperT = clamp((q.y + 0.035) / 0.255, 0.0, 1.0);
+        float taperWidth = mix(0.082, 0.006, taperT);
+        float taperX = 1.0 - smoothstep(taperWidth * 0.78, taperWidth, abs(q.x));
+        float taperY = smoothstep(-0.060, -0.020, q.y)
+            * (1.0 - smoothstep(0.185, 0.245, q.y));
+        float taper = taperX * taperY;
+
+        float bridgeWidth = mix(0.096, 0.066,
+            clamp((q.y + 0.060) / 0.105, 0.0, 1.0));
+        float bridge = (1.0 - smoothstep(bridgeWidth * 0.78, bridgeWidth, abs(q.x)))
+            * smoothstep(-0.080, -0.045, q.y)
+            * (1.0 - smoothstep(0.025, 0.060, q.y));
+
+        float body = clamp(max(bulb, max(taper, bridge)) * dropEnabled, 0.0, 1.0);
+        float inner = clamp(max(
+            1.0 - smoothstep(0.70, 0.88, bulbDistance),
+            max(taper * 0.72, bridge * 0.72)
+        ) * dropEnabled, 0.0, 1.0);
+        float edge = clamp(body - inner, 0.0, 1.0);
+
+        vec2 direction = vec2(q.x, (q.y + 0.085) * 0.68);
+        float lengthSquared = dot(direction, direction);
+        if (lengthSquared > 0.000001)
+            direction *= inversesqrt(lengthSquared);
+        else
+            direction = vec2(0.0, -1.0);
+
+        vec2 refractionOffset = direction * body * 0.00235;
+        refractionOffset.x /= max(aspect, 0.001);
+
+        return vec4(refractionOffset, body, edge);
+    }
+
+    void main()
+    {
+        vec4 base = omw_GetLastShader(omw_TexCoord);
+        float rain = rainFactor051() * rainlens_strength_v34;
+
+        if (rain <= 0.001)
+        {
+            omw_FragColor = base;
+            return;
+        }
+
+        float timeValue = omw.simulationTime;
+        float wind = clamp(omw.windSpeed, 0.0, 1.5);
+        float density = clamp(rainlens_density_v34, 0.0, 1.0);
+        vec4 drop = movingDrop051(
+            omw_TexCoord, 5.6, 0.215, 19.7, timeValue, wind, density
+        );
+
+        float mask = clamp(drop.z * rain, 0.0, 1.0);
+
+        if (mask <= 0.001)
+        {
+            omw_FragColor = base;
+            return;
+        }
+
+        vec2 sampleUv = clamp(
+            omw_TexCoord + drop.xy * rainlens_refraction_v34 * rain,
+            vec2(0.001),
+            vec2(0.999)
+        );
+        vec4 refracted = omw_GetLastShader(sampleUv);
+
+        float refractionMix = clamp(mask * 0.82, 0.0, 0.82);
+        vec3 result = mix(base.rgb, refracted.rgb, refractionMix);
+        result *= 1.0 - 0.030 * mask;
+        result += vec3(0.028) * drop.w * rain;
+
+        base.rgb = result;
+        omw_FragColor = base;
+    }
+}
+
+technique {
+    passes = main;
+    description = "OpenMW 0.51 Android RainLens v1.2 with a doubled moving-drop population.";
+    author = "OpenMW Android project";
+    version = "4.3-051-rainlens-v12-dense";
+    flags = Disable_Interiors, Disable_Underwater;
+}

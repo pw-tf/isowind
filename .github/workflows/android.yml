@@ -1,0 +1,51 @@
+name: Android
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      # The NDK, the dependencies and their builds need more room than the runner leaves free
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+
+      - uses: actions/checkout@v4
+
+      - name: Dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential cmake python3 wget unzip bzip2 pkg-config gettext-base autoconf \
+            automake libtool patch nasm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # The NDK, downloaded sources and built dependencies; the engine itself is always rebuilt
+      - uses: actions/cache@v4
+        with:
+          path: |
+            android/buildscripts/downloads
+            android/buildscripts/toolchain
+            android/buildscripts/prefix
+            android/buildscripts/build
+            !android/buildscripts/build/arm64/openmw-prefix
+          key: android-deps-${{ hashFiles('android/buildscripts/CMakeLists.txt', 'android/buildscripts/include/**', 'android/buildscripts/patches/**') }}
+
+      - name: Engine and libraries (arm64)
+        run: |
+          rm -rf android/buildscripts/build/arm64/openmw-prefix
+          cd android/buildscripts && ./build.sh --arch arm64
+
+      - name: APK
+        run: cd android && ./gradlew --no-daemon assembleMainlineDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: isowind-android-arm64
+          path: android/app/build/outputs/apk/mainline/debug/*.apk
