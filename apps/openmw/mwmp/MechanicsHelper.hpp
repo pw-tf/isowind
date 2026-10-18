@@ -15,6 +15,9 @@ namespace MechanicsHelper
     ESM::Position getPositionFromVector(osg::Vec3f vector);
 
     void spawnLeveledCreatures(MWWorld::CellStore* cellStore);
+    /// Isowind MMO: an actor the server brings back (respawns), alive and fresh at its starting place, as when
+    /// Morrowind respawns one. Only for cells nobody here is in; returns whether it was done.
+    bool respawnActor(const MWWorld::Ptr& ptr);
 
     bool isUsingRangedWeapon(const MWWorld::Ptr& ptr);
 

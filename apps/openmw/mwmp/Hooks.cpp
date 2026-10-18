@@ -544,6 +544,39 @@ namespace mwmp::hooks
         return otherPlayer && contains(player->alliedPlayers, otherPlayer->guid);
     }
 
+    namespace
+    {
+        bool sPvp = false;
+        bool sMmo = false;
+
+        bool isPlayer(const MWWorld::Ptr& ptr)
+        {
+            return isLocalPlayer(ptr) || isDedicatedPlayer(ptr);
+        }
+    }
+
+    bool applyServerRule(const std::string& name, const std::string& value)
+    {
+        if (name == "isowind pvp")
+            sPvp = value == "true";
+        else if (name == "isowind mode")
+            sMmo = value == "mmo";
+        else
+            return false;
+        return true;
+    }
+
+    bool isPvpBlocked(const MWWorld::Ptr& attacker, const MWWorld::Ptr& victim)
+    {
+        return isMultiplayer() && !sPvp && !attacker.isEmpty() && !victim.isEmpty() && attacker != victim
+            && isPlayer(attacker) && isPlayer(victim);
+    }
+
+    bool isMmoMode()
+    {
+        return isMultiplayer() && sMmo;
+    }
+
     void sendSummonRemoval(const MWWorld::Ptr& creature)
     {
         if (!isLoggedIn() || creature.isEmpty())
@@ -1287,5 +1320,21 @@ namespace mwmp::hooks
             objectList->addObjectSpawn(ptr);
             objectList->sendObjectSpawn();
         }
+    }
+
+    bool claimExploredMapTile(int cellX, int cellY)
+    {
+        if (!isLoggedIn())
+            return false;
+        mwmp::Worldstate* worldstate = Main::get().getNetworking()->getWorldstate();
+        if (worldstate->containsExploredMapTile(cellX, cellY))
+            return false;
+        worldstate->markExploredMapTile(cellX, cellY);
+        return true;
+    }
+
+    void sendExploredMapTile(int cellX, int cellY, const std::vector<char>& png)
+    {
+        Main::get().getNetworking()->getWorldstate()->sendMapExplored(cellX, cellY, png);
     }
 }

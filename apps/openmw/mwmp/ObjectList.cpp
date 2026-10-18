@@ -990,12 +990,24 @@ void ObjectList::runConsoleCommands(MWWorld::CellStore* cellStore)
             {
                 LOG_APPEND(TimedLog::LOG_VERBOSE, "-- Running on object %s %i-%i", baseObject.refId.c_str(), baseObject.refNum, baseObject.mpNum);
 
+                // A cell this client hasn't loaded has its actors as they start anyway
+                if (consoleCommand == "isowind respawn" && cellStore->getState() != MWWorld::CellStore::State_Loaded)
+                    continue;
+
                 MWWorld::Ptr ptrFound = cellStore->searchExact(baseObject.refNum, baseObject.mpNum, mwmp::refId(baseObject.refId));
 
                 if (!ptrFound.isEmpty())
                 {
                     LOG_APPEND(TimedLog::LOG_VERBOSE, "-- Found %s %i-%i", mwmp::idString(ptrFound.getCellRef().getRefId()).c_str(),
                         ptrFound.getCellRef().getMpRefNum(), ptrFound.getCellRef().getMpNum());
+
+                    // Isowind MMO: not a console command, the server bringing an enemy or NPC back
+                    if (consoleCommand == "isowind respawn")
+                    {
+                        if (!MechanicsHelper::respawnActor(ptrFound))
+                            LOG_APPEND(TimedLog::LOG_INFO, "-- Not respawned here (its cell is in use)");
+                        continue;
+                    }
 
                     windowManager->setConsolePtr(ptrFound);
                     windowManager->executeCommandInConsole(consoleCommand);

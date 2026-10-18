@@ -673,6 +673,11 @@ void ObjectFunctions::SetContainerItemSoul(const char* soul) noexcept
     tempContainerItem.soul = soul;
 }
 
+void ObjectFunctions::SetContainerItemActionCount(int actionCount) noexcept
+{
+    tempContainerItem.actionCount = actionCount;
+}
+
 void ObjectFunctions::SetContainerItemActionCountByIndex(unsigned int objectIndex, unsigned int itemIndex, int actionCount) noexcept
 {
     writeObjectList.baseObjects.at(objectIndex).containerItems.at(itemIndex).actionCount = actionCount;

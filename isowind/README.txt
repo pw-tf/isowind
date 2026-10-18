@@ -23,7 +23,7 @@ Getting started
 On Linux, unpack the folder and use isowind.sh instead of Isowind.exe, from a terminal:
    ./isowind.sh                 play (pixel art; ./isowind.sh normal for the normal look)
    ./isowind.sh join ADDRESS    play on a server
-   ./isowind.sh host            run a server in that terminal
+   ./isowind.sh host            run a server in that terminal (it asks its settings first)
    The first time it finds Morrowind in Steam's usual places and sets up OpenMW for it; otherwise run it as
    MORROWIND=/path/to/Morrowind ./isowind.sh (the folder with "Data Files" in it). The pixel art look
    needs Python 3; it fetches Pillow for itself if your system doesn't have it.
@@ -46,16 +46,26 @@ Joining a friend's server
 The address is remembered for next time.
 
 Hosting a server
-1. Press "Host a server" in Isowind.exe. A server window opens; close it to stop the server.
-2. Press Join (the address is set to 127.0.0.1, this computer) to play on it yourself.
+1. Press "Host a server" in Isowind.exe and choose its settings:
+   - Name, port (25565 unless you change it), most players, and a password (empty: anyone can join).
+   - Game: Co-op is one shared world, as in single player. MMO gives everyone their own loot
+     (containers, corpses, plants, items lying around) and their own quests, and enemies and NPCs
+     come back after they die once no one is nearby: weak ones after 1.5 minutes, normal ones 5,
+     tough ones 15, bosses 60 ("Enemy respawns" speeds that up or slows it down). Plants and ore
+     you harvested grow back for you after 10 minutes; chests don't refill.
+   - PvP (whether players can hurt each other), difficulty and how fast the time of day goes.
+   Then a server window opens; close it to stop the server.
+2. Press Join (the address is set to this computer) to play on it yourself.
 3. Friends need to reach your computer, one of two ways:
-   - Port forwarding: in your router, forward UDP port 25565 to this computer, and allow
-     tes3mp-server.exe through the Windows firewall when it asks. Friends use your internet address
-     (search "what is my IP").
+   - Port forwarding: in your router, forward the server's UDP port (25565) to this computer, and
+     allow tes3mp-server.exe through the Windows firewall when it asks. Friends use your internet
+     address (search "what is my IP").
    - A VPN that puts you on one network, such as Tailscale, ZeroTier or Radmin VPN (free). Everyone
      joins the same network and friends use this computer's address in it.
-The server's settings (port, password, player count) are in server\tes3mp-server-default.cfg, and
-everything it saves (characters, the world) in server\CoreScripts\data. Its log is in server\logs.
+Your choices are kept in server\tes3mp-server.cfg (over server\tes3mp-server-default.cfg), and
+everything the server saves (characters, the world) in server\CoreScripts\data. Its log is in
+server\logs. Keep the same game (co-op or MMO) for a world: an MMO world switched to co-op forgets
+what each player looted, so it's all back.
 
 In multiplayer
 Enter          Talk in the chat; F2 hides or shows the chat window.

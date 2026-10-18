@@ -2,3 +2,4 @@ data/*
 lib/*
 scripts/custom/*
 !/lib/lua
+!scripts/custom/isowind*.lua

@@ -85,7 +85,7 @@ namespace MWGui
         bool isGamepadCursorAllowed() { return !mDisableGamepadCursor; }
         virtual bool onControllerButtonEvent(const SDL_ControllerButtonEvent& arg) { return true; }
         virtual bool onControllerThumbstickEvent(const SDL_ControllerAxisEvent& arg) { return false; }
-        virtual void setActiveControllerWindow(bool active) { mActiveControllerWindow = active; }
+        virtual void setActiveControllerWindow(bool active);
 
     protected:
         virtual void onTitleDoubleClicked();
@@ -124,10 +124,14 @@ namespace MWGui
         virtual void setAlpha(float alpha);
         virtual ~NoDrop() = default;
 
+        /// Isowind: the alpha the window settles back to (dimmed when it isn't the controller's active window)
+        void setRestAlpha(float alpha) { mRestAlpha = alpha; }
+
     private:
         MyGUI::Widget* mWidget;
         DragAndDrop* mDrag;
         bool mTransparent;
+        float mRestAlpha = 1.f;
     };
 
     class BookWindowBase : public WindowBase

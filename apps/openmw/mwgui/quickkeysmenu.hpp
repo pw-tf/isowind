@@ -54,6 +54,10 @@ namespace MWGui
         /// Isowind's action bar: the Item / Magic / Delete dialog for a key (1-based), as clicking it here opens.
         void openAssignDialog(int index);
         void assignItemToKey(int index, const MWWorld::Ptr& item);
+
+        /// Isowind: the slot picked next gets this item (Item, MagicItem) or spell (Magic) instead of opening the
+        /// assign dialog; then the menu closes
+        void beginAssign(ESM::QuickKeys::Type type, const MWWorld::Ptr& item, const ESM::RefId& spellId);
         void unassignKey(int index);
 
         /// Isowind multiplayer: assigns a key (1-based slot) as the server says.
@@ -67,6 +71,10 @@ namespace MWGui
         std::string_view getWindowIdForLua() const override { return "QuickKeys"; }
 
     private:
+        ESM::QuickKeys::Type mPendingType = ESM::QuickKeys::Type::Unassigned;
+        MWWorld::Ptr mPendingItem;
+        ESM::RefId mPendingSpell;
+
         struct keyData
         {
             int index = -1;

@@ -13,6 +13,7 @@
 
 #include "../mwgui/mode.hpp"
 
+#include <components/esm3/quickkeys.hpp>
 #include <components/sdlutil/events.hpp>
 
 namespace ESM
@@ -253,6 +254,20 @@ namespace MWBase
         virtual void notifyInputActionBound() = 0;
 
         virtual void addVisitedLocation(const std::string& name, int x, int y) = 0;
+
+        /// Isowind controller menus: whether this menu has several windows side by side (the inventory screen,
+        /// containers, barter, companions), so the bumpers switch between them and the triggers do the bumpers' jobs
+        /// in the windows
+        virtual bool controllerCyclesWindows() = 0;
+        /// How fast the controller's menu cursor moves here (slower over the world map, so it can pick out places)
+        virtual float getControllerCursorSpeedScale() = 0;
+        /// Isowind controller menus: a click on one of the windows side by side makes it the active one
+        virtual void selectControllerWindowUnderMouse() = 0;
+        /// Isowind: opens the Quick Keys menu to put this item (Item, MagicItem) or spell (Magic) on the slot chosen
+        virtual void beginQuickKeyAssign(
+            ESM::QuickKeys::Type type, const MWWorld::Ptr& item, const ESM::RefId& spellId) = 0;
+        /// Isowind multiplayer: an explored cell's world map picture (a PNG) from the server
+        virtual void setGlobalMapTile(int cellX, int cellY, const std::vector<char>& png) = 0;
 
         /// Hides dialog and schedules dialog to be deleted.
         virtual void removeDialog(std::unique_ptr<MWGui::Layout>&& dialog) = 0;

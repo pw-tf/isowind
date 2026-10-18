@@ -198,6 +198,9 @@ namespace MWMechanics
             const ESM::MagicEffect* magicEffect = store.find(enam.mData.mEffectID);
             if (!magicEffect)
                 continue;
+            // Isowind multiplayer: no harmful spells from one player on another while the server has PvP off
+            if (magicEffect->mData.mFlags & ESM::MagicEffect::Harmful && mwmp::hooks::isPvpBlocked(mCaster, target))
+                continue;
             // caster needs to be an actor for linked effects (e.g. Absorb)
             if (magicEffect->mData.mFlags & ESM::MagicEffect::CasterLinked
                 && (mCaster.isEmpty() || !mCaster.getClass().isActor()))

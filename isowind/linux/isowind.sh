@@ -4,7 +4,8 @@
 #   ./isowind.sh                  play (pixel art look, or the look you used last)
 #   ./isowind.sh normal           play with the normal look (or: pixelart)
 #   ./isowind.sh join ADDRESS     play on a server, e.g. ./isowind.sh join 203.0.113.7:25565 (look optional after it)
-#   ./isowind.sh host             run a server here, in this terminal (others join with this computer's address)
+#   ./isowind.sh host             run a server here, in this terminal, after asking its settings (others join
+#                                 with this computer's address)
 #
 # The first time, it finds Morrowind (Steam's usual places; otherwise run it as MORROWIND=/path/to/Morrowind
 # ./isowind.sh, the folder with "Data Files" and Morrowind.ini) and sets up OpenMW for it, like OpenMW's wizard.
@@ -58,20 +59,107 @@ Install your distribution's python3-pillow (or python3-venv), or play with the n
     echo "Built by isowind.sh from your Morrowind files" > "$TEXTURES_MARKER"
 }
 
+# set_setting FILE SECTION KEY VALUE: sets KEY in [SECTION] of a settings file (OpenMW's settings.cfg, the server's
+# tes3mp-server.cfg); a new one goes after the section's last setting
+set_setting() {
+    awk -v section="[$2]" -v key="$3" -v value="$4" '
+        function emit() { print key " = " value; done = 1 }
+        function flush() { printf "%s", blanks; blanks = "" }
+        $0 == section { print; insection = 1; next }
+        insection && /^[ \t\r]*$/ { blanks = blanks $0 "\n"; next }
+        /^\[/ && insection { if (!done) emit(); insection = 0 }
+        insection && index($0, key " =") == 1 { flush(); emit(); next }
+        { flush(); print }
+        END { if (!done) { if (!insection) print "\n" section; emit() } flush() }
+    ' "$1" > "$1.tmp" && mv "$1.tmp" "$1"
+}
+
+# get_server_setting SECTION KEY DEFAULT: from the server's settings files (in the current folder), tes3mp-server.cfg's
+# over tes3mp-server-default.cfg's
+get_server_setting() {
+    VALUE=$(cat tes3mp-server-default.cfg tes3mp-server.cfg 2>/dev/null | tr -d '\r' | awk -v section="[$1]" -v key="$2" '
+        /^\[/ { insection = ($0 == section); next }
+        insection && !/^#/ && (i = index($0, "=")) {
+            k = substr($0, 1, i - 1); v = substr($0, i + 1)
+            gsub(/^[ \t]+|[ \t]+$/, "", k); gsub(/^[ \t]+|[ \t]+$/, "", v)
+            if (k == key) found = v
+        }
+        END { print found }')
+    echo "${VALUE:-$3}"
+}
+
+# ask QUESTION DEFAULT [PATTERN]: the answer in REPLY (Enter keeps the default); asked again until it matches the
+# extended regular expression PATTERN
+ask() {
+    while :; do
+        printf '%s [%s]: ' "$1" "$2"
+        read -r REPLY || REPLY=""
+        [ -n "$REPLY" ] || REPLY=$2
+        if [ -z "$3" ] || printf '%s\n' "$REPLY" | grep -Eqx "$3"; then return; fi
+        echo "  That isn't one of the choices."
+    done
+}
+
+# The host's choices, kept in server/tes3mp-server.cfg (over tes3mp-server-default.cfg), as Isowind.exe's
+# "Host a server" window does on Windows
+ask_host_settings() {
+    FILE=tes3mp-server.cfg
+    [ -f "$FILE" ] || echo "# This server's settings, over those in tes3mp-server-default.cfg (isowind.sh host writes them)" > "$FILE"
+    if [ ! -t 0 ]; then return; fi
+    echo "Hosting a server. Press Enter to keep the choice in [brackets]."
+    ask "Server name" "$(get_server_setting General hostname 'Isowind server')" '[^=#]{1,60}'
+    set_setting "$FILE" General hostname "$REPLY"
+    ask "Port" "$(get_server_setting General port 25565)" '[0-9]{4,5}'
+    PORT=$REPLY
+    set_setting "$FILE" General port "$REPLY"
+    ask "Most players" "$(get_server_setting General maximumPlayers 16)" '[1-9]|[1-5][0-9]|6[0-4]'
+    set_setting "$FILE" General maximumPlayers "$REPLY"
+    PASSWORD=$(get_server_setting General password '')
+    ask "Password (a single - for none)" "${PASSWORD:--}" '[^ ]{1,40}'
+    [ "$REPLY" = "-" ] && REPLY=""
+    set_setting "$FILE" General password "$REPLY"
+    echo "Game: coop  - one shared world, as in single player"
+    echo "      mmo   - everyone loots and quests for themselves, and enemies come back"
+    ask "Game (coop or mmo)" "$(get_server_setting Isowind mode coop)" 'coop|mmo'
+    MODE=$REPLY
+    set_setting "$FILE" Isowind mode "$REPLY"
+    PVP=$(get_server_setting Isowind pvp false)
+    [ "$PVP" = true ] && PVP=yes || PVP=no
+    ask "Can players hurt each other (PvP)? (yes or no)" "$PVP" 'yes|no'
+    [ "$REPLY" = yes ] && REPLY=true || REPLY=false
+    set_setting "$FILE" Isowind pvp "$REPLY"
+    ask "Difficulty, -100 (very easy) to 100 (very hard), 0 is Morrowind's normal" \
+        "$(get_server_setting Isowind difficulty 0)" '-?[0-9]{1,3}'
+    set_setting "$FILE" Isowind difficulty "$REPLY"
+    if [ "$MODE" = mmo ]; then
+        ask "How fast enemies come back: 0.5, 1, 2 or 4 (1: 1.5 minutes for the weakest, 60 for bosses)" \
+            "$(get_server_setting Isowind respawnSpeed 1)" '0\.5|1|2|4'
+        set_setting "$FILE" Isowind respawnSpeed "$REPLY"
+    fi
+    ask "How fast the time of day goes: 0.5, 1, 2 or 4 (1: Morrowind's, an hour in 2 minutes)" \
+        "$(get_server_setting Isowind timeSpeed 1)" '0\.5|1|2|4'
+    set_setting "$FILE" Isowind timeSpeed "$REPLY"
+}
+
 play() {
     LOOK=${1:-$(cat "$LOOK_FILE" 2>/dev/null || echo pixelart)}
     case $LOOK in pixelart|normal) ;; *) die "unknown look '$LOOK' (pixelart or normal)" ;; esac
     echo "$LOOK" > "$LOOK_FILE"
     setup_morrowind
     [ "$LOOK" = pixelart ] && build_textures
+    # Menus made for a controller when one is plugged in, Morrowind's own (drag and drop) otherwise
+    if ls /dev/input/js* >/dev/null 2>&1; then MENUS=true; else MENUS=false; fi
+    set_setting "$ROOT/profiles/$LOOK/settings.cfg" GUI "controller menus" "$MENUS"
     exec "$ENGINE/openmw" --config "$ROOT/profiles/$LOOK" $CONNECT
 }
 
 case $1 in
     host)
         cd "$ROOT/server"
-        echo "Starting the server (Ctrl+C stops it). Play on it with: $0 join 127.0.0.1"
-        echo "Friends join with this computer's address; the host's router needs UDP port 25565 forwarded to it."
+        ask_host_settings
+        PORT=$(get_server_setting General port 25565)
+        echo "Starting the server (Ctrl+C stops it). Play on it with: $0 join 127.0.0.1:$PORT"
+        echo "Friends join with this computer's address; the host's router needs UDP port $PORT forwarded to it."
         exec "$ENGINE/tes3mp-server" ;;
     join)
         [ -n "$2" ] || die "join needs the server's address, e.g. $0 join 203.0.113.7"
@@ -80,6 +168,6 @@ case $1 in
     ""|pixelart|normal)
         play "$1" ;;
     *)
-        sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
         exit 1 ;;
 esac

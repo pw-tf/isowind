@@ -13,7 +13,9 @@
 #include "../mwbase/environment.hpp"
 #include "../mwbase/luamanager.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
+#include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
+#include "../mwworld/scene.hpp"
 
 #include "../mwmechanics/activespells.hpp"
 #include "../mwmechanics/actorutil.hpp"
@@ -103,6 +105,27 @@ void MechanicsHelper::spawnLeveledCreatures(MWWorld::CellStore* cellStore)
 
     if (!spawns.empty())
         objectList->sendObjectSpawn();
+}
+
+bool MechanicsHelper::respawnActor(const MWWorld::Ptr& ptr)
+{
+    if (ptr.isEmpty() || !ptr.getClass().isActor() || ptr.getCell()->getState() != MWWorld::CellStore::State_Loaded
+        || MWBase::Environment::get().getWorldScene()->isCellActive(*ptr.getCell()))
+        return false;
+
+    // What Npc::respawn and Creature::respawn do, whatever the Respawn flag and time since death (its local
+    // script comes back when the cell becomes active)
+    MWBase::World* world = MWBase::Environment::get().getWorld();
+    if (ptr.getCellRef().getCount() == 0)
+        ptr.getCellRef().setCount(1);
+    MWBase::Environment::get().getWindowManager()->onDeleteCustomData(ptr);
+    ptr.getRefData().setCustomData(nullptr);
+    ptr.getRefData().enable();
+
+    const ESM::Position& start = ptr.getCellRef().getPosition();
+    MWWorld::Ptr moved = world->moveObject(ptr, ptr.getCell()->getOriginCell(ptr), start.asVec3());
+    world->rotateObject(moved, start.asRotationVec3(), MWBase::RotationFlag_none);
+    return true;
 }
 
 bool MechanicsHelper::isUsingRangedWeapon(const MWWorld::Ptr& ptr)

@@ -21,6 +21,7 @@
 #include <components/settings/values.hpp>
 
 #include "../mwbase/environment.hpp"
+#include "../mwbase/inputmanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 
@@ -1196,6 +1197,11 @@ namespace MWGui
         return markerWidget;
     }
 
+    void MapWindow::setGlobalMapTile(int cellX, int cellY, const std::vector<char>& png)
+    {
+        mGlobalMapRender->setTile(cellX, cellY, png);
+    }
+
     void MapWindow::addVisitedLocation(const std::string& name, int x, int y)
     {
         CellId cell;
@@ -1248,6 +1254,7 @@ namespace MWGui
         NoDrop::onFrame(dt);
         updateGlobalPlayerMarkers();
     }
+
 
     void MapWindow::updateGlobalPlayerMarkers()
     {
@@ -1583,19 +1590,7 @@ namespace MWGui
         MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
         if (winMgr->getMode() == MWGui::GM_Inventory)
         {
-            // Fill the screen, or limit to a certain size on large screens. Size chosen to
-            // show the entire local map without scrolling.
-            MyGUI::IntSize viewSize = MyGUI::RenderManager::getInstance().getViewSize();
-            MyGUI::IntSize canvasSize = mLocalMap->getCanvasSize();
-            MyGUI::IntSize borderSize = mMainWidget->getSize() - mMainWidget->getClientWidget()->getSize();
-
-            int width = std::min(viewSize.width, canvasSize.width + borderSize.width);
-            int height = std::min(winMgr->getControllerMenuHeight(), canvasSize.height + borderSize.height);
-            int x = (viewSize.width - width) / 2;
-            int y = (viewSize.height - height) / 2;
-
-            MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();
-            window->setCoord(x, active ? y : viewSize.height + 1, width, height);
+            // Isowind: the windows keep Morrowind's layout (the active one is lit, see WindowBase)
         }
 
         WindowBase::setActiveControllerWindow(active);

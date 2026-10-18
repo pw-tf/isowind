@@ -748,16 +748,8 @@ namespace MWGui
         MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
         if (winMgr->getMode() == MWGui::GM_Inventory)
         {
-            // Fill the screen, or limit to a certain size on large screens. Size chosen to
-            // show all stats.
-            MyGUI::IntSize viewSize = MyGUI::RenderManager::getInstance().getViewSize();
-            int width = std::min(viewSize.width, getIdealWidth());
-            int height = std::min(winMgr->getControllerMenuHeight(), getIdealHeight());
-            int x = (viewSize.width - width) / 2;
-            int y = (viewSize.height - height) / 2;
-
+            // Isowind: the windows keep Morrowind's layout (the active one is lit, see WindowBase)
             MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();
-            window->setCoord(x, active ? y : viewSize.height + 1, width, height);
 
             if (active)
                 onWindowResize(window);

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 
 #include <components/esm3/loadmgef.hpp>
@@ -75,12 +76,11 @@ DedicatedPlayer::~DedicatedPlayer()
 
 void DedicatedPlayer::update(float dt)
 {
-    // Only move and set anim flags if the framerate isn't too low
-    if (dt < 0.1)
-    {
-        move(dt);
-        setAnimFlags();
-    }
+    // Isowind: every frame, slow ones too (skipping them let the actor wander off on its last movement until the
+    // framerate picked up, ending up somewhere else than for everyone else); the step toward the position from the
+    // network is dt * 15 of the way, so dt is capped where that gets all the way there
+    move(std::min(dt, 1.f / 15.f));
+    setAnimFlags();
 
     MWMechanics::CreatureStats *ptrCreatureStats = &ptr.getClass().getCreatureStats(ptr);
 

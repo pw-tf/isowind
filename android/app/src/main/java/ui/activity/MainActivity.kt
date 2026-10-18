@@ -638,6 +638,8 @@ class MainActivity : AppCompatActivity() {
                         line.substringAfter('=').trim()
             }
         }
+        // Menus made for a controller: the handheld's pad or the on-screen one drives them
+        sections.getOrPut("GUI") { linkedMapOf() }["controller menus"] = "true"
         val settingsFile = File(Constants.USER_CONFIG, "settings.cfg")
         sections.forEach { (name, values) -> updateSettingsSection(settingsFile, name, values) }
     }

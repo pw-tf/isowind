@@ -455,12 +455,9 @@ void Worldstate::setMapExplored()
             MWBase::Environment::get().getWindowManager()->addVisitedLocation(
                 std::string(cellStore.getCell()->getNameId()), mapTile.x, mapTile.y);
 
-        // TODO: TES3MP also shared the explored map's pictures (WindowManager::setGlobalMapImage), which needs
-        // porting to OpenMW 0.51's global map
-        //MWBase::Environment::get().getWindowManager()->setGlobalMapImage(mapTile.x, mapTile.y, mapTile.imageData);
-
-        // Keep this tile marked as explored so we don't send any more packets for it
+        // Keep this tile marked as explored so we don't send any more packets for it (before drawing it)
         markExploredMapTile(mapTile.x, mapTile.y);
+        MWBase::Environment::get().getWindowManager()->setGlobalMapTile(mapTile.x, mapTile.y, mapTile.imageData);
     }
 }
 

@@ -2316,7 +2316,9 @@ namespace MWMechanics
                 {
                     float height = cls.getCreatureStats(mPtr).land(isPlayer);
                     float healthLost = 0.f;
-                    if (!inwater)
+                    // Isowind multiplayer: other players and the actors another client runs get their health over
+                    // the network; their positions jump as packets arrive, which would look like falls here
+                    if (!inwater && !mwmp::hooks::isRemotelyControlled(mPtr))
                         healthLost = getFallDamage(mPtr, height);
 
                     if (healthLost > 0.0f)

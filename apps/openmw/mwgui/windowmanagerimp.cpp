@@ -701,6 +701,14 @@ namespace MWGui
                     mControllerButtonsOverlay->setVisible(false);
                 if (mInventoryTabsOverlay)
                     mInventoryTabsOverlay->setVisible(false);
+                // Isowind: out of the menus no window is dimmed (the pinned map shows on the HUD)
+                for (WindowBase* window : { static_cast<WindowBase*>(mMap), static_cast<WindowBase*>(mStatsWindow),
+                         static_cast<WindowBase*>(mInventoryWindow), static_cast<WindowBase*>(mSpellWindow) })
+                {
+                    window->mMainWidget->setAlpha(1.f);
+                    if (NoDrop* noDrop = dynamic_cast<NoDrop*>(window))
+                        noDrop->setRestAlpha(1.f);
+                }
             }
             return;
         }
@@ -1893,9 +1901,66 @@ namespace MWGui
         mWaitDialog->wakeUp();
     }
 
+    bool WindowManager::controllerCyclesWindows()
+    {
+        if (!Settings::gui().mControllerMenus || mGuiModes.empty() || !mCurrentModals.empty())
+            return false;
+        const GuiMode mode = mGuiModes.back();
+        if (mode != GM_Inventory && mode != GM_Container && mode != GM_Companion && mode != GM_Barter)
+            return false;
+        int visible = 0;
+        for (WindowBase* window : mGuiModeStates[mode].mWindows)
+        {
+            if (window->isVisible())
+                ++visible;
+        }
+        return visible > 1;
+    }
+
+    float WindowManager::getControllerCursorSpeedScale()
+    {
+        if (Settings::gui().mControllerMenus && Settings::map().mGlobal && getMode() == GM_Inventory
+            && getActiveControllerWindow() == mMap)
+            return 0.45f;
+        return 1.f;
+    }
+
+    void WindowManager::selectControllerWindowUnderMouse()
+    {
+        if (!controllerCyclesWindows())
+            return;
+        MyGUI::Widget* focus = MyGUI::InputManager::getInstance().getMouseFocusWidget();
+        if (!focus)
+            return;
+        while (focus->getParent())
+            focus = focus->getParent();
+        const GuiMode mode = mGuiModes.back();
+        const std::vector<WindowBase*>& windows = mGuiModeStates[mode].mWindows;
+        for (size_t i = 0; i < windows.size(); ++i)
+        {
+            if (windows[i]->mMainWidget == focus && i != mActiveControllerWindows[mode])
+            {
+                setActiveControllerWindow(mode, i);
+                return;
+            }
+        }
+    }
+
+    void WindowManager::beginQuickKeyAssign(
+        ESM::QuickKeys::Type type, const MWWorld::Ptr& item, const ESM::RefId& spellId)
+    {
+        mQuickKeysMenu->beginAssign(type, item, spellId);
+        pushGuiMode(GM_QuickKeysMenu);
+    }
+
     void WindowManager::addVisitedLocation(const std::string& name, int x, int y)
     {
         mMap->addVisitedLocation(name, x, y);
+    }
+
+    void WindowManager::setGlobalMapTile(int cellX, int cellY, const std::vector<char>& png)
+    {
+        mMap->setGlobalMapTile(cellX, cellY, png);
     }
 
     const Translation::Storage& WindowManager::getTranslationDataStorage() const

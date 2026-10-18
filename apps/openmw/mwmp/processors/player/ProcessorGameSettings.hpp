@@ -6,6 +6,7 @@
 #include "apps/openmw/mwgui/windowmanagerimp.hpp"
 
 #include "../PlayerProcessor.hpp"
+#include "apps/openmw/mwmp/Hooks.hpp"
 
 namespace mwmp
 {
@@ -54,6 +55,12 @@ namespace mwmp
 
                 for (auto setting : player->gameSettings)
                 {
+                    // Isowind: the host's choices (PvP, game mode) come this way too
+                    if (hooks::applyServerRule(setting.first, setting.second))
+                    {
+                        LOG_APPEND(TimedLog::LOG_INFO, "- %s: %s", setting.first.c_str(), setting.second.c_str());
+                        continue;
+                    }
                     // Ignore settings this version of the game doesn't have
                     try
                     {

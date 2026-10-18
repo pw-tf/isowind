@@ -140,19 +140,19 @@ namespace MWGui
 
         if (Settings::gui().mControllerMenus)
         {
-            // Show L1 and R1 buttons next to tabs
+            // Show the buttons for the tabs next to them: the triggers (Isowind: the bumpers switch windows)
             MyGUI::ImageBox* image;
             getWidget(image, "BtnL1Image");
             image->setVisible(true);
             image->setUserString("Hidden", "false");
-            image->setImageTexture(MWBase::Environment::get().getInputManager()->getControllerButtonIcon(
-                SDL_CONTROLLER_BUTTON_LEFTSHOULDER));
+            image->setImageTexture(MWBase::Environment::get().getInputManager()->getControllerAxisIcon(
+                SDL_CONTROLLER_AXIS_TRIGGERLEFT));
 
             getWidget(image, "BtnR1Image");
             image->setVisible(true);
             image->setUserString("Hidden", "false");
-            image->setImageTexture(MWBase::Environment::get().getInputManager()->getControllerButtonIcon(
-                SDL_CONTROLLER_BUTTON_RIGHTSHOULDER));
+            image->setImageTexture(MWBase::Environment::get().getInputManager()->getControllerAxisIcon(
+                SDL_CONTROLLER_AXIS_TRIGGERRIGHT));
 
             mControllerButtons.mR3 = "#{Interface:Info}";
         }
@@ -979,18 +979,21 @@ namespace MWGui
         switch (mGuiMode)
         {
             case MWGui::GM_Companion:
+                mControllerButtons.mY.clear();
                 mControllerButtons.mA = "#{OMWEngine:InventorySelect}";
                 mControllerButtons.mB = "#{Interface:Close}";
                 mControllerButtons.mX.clear();
                 mControllerButtons.mR2 = "#{Interface:Share}";
                 break;
             case MWGui::GM_Container:
+                mControllerButtons.mY.clear();
                 mControllerButtons.mA = "#{OMWEngine:InventorySelect}";
                 mControllerButtons.mB = "#{Interface:Close}";
                 mControllerButtons.mX = "#{Interface:TakeAll}";
                 mControllerButtons.mR2 = "#{Interface:Container}";
                 break;
             case MWGui::GM_Barter:
+                mControllerButtons.mY.clear();
                 mControllerButtons.mA = "#{Interface:Sell}";
                 mControllerButtons.mB = "#{Interface:Cancel}";
                 mControllerButtons.mX = "#{Interface:Offer}";
@@ -1001,6 +1004,7 @@ namespace MWGui
                 mControllerButtons.mA = "#{Interface:Equip}";
                 mControllerButtons.mB = "#{Interface:Back}";
                 mControllerButtons.mX = "#{Interface:Drop}";
+                mControllerButtons.mY = "#{sQuickMenuTitle}";
                 mControllerButtons.mR2.clear();
                 break;
         }
@@ -1025,6 +1029,14 @@ namespace MWGui
                 mPendingControllerAction = ControllerAction::Sell;
 
             mItemView->onControllerButton(SDL_CONTROLLER_BUTTON_A);
+        }
+        else if (arg.button == SDL_CONTROLLER_BUTTON_Y && mGuiMode == MWGui::GM_Inventory)
+        {
+            // Isowind: the focused item onto a quick key (the Quick Keys menu opens to pick the slot)
+            const int index = mItemView->getControllerFocus();
+            if (index >= 0 && index < mItemView->getItemCount())
+                MWBase::Environment::get().getWindowManager()->beginQuickKeyAssign(
+                    ESM::QuickKeys::Type::Item, mSortModel->getItem(index).mBase, ESM::RefId());
         }
         else if (arg.button == SDL_CONTROLLER_BUTTON_X)
         {
@@ -1094,16 +1106,8 @@ namespace MWGui
         MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
         if (winMgr->getMode() == MWGui::GM_Inventory)
         {
-            // Fill the screen, or limit to a certain size on large screens. Size chosen to
-            // match the size of the stats window.
-            MyGUI::IntSize viewSize = MyGUI::RenderManager::getInstance().getViewSize();
-            int width = std::min(viewSize.width, 1600);
-            int height = std::min(winMgr->getControllerMenuHeight(), StatsWindow::getIdealHeight());
-            int x = (viewSize.width - width) / 2;
-            int y = (viewSize.height - height) / 2;
-
+            // Isowind: the windows keep Morrowind's layout (the active one is lit, see WindowBase)
             MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();
-            window->setCoord(x, active ? y : viewSize.height + 1, width, height);
 
             adjustPanes();
             updatePreviewSize();

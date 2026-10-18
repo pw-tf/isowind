@@ -307,6 +307,13 @@ namespace MWGui
         return MyGUI::utility::parseInt(widget->getUserString("SpellModelIndex"));
     }
 
+    int SpellView::getControllerFocusModelIndex() const
+    {
+        if (mControllerFocus >= mButtons.size())
+            return -1;
+        return MyGUI::utility::parseInt(mButtons[mControllerFocus].first->getUserString("SpellModelIndex"));
+    }
+
     void SpellView::onSpellSelected(MyGUI::Widget* sender)
     {
         eventSpellClicked(getSpellModelIndex(sender));

@@ -70,6 +70,15 @@ namespace MWGui
     void ControllerButtonsOverlay::setButtons(ControllerButtons* buttons)
     {
         int buttonCount = 0;
+        // Isowind: where the bumpers switch windows, the triggers do what the window's guide gives the bumpers
+        ControllerButtons swapped;
+        if (buttons != nullptr && MWBase::Environment::get().getWindowManager()->controllerCyclesWindows())
+        {
+            swapped = *buttons;
+            std::swap(swapped.mL1, swapped.mL2);
+            std::swap(swapped.mR1, swapped.mR2);
+            buttons = &swapped;
+        }
         if (buttons != nullptr)
         {
             for (const auto& row : sButtonDefs)

@@ -261,6 +261,12 @@ namespace MWGui
         void notifyInputActionBound() override;
 
         void addVisitedLocation(const std::string& name, int x, int y) override;
+        bool controllerCyclesWindows() override;
+        float getControllerCursorSpeedScale() override;
+        void selectControllerWindowUnderMouse() override;
+        void beginQuickKeyAssign(
+            ESM::QuickKeys::Type type, const MWWorld::Ptr& item, const ESM::RefId& spellId) override;
+        void setGlobalMapTile(int cellX, int cellY, const std::vector<char>& png) override;
 
         /// Hides dialog and schedules dialog to be deleted.
         void removeDialog(std::unique_ptr<Layout>&& dialog) override;

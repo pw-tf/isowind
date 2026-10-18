@@ -719,6 +719,14 @@ namespace MWClass
     void Npc::onHit(const MWWorld::Ptr& ptr, const std::map<std::string, float>& damages, ESM::RefId object,
         const MWWorld::Ptr& attacker, bool successful, const MWMechanics::DamageSourceType sourceType) const
     {
+        // Isowind multiplayer: players' hits on each other don't land while the server has PvP off
+        if (mwmp::hooks::isPvpBlocked(attacker, ptr))
+        {
+            if (sourceType != MWMechanics::DamageSourceType::Magical)
+                mwmp::hooks::finishLocalHit(attacker, ptr, 0.f, false);
+            return;
+        }
+
         MWMechanics::CreatureStats& stats = getCreatureStats(ptr);
         bool wasDead = stats.isDead();
 

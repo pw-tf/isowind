@@ -143,6 +143,7 @@
     {"SetContainerItemSoul",                  ObjectFunctions::SetContainerItemSoul},\
     \
     {"SetContainerItemActionCountByIndex",    ObjectFunctions::SetContainerItemActionCountByIndex},\
+    {"SetContainerItemActionCount",           ObjectFunctions::SetContainerItemActionCount},\
     \
     {"AddObject",                             ObjectFunctions::AddObject},\
     {"AddClientLocalInteger",                 ObjectFunctions::AddClientLocalInteger},\
@@ -1259,6 +1260,15 @@ public:
     * \return void
     */
     static void SetContainerItemSoul(const char* soul) noexcept;
+
+    /**
+    * \brief Set the action count of the temporary container item stored on the server: how many
+    * of it a REMOVE takes away.
+    *
+    * \param actionCount The action count.
+    * \return void
+    */
+    static void SetContainerItemActionCount(int actionCount) noexcept;
 
     /**
     * \brief Set the action count of the container item at a certain itemIndex in the container

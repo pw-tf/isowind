@@ -169,6 +169,8 @@ namespace MWInput
             guiMode = MyGUI::InputManager::getInstance().injectMousePress(static_cast<int>(mGuiCursorX),
                           static_cast<int>(mGuiCursorY), SDLUtil::sdlMouseButtonToMyGui(id))
                 && guiMode;
+            if (guiMode)
+                MWBase::Environment::get().getWindowManager()->selectControllerWindowUnderMouse();
             if (MyGUI::InputManager::getInstance().getMouseFocusWidget() != nullptr)
             {
                 MyGUI::Button* b
@@ -252,8 +254,11 @@ namespace MWInput
 
     bool MouseManager::injectMouseButtonPress(Uint8 button)
     {
-        return MyGUI::InputManager::getInstance().injectMousePress(
+        const bool handled = MyGUI::InputManager::getInstance().injectMousePress(
             static_cast<int>(mGuiCursorX), static_cast<int>(mGuiCursorY), SDLUtil::sdlMouseButtonToMyGui(button));
+        if (handled)
+            MWBase::Environment::get().getWindowManager()->selectControllerWindowUnderMouse();
+        return handled;
     }
 
     bool MouseManager::injectMouseButtonRelease(Uint8 button)

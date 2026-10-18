@@ -45,6 +45,10 @@ namespace MWRender
 
         void exploreCell(int cellX, int cellY, osg::ref_ptr<osg::Texture2D> localMapTexture);
 
+        /// Isowind multiplayer: draws an explored cell's picture (a PNG, as exploring it here would have made) from
+        /// the server
+        void setTile(int cellX, int cellY, const std::vector<char>& png);
+
         /// Clears the overlay
         void clear();
 

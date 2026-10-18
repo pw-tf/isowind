@@ -162,6 +162,13 @@ namespace mwmp::hooks
     /// Whether other is a player allied to the player actor (both the local player or other players), for siding
     /// with each other (companions forgive their hits, they don't give away each other's sneaking)
     bool isAlliedPlayer(const MWWorld::Ptr& actor, const MWWorld::Ptr& other);
+    /// The host's choices the server sends with the game settings ("isowind pvp", "isowind mode"): returns false
+    /// for other settings
+    bool applyServerRule(const std::string& name, const std::string& value);
+    /// Whether this is a hit or harmful spell from one player on another while the server has PvP off
+    bool isPvpBlocked(const MWWorld::Ptr& attacker, const MWWorld::Ptr& victim);
+    /// Whether the server is in MMO mode (everyone loots and quests for themselves)
+    bool isMmoMode();
     /// A summoned creature going away: the server removes it for everyone, when this client is the one to say so
     void sendSummonRemoval(const MWWorld::Ptr& creature);
 
@@ -300,6 +307,11 @@ namespace mwmp::hooks
     ESM::RefId getDoorDestination(const ESM::RefId& destination);
     /// Whether the server wants objects without collision of their own (items) to collide, and how
     bool hasEnforcedCollision(const MWWorld::Ptr& ptr, bool& asActor);
+
+    /// The world map: whether this newly explored exterior cell's picture should go to the server (once per cell, which
+    /// it then counts as sent), and sending it (a PNG). The server keeps them and sends them all back at login.
+    bool claimExploredMapTile(int cellX, int cellY);
+    void sendExploredMapTile(int cellX, int cellY, const std::vector<char>& png);
 }
 
 #endif

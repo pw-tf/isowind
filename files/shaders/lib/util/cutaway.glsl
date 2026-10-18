@@ -129,8 +129,13 @@ vec2 applyCutaway(vec3 viewPos, vec3 viewNormal, bool terrain)
         vec2 towardCamera = -normalize(cameraForward.xy + vec2(1e-5));
         bool inFront = dot(world.xy - playerPos.xy, towardCamera) > CUTAWAY_FRONT_MARGIN;
 
+        // Level surfaces below the player's waist (swamp scum on a pool they wade in, rugs, tabletops, lower steps)
+        // never hide them from above, so a faded object stays whole there
+        vec3 worldNormal = (osg_ViewMatrixInverse * vec4(viewNormal, 0.0)).xyz;
+        bool lowFloor = abs(worldNormal.z) > 0.7 && world.z < playerPos.z + CUTAWAY_WALL_HEIGHT;
+
         float cut = 0.0;
-        if (occluderFade > 0.0)
+        if (occluderFade > 0.0 && !lowFloor)
         {
             // Open in a circle around the player on screen (measured at their distance) and see-through around it,
             // where this fragment is in front of them
@@ -171,7 +176,6 @@ vec2 applyCutaway(vec3 viewPos, vec3 viewNormal, bool terrain)
         {
             float around = 1.0 - smoothstep(cutawayOverheadRadius * 0.8, cutawayOverheadRadius,
                 length(world.xy - playerPos.xy));
-            vec3 worldNormal = (osg_ViewMatrixInverse * vec4(viewNormal, 0.0)).xyz;
             if (abs(worldNormal.z) > 0.5)
                 cut = max(cut, around);
             cut = max(cut, around * step(CUTAWAY_STOREY_HEIGHT, world.z - playerPos.z));

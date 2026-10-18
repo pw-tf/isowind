@@ -818,9 +818,24 @@ local function onKeyPress(key)
     end
 end
 
+-- A frame that fails part way must not leave the selection ring or the health bars stuck where they were: hide them
+-- and say (once per different error) what went wrong.
+local lastFrameError = nil
+local function onFrameSafe(dt)
+    local ok, err = pcall(onFrame, dt)
+    if not ok then
+        pcall(hidesRing)
+        pcall(healthbars.clear)
+        if err ~= lastFrameError then
+            lastFrameError = err
+            print('top-down frame failed: ' .. tostring(err))
+        end
+    end
+end
+
 return {
     engineHandlers = {
-        onFrame = onFrame,
+        onFrame = onFrameSafe,
         onMouseButtonPress = onMouseButtonPress,
         onInputAction = onInputAction,
         onKeyPress = onKeyPress,

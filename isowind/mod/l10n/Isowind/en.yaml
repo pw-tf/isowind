@@ -1,0 +1,5 @@
+settings_page: "Isowind"
+settings_page_desc: "Isowind's own options."
+settings_multiplayer: "Multiplayer"
+settings_player_names: "Show player names"
+settings_player_names_desc: "Always show the other players' names over them."

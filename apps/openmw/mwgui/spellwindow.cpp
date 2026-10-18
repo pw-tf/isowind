@@ -68,6 +68,7 @@ namespace MWGui
             setPinButtonVisible(false);
             mControllerButtons.mA = "#{Interface:Select}";
             mControllerButtons.mB = "#{Interface:Back}";
+            mControllerButtons.mY = "#{sQuickMenuTitle}";
             mControllerButtons.mR3 = "#{Interface:Info}";
         }
     }
@@ -312,6 +313,21 @@ namespace MWGui
     {
         if (arg.button == SDL_CONTROLLER_BUTTON_B)
             MWBase::Environment::get().getWindowManager()->exitCurrentGuiMode();
+        else if (arg.button == SDL_CONTROLLER_BUTTON_Y)
+        {
+            // Isowind: the focused spell or enchanted item onto a quick key (the Quick Keys menu picks the slot)
+            const int index = mSpellView->getControllerFocusModelIndex();
+            if (index >= 0 && index < static_cast<int>(mSpellView->getModel()->getItemCount()))
+            {
+                const Spell& spell = mSpellView->getModel()->getItem(index);
+                if (spell.mType == Spell::Type_EnchantedItem)
+                    MWBase::Environment::get().getWindowManager()->beginQuickKeyAssign(
+                        ESM::QuickKeys::Type::MagicItem, spell.mItem, ESM::RefId());
+                else
+                    MWBase::Environment::get().getWindowManager()->beginQuickKeyAssign(
+                        ESM::QuickKeys::Type::Magic, MWWorld::Ptr(), spell.mId);
+            }
+        }
         else
             mSpellView->onControllerButton(arg.button);
 
@@ -323,16 +339,8 @@ namespace MWGui
         MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
         if (winMgr->getMode() == MWGui::GM_Inventory)
         {
-            // Fill the screen, or limit to a certain size on large screens. Size chosen to
-            // match the size of the stats window.
-            MyGUI::IntSize viewSize = MyGUI::RenderManager::getInstance().getViewSize();
-            int width = std::min(viewSize.width, StatsWindow::getIdealWidth());
-            int height = std::min(winMgr->getControllerMenuHeight(), StatsWindow::getIdealHeight());
-            int x = (viewSize.width - width) / 2;
-            int y = (viewSize.height - height) / 2;
-
+            // Isowind: the windows keep Morrowind's layout (the active one is lit, see WindowBase)
             MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();
-            window->setCoord(x, active ? y : viewSize.height + 1, width, height);
 
             MWBase::Environment::get().getWindowManager()->setControllerTooltipVisible(
                 active && Settings::gui().mControllerTooltips);

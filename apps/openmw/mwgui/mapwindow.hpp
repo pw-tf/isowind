@@ -255,6 +255,9 @@ namespace MWGui
         /// @param name The ESM::Cell::mName
         void addVisitedLocation(const std::string& name, int x, int y);
 
+        /// Isowind multiplayer: an explored cell's picture (a PNG) from the server
+        void setGlobalMapTile(int cellX, int cellY, const std::vector<char>& png);
+
         // reveals this cell's map on the global map
         void cellExplored(int x, int y);
 

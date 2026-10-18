@@ -24,13 +24,14 @@ namespace MWGui
         }
 
         MyGUI::ImageBox* image;
+        // Isowind: the bumpers switch between these windows
         getWidget(image, "BtnL2Image");
         image->setImageTexture(
-            MWBase::Environment::get().getInputManager()->getControllerAxisIcon(SDL_CONTROLLER_AXIS_TRIGGERLEFT));
+            MWBase::Environment::get().getInputManager()->getControllerButtonIcon(SDL_CONTROLLER_BUTTON_LEFTSHOULDER));
 
         getWidget(image, "BtnR2Image");
-        image->setImageTexture(
-            MWBase::Environment::get().getInputManager()->getControllerAxisIcon(SDL_CONTROLLER_AXIS_TRIGGERRIGHT));
+        image->setImageTexture(MWBase::Environment::get().getInputManager()->getControllerButtonIcon(
+            SDL_CONTROLLER_BUTTON_RIGHTSHOULDER));
     }
 
     int InventoryTabsOverlay::getHeight()

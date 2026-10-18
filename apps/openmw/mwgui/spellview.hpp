@@ -42,6 +42,8 @@ namespace MWGui
         void setModel(SpellModel* model);
 
         SpellModel* getModel();
+        /// Isowind: the model index of the row the controller is on, or -1
+        int getControllerFocusModelIndex() const;
 
         void update();
 

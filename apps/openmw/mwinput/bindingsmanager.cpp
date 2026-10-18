@@ -375,6 +375,7 @@ namespace MWInput
         defaultButtonBindings[A_QuickKeyNext] = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
         defaultButtonBindings[A_ZoomIn] = SDL_CONTROLLER_BUTTON_DPAD_UP;
         defaultButtonBindings[A_ZoomOut] = SDL_CONTROLLER_BUTTON_DPAD_DOWN;
+        defaultButtonBindings[A_QuickKeysMenu] = SDL_CONTROLLER_BUTTON_DPAD_LEFT;
         defaultButtonBindings[A_Sneak] = SDL_CONTROLLER_BUTTON_LEFTSTICK;
         defaultButtonBindings[A_Rest] = SDL_CONTROLLER_BUTTON_RIGHTSTICK;
         defaultButtonBindings[A_Inventory] = SDL_CONTROLLER_BUTTON_BACK;

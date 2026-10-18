@@ -1,8 +1,10 @@
--- Health bars over the heads of creatures, and of people once they are hurt or hostile (Diablo style).
+-- Health bars over the heads of creatures, and of people once they are hurt or hostile (Diablo style); in
+-- multiplayer, the other players' names over them too (Options -> Scripts -> Isowind).
 -- Used by topdown.lua, which supplies the projection from the world onto the screen.
 
 local self = require('openmw.self')
 local nearby = require('openmw.nearby')
+local storage = require('openmw.storage')
 local types = require('openmw.types')
 local ui = require('openmw.ui')
 local util = require('openmw.util')
@@ -19,7 +21,12 @@ local texture = ui.texture { path = 'textures/menu_bar_red.dds' }
 local backColor = util.color.rgb(0.08, 0.04, 0.04)
 local fillColor = util.color.rgb(0.85, 0.15, 0.1)
 
+local NAME_SIZE = 16
+local nameColor = util.color.rgb(0.792, 0.647, 0.376) -- Morrowind's normal text colour
+local multiplayerSettings = storage.playerSection('Settings/Isowind/Multiplayer')
+
 local bars = {} -- actor id -> UI element
+local names = {} -- actor id -> UI element (other players' names)
 
 local M = {}
 
@@ -66,10 +73,54 @@ local function remove(id)
     bars[id] = nil
 end
 
+local function removeName(id)
+    names[id]:destroy()
+    names[id] = nil
+end
+
+local function makeName(text)
+    return ui.create {
+        layer = 'IsowindOverlay',
+        type = ui.TYPE.Text,
+        props = {
+            anchor = v2(0.5, 1),
+            text = text,
+            textSize = NAME_SIZE,
+            textColor = nameColor,
+            textShadow = true,
+            textShadowColor = util.color.rgb(0, 0, 0),
+        },
+    }
+end
+
+-- Another player whose name should show (multiplayer, and the option is on)
+local function showsName(actor)
+    return nearby.isOtherPlayer ~= nil and nearby.isOtherPlayer(actor)
+        and multiplayerSettings:get('ShowPlayerNames') ~= false
+        and (actor.position - self.position):length() <= RANGE
+end
+
 -- project(worldPosition) returns a normalised screen position, or nil when it is off screen.
 function M.update(project)
     local seen = {}
+    local seenNames = {}
     for _, actor in ipairs(nearby.actors) do
+        if showsName(actor) then
+            local box = actor:getBoundingBox()
+            local screen = project(v3(box.center.x, box.center.y, box.center.z + box.halfSize.z + 12))
+            if screen then
+                seenNames[actor.id] = true
+                local label = names[actor.id]
+                if not label then
+                    label = makeName(types.NPC.record(actor).name)
+                    names[actor.id] = label
+                end
+                label.layout.props.relativePosition = screen
+                -- above where the health bar goes
+                label.layout.props.position = v2(0, -(HEIGHT + 2))
+                label:update()
+            end
+        end
         local fraction = wanted(actor)
         if fraction then
             local box = actor:getBoundingBox()
@@ -91,10 +142,14 @@ function M.update(project)
     for id in pairs(bars) do
         if not seen[id] then remove(id) end
     end
+    for id in pairs(names) do
+        if not seenNames[id] then removeName(id) end
+    end
 end
 
 function M.clear()
     for id in pairs(bars) do remove(id) end
+    for id in pairs(names) do removeName(id) end
 end
 
 return M

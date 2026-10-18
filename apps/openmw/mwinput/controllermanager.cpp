@@ -98,7 +98,8 @@ namespace MWInput
             // We keep track of our own mouse position, so that moving the mouse while in
             // game mode does not move the position of the GUI cursor
             float uiScale = MWBase::Environment::get().getWindowManager()->getScalingFactor();
-            const float gamepadCursorSpeed = Settings::input().mGamepadCursorSpeed;
+            const float gamepadCursorSpeed = Settings::input().mGamepadCursorSpeed
+                * MWBase::Environment::get().getWindowManager()->getControllerCursorSpeedScale();
             const float xMove = xAxis * dt * 1500.0f / uiScale * gamepadCursorSpeed;
             const float yMove = yAxis * dt * 1500.0f / uiScale * gamepadCursorSpeed;
 
@@ -276,6 +277,15 @@ namespace MWInput
                 if (mGamepadGuiCursorEnabled && treatAsMouse && arg.button == SDL_CONTROLLER_BUTTON_A)
                     return false;
 
+                // Isowind: in menus with several windows side by side the bumpers switch between them
+                if (winMgr->controllerCyclesWindows()
+                    && (arg.button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER
+                        || arg.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER))
+                {
+                    winMgr->cycleActiveControllerWindow(arg.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
+                    return true;
+                }
+
                 if (topWin->onControllerButtonEvent(arg))
                     return true;
             }
@@ -362,17 +372,30 @@ namespace MWInput
 
         if (Settings::gui().mControllerMenus)
         {
-            // Left and right triggers toggle through open GUI windows.
+            // Left and right triggers toggle through open GUI windows. Isowind: where the bumpers do that (several
+            // windows side by side), the triggers instead do what the bumpers do in the active window.
+            const auto triggerPressed = [&](bool right) {
+                MWGui::WindowBase* activeWin = winMgr->getActiveControllerWindow();
+                if (winMgr->controllerCyclesWindows() && activeWin && activeWin->isVisible())
+                {
+                    SDL_ControllerButtonEvent bumper{};
+                    bumper.type = SDL_CONTROLLERBUTTONDOWN;
+                    bumper.state = SDL_PRESSED;
+                    bumper.button
+                        = right ? SDL_CONTROLLER_BUTTON_RIGHTSHOULDER : SDL_CONTROLLER_BUTTON_LEFTSHOULDER;
+                    activeWin->onControllerButtonEvent(bumper);
+                }
+                else
+                    winMgr->cycleActiveControllerWindow(right);
+            };
             if (arg.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT)
             {
-                handleTriggerPress(
-                    arg.value, mRightTriggerGuiPressed, [&] { winMgr->cycleActiveControllerWindow(true); });
+                handleTriggerPress(arg.value, mRightTriggerGuiPressed, [&] { triggerPressed(true); });
                 return true;
             }
             else if (arg.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT)
             {
-                handleTriggerPress(
-                    arg.value, mLeftTriggerGuiPressed, [&] { winMgr->cycleActiveControllerWindow(false); });
+                handleTriggerPress(arg.value, mLeftTriggerGuiPressed, [&] { triggerPressed(false); });
                 return true;
             }
 

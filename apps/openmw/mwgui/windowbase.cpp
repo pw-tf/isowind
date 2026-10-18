@@ -15,6 +15,21 @@
 
 using namespace MWGui;
 
+void WindowBase::setActiveControllerWindow(bool active)
+{
+    mActiveControllerWindow = active;
+    // Isowind: with several windows side by side, the one the controller works in is lit and the others dimmed
+    if (Settings::gui().mControllerMenus && mMainWidget)
+    {
+        const float alpha
+            = active || !MWBase::Environment::get().getWindowManager()->controllerCyclesWindows() ? 1.f : 0.55f;
+        mMainWidget->setAlpha(alpha);
+        // Windows that fade under a dragged item settle back to this rather than to fully opaque
+        if (NoDrop* noDrop = dynamic_cast<NoDrop*>(this))
+            noDrop->setRestAlpha(alpha);
+    }
+}
+
 size_t MWGui::wrap(size_t index, size_t max, int delta)
 {
     if (max == 0)
@@ -188,7 +203,8 @@ void NoDrop::onFrame(float dt)
     else
     {
         mWidget->setNeedMouseFocus(true);
-        setAlpha(std::min(1.0f, mWidget->getAlpha() + dt * 5));
+        const float alpha = mWidget->getAlpha();
+        setAlpha(alpha < mRestAlpha ? std::min(mRestAlpha, alpha + dt * 5) : std::max(mRestAlpha, alpha - dt * 5));
     }
 }
 

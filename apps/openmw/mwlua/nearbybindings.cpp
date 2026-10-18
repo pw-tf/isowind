@@ -13,6 +13,8 @@
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/scene.hpp"
 
+#include "../mwmp/Hooks.hpp"
+
 #include "context.hpp"
 #include "luamanagerimp.hpp"
 #include "objectlists.hpp"
@@ -199,6 +201,8 @@ namespace MWLua
         api["doors"] = LObjectList{ objectLists->getDoorsInScene() };
         api["items"] = LObjectList{ objectLists->getItemsInScene() };
         api["players"] = LObjectList{ objectLists->getPlayers() };
+        // Isowind multiplayer: whether an actor is another player (to the engine they are ordinary NPCs)
+        api["isOtherPlayer"] = [](const LObject& object) { return mwmp::hooks::isDedicatedPlayer(object.ptr()); };
 
         api["NAVIGATOR_FLAGS"]
             = LuaUtil::makeStrictReadOnly(LuaUtil::tableFromPairs<std::string_view, DetourNavigator::Flag>(lua,

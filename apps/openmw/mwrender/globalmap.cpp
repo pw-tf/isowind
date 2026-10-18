@@ -26,6 +26,8 @@
 
 #include "../mwbase/environment.hpp"
 
+#include "../mwmp/Hooks.hpp"
+
 #include "../mwworld/esmstore.hpp"
 
 #include "vismask.hpp"
@@ -410,6 +412,40 @@ namespace MWRender
             originX, mHeight - originY, cellSize, cellSize, std::move(localMapTexture), false, true);
     }
 
+    void GlobalMap::setTile(int cellX, int cellY, const std::vector<char>& png)
+    {
+        ensureLoaded();
+
+        if (png.empty() || cellX > mMaxX || cellX < mMinX || cellY > mMaxY || cellY < mMinY)
+            return;
+
+        osgDB::ReaderWriter* readerwriter = osgDB::Registry::instance()->getReaderWriterForExtension("png");
+        if (!readerwriter)
+            return;
+        Files::IMemStream istream(png.data(), png.size());
+        osgDB::ReaderWriter::ReadResult result = readerwriter->readImage(istream);
+        if (!result.success())
+        {
+            Log(Debug::Warning) << "Can't read the map picture of cell " << cellX << ", " << cellY << ": "
+                                << result.message();
+            return;
+        }
+
+        osg::ref_ptr<osg::Texture2D> texture(new osg::Texture2D);
+        texture->setImage(result.getImage());
+        texture->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
+        texture->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
+        texture->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR);
+        texture->setFilter(osg::Texture::MAG_FILTER, osg::Texture::LINEAR);
+        texture->setResizeNonPowerOfTwoHint(false);
+
+        // Where exploreCell draws it; no copy back, which would only send it to the server again
+        const int cellSize = Settings::map().mGlobalMapCellSize;
+        const int originX = (cellX - mMinX) * cellSize;
+        const int originY = (cellY - mMinY + 1) * cellSize;
+        requestOverlayTextureUpdate(originX, mHeight - originY, cellSize, cellSize, std::move(texture), false, false);
+    }
+
     void GlobalMap::clear()
     {
         ensureLoaded();
@@ -600,6 +636,16 @@ namespace MWRender
             }
 
             mOverlayImage->copySubImage(imageDest.mX, imageDest.mY, 0, imageDest.mImage);
+
+            // Isowind multiplayer: a newly explored cell's picture goes to the server, which keeps every player's
+            // exploration and sends it back at login (only exploreCell copies back like this; its corner is
+            // (cell - min) * cellSize in the image's bottom-left coordinates)
+            const int cellSize = Settings::map().mGlobalMapCellSize;
+            const int cellX = imageDest.mX / cellSize + mMinX;
+            const int cellY = imageDest.mY / cellSize + mMinY;
+            if (mwmp::hooks::claimExploredMapTile(cellX, cellY))
+                mwmp::hooks::sendExploredMapTile(cellX, cellY, writePng(*imageDest.mImage));
+
             mPendingImageDest.erase(it);
             return true;
         }

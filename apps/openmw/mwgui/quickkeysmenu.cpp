@@ -133,6 +133,7 @@ namespace MWGui
     void QuickKeysMenu::onClose()
     {
         WindowBase::onClose();
+        mPendingType = ESM::QuickKeys::Type::Unassigned;
 
         if (mAssignDialog)
             mAssignDialog->setVisible(false);
@@ -221,6 +222,13 @@ namespace MWGui
         onAssignItem(item);
     }
 
+    void QuickKeysMenu::beginAssign(ESM::QuickKeys::Type type, const MWWorld::Ptr& item, const ESM::RefId& spellId)
+    {
+        mPendingType = type;
+        mPendingItem = item;
+        mPendingSpell = spellId;
+    }
+
     void QuickKeysMenu::unassignKey(int index)
     {
         if (index < 1 || index > static_cast<int>(mKey.size()))
@@ -251,6 +259,21 @@ namespace MWGui
         // prevent reallocation of zero key from ESM::QuickKeys::Type::HandToHand
         if (mSelected->index == 10)
             return;
+
+        // Isowind: an item or spell picked beforehand (Y in the inventory or magic window) goes straight on
+        if (mPendingType != ESM::QuickKeys::Type::Unassigned)
+        {
+            const ESM::QuickKeys::Type type = mPendingType;
+            mPendingType = ESM::QuickKeys::Type::Unassigned;
+            if (type == ESM::QuickKeys::Type::Item)
+                onAssignItem(mPendingItem);
+            else if (type == ESM::QuickKeys::Type::MagicItem)
+                onAssignMagicItem(mPendingItem);
+            else if (type == ESM::QuickKeys::Type::Magic)
+                onAssignMagic(mPendingSpell);
+            MWBase::Environment::get().getWindowManager()->removeGuiMode(GM_QuickKeysMenu);
+            return;
+        }
 
         // open assign dialog
         if (!mAssignDialog)
