@@ -4,7 +4,9 @@
 --   theirs alone (kept per player in the cell's data, isowindLoot, and replayed to them when they load the cell).
 --   Containers players placed stay shared.
 -- * Loose items from the game's files (not ones players dropped) are picked up per player too (isowindTaken).
--- * Quests, topics, factions, bounties, reputation and kill counts are each player's own.
+-- * Quests, topics, factions, bounties, reputation and kill counts are each player's own, and so is what quest scripts
+--   do to the world's own people and things: enabling or disabling them (isowindStates) or deleting them (isowindTaken),
+--   so a quest that removes someone for one player leaves them there for the others.
 -- * Enemies and NPCs come back after they die, once no player is in or next to their cell, after a time from how
 --   tough they were (WoW-like tiers, from their health): trash 1.5 minutes, normal 5, elite 15, bosses 60, divided by
 --   the host's respawn speed. Ones from the game's files are reset on each client ("isowind respawn", a console
@@ -206,9 +208,18 @@ end
 
 -- --- Loose items per player --------------------------------------------------------------------------------------
 
+-- A script or dialogue (a quest's), rather than the player's hands or the console
+local function isFromScript(packetOrigin)
+    return packetOrigin == enumerations.packetOrigin.CLIENT_SCRIPT_LOCAL or
+        packetOrigin == enumerations.packetOrigin.CLIENT_SCRIPT_GLOBAL or
+        packetOrigin == enumerations.packetOrigin.CLIENT_DIALOGUE
+end
+
 local function onObjectDelete(eventStatus, pid, cellDescription, objects)
+    local packetOrigin = tes3mp.GetObjectListOrigin()
+    local fromScript = isFromScript(packetOrigin)
     if eventStatus.validDefaultHandler == false or
-        tes3mp.GetObjectListOrigin() ~= enumerations.packetOrigin.CLIENT_GAMEPLAY then
+        (packetOrigin ~= enumerations.packetOrigin.CLIENT_GAMEPLAY and not fromScript) then
         return
     end
     local cell = LoadedCells[cellDescription]
@@ -216,10 +227,12 @@ local function onObjectDelete(eventStatus, pid, cellDescription, objects)
         return
     end
 
+    -- The game's own things a player picks up, or a quest of theirs deletes (people too); bodies a player disposes of
+    -- stay shared
     local mine, shared = {}, {}
     for uniqueIndex, object in pairs(objects) do
         local _, mpNum = splitIndex(uniqueIndex)
-        if mpNum == 0 and not isActor(cell, uniqueIndex) then
+        if mpNum == 0 and (fromScript or not isActor(cell, uniqueIndex)) then
             mine[uniqueIndex] = object
         else
             shared[uniqueIndex] = object
@@ -250,6 +263,46 @@ local function onObjectDelete(eventStatus, pid, cellDescription, objects)
     return customEventHooks.makeEventStatus(false, true)
 end
 
+-- A quest script enabling or disabling one of the game's own people or things: for that player only
+local function onObjectState(eventStatus, pid, cellDescription, objects)
+    if eventStatus.validDefaultHandler == false or not isFromScript(tes3mp.GetObjectListOrigin()) then
+        return
+    end
+    local cell = LoadedCells[cellDescription]
+    if cell == nil then
+        return
+    end
+
+    local mine, shared = {}, {}
+    for uniqueIndex, object in pairs(objects) do
+        local _, mpNum = splitIndex(uniqueIndex)
+        if mpNum == 0 then
+            mine[uniqueIndex] = object
+        else
+            shared[uniqueIndex] = object
+        end
+    end
+    if next(mine) == nil then
+        return
+    end
+
+    local name = playerKey(pid)
+    cell.data.isowindStates = cell.data.isowindStates or {}
+    for uniqueIndex, object in pairs(mine) do
+        local record = cell.data.isowindStates[uniqueIndex] or { refId = object.refId, players = {} }
+        record.players[name] = object.state
+        cell.data.isowindStates[uniqueIndex] = record
+    end
+
+    -- The rest as the default handler does
+    if next(shared) ~= nil then
+        cell:SaveObjectsByPacketType("ObjectState", shared)
+        cell:LoadObjectsByPacketType("ObjectState", pid, shared, tableHelper.getArrayFromIndexes(shared), true)
+    end
+    cell:QuicksaveToDrive()
+    return customEventHooks.makeEventStatus(false, true)
+end
+
 -- A player loading a cell gets their own loot and pickups there on top of the shared state just sent
 local function onCellLoad(eventStatus, pid, cellDescription)
     local cell = LoadedCells[cellDescription]
@@ -271,6 +324,23 @@ local function onCellLoad(eventStatus, pid, cellDescription)
         end
         if count > 0 then
             tes3mp.SendObjectDelete(false)
+        end
+    end
+
+    if cell.data.isowindStates ~= nil then
+        tes3mp.ClearObjectList()
+        tes3mp.SetObjectListPid(pid)
+        tes3mp.SetObjectListCell(cellDescription)
+        local count = 0
+        for uniqueIndex, record in pairs(cell.data.isowindStates) do
+            local state = record.players[name]
+            if state ~= nil then
+                packetBuilder.AddObjectState(uniqueIndex, { refId = record.refId, state = state })
+                count = count + 1
+            end
+        end
+        if count > 0 then
+            tes3mp.SendObjectState(false)
         end
     end
 
@@ -485,7 +555,8 @@ local function respawnInCell(cellDescription, uniqueIndexes)
         for _, uniqueIndex in ipairs(uniqueIndexes) do
             local objectData = cell.data.objectData[uniqueIndex]
             local moved = objectData ~= nil and (objectData.cellChangeTo ~= nil or objectData.cellChangeFrom ~= nil)
-            -- One a script disabled (a quest removing someone) stays gone
+            -- One disabled for everyone (by the console, or before the server was MMO) stays gone; what a player's quest
+            -- disabled stays that way for them (it's in isowindStates, which a respawn keeps)
             local disabled = objectData ~= nil and objectData.state == false
             local _, mpNum = splitIndex(uniqueIndex)
             if not moved and not disabled then
@@ -581,6 +652,7 @@ end
 customEventHooks.registerHandler("OnServerPostInit", function(eventStatus)
     customEventHooks.registerValidator("OnContainer", onContainer)
     customEventHooks.registerValidator("OnObjectDelete", onObjectDelete)
+    customEventHooks.registerValidator("OnObjectState", onObjectState)
     customEventHooks.registerHandler("OnCellLoad", onCellLoad)
     customEventHooks.registerHandler("OnObjectSpawn", onObjectSpawn)
     customEventHooks.registerHandler("OnActorDeath", onActorDeath)

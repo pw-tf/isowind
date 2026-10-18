@@ -128,6 +128,37 @@ local function runTests()
     check("pickup sent to the player only", delete ~= nil and delete.args[1] == false)
     check("pickup not saved as shared", not tableHelper.containsValue(cell.data.packets.delete or {}, "5678-0"))
 
+    -- A quest script disabling someone does it for that player only
+    sent = {}
+    receive({ objects = {}, origin = enumerations.packetOrigin.CLIENT_SCRIPT_GLOBAL })
+    status = validate("OnObjectState", { pid, CELL, { ["4444-0"] = { refId = "quest_giver", uniqueIndex = "4444-0",
+        state = false } }, {} })
+    check("quest disable skips the shared save", status.validDefaultHandler == false)
+    check("quest disable kept for the player", cell.data.isowindStates["4444-0"].players.alpha == false)
+    check("quest disable not shared", cell.data.objectData["4444-0"] == nil or cell.data.objectData["4444-0"].state == nil)
+    check("quest disable not sent to others", lastSent("SendObjectState") == nil)
+
+    -- The player's hands enabling or disabling things (none do) and the console stay as they were
+    receive({ objects = {}, origin = enumerations.packetOrigin.CLIENT_CONSOLE })
+    status = validate("OnObjectState", { pid, CELL, { ["4445-0"] = { refId = "x", uniqueIndex = "4445-0",
+        state = false } }, {} })
+    check("console disable stays shared", status.validDefaultHandler ~= false)
+
+    -- A quest script deleting a person: that player only
+    receive({ objects = {}, origin = enumerations.packetOrigin.CLIENT_SCRIPT_LOCAL })
+    cell.data.objectData["4446-0"] = { refId = "quest_npc_2", stats = { healthBase = 80 } }
+    status = validate("OnObjectDelete", { pid, CELL, { ["4446-0"] = { refId = "quest_npc_2", uniqueIndex = "4446-0" } },
+        {} })
+    check("quest delete of a person is the player's own", status.validDefaultHandler == false and
+        cell.data.isowindTaken["4446-0"].alpha == true)
+
+    -- Loading the cell: the disable comes back for them
+    sent = {}
+    customEventHooks.triggerHandlers("OnCellLoad", customEventHooks.makeEventStatus(true, true), { pid, CELL })
+    local stateReplay = lastSent("SendObjectState")
+    check("cell load replays the quest disable to the player only", stateReplay ~= nil and stateReplay.args[1] == false
+        and stateReplay.objects[1] ~= nil and tostring(stateReplay.objects[1].refNum) == "4444")
+
     -- A dead mudcrab comes back after 1.5 minutes, once no one is near
     cell.data.objectData["999-0"] = { refId = "mudcrab", stats = { healthBase = 35 } }
     customEventHooks.triggerHandlers("OnActorDeath", customEventHooks.makeEventStatus(true, true),
