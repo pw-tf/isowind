@@ -60,6 +60,8 @@ jobs:
       - name: Engine and libraries (arm64)
         env:
           ISOWIND_MODS: ${{ github.workspace }}/bundled-mods
+          # Report every file that fails, not just the first
+          MAKEFLAGS: -k
         run: |
           rm -rf android/buildscripts/build/arm64/openmw-prefix
           cd android/buildscripts && ./build.sh --arch arm64

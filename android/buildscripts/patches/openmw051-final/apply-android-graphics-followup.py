@@ -235,7 +235,7 @@ void main()
                 state.pushStateSet(mAndroidGammaStateSet);
                 state.apply();
                 state.applyTextureAttribute(0, mTextureScene);
-                resolveViewport->apply(state);
+                finalViewport->apply(state); // Isowind: its name for the viewport (resolveViewport is a function there)
                 drawGeometry(renderInfo);
                 state.popStateSet();
                 return;
@@ -303,7 +303,7 @@ void main()
         {
             bindDestinationFbo();
             if (!destinationFbo)
-                resolveViewport->apply(state);
+                finalViewport->apply(state); // Isowind: its name for the viewport (resolveViewport is a function there)
 
             state.pushStateSet(mAndroidGammaStateSet);
             state.apply();
