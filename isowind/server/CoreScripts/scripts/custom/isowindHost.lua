@@ -75,3 +75,43 @@ customEventHooks.registerHandler("OnServerInit", function(eventStatus)
     WorldInstance:UpdateFrametimeMultiplier()
     WorldInstance:QuicksaveToDrive()
 end)
+
+-- A dead actor can't be looted until the game in charge of its cell has said what it carries (the server asks when it
+-- dies). If that answer never comes, its body would stay locked ("currently unusable"), so it unlocks after 5 seconds
+-- anyway, and the server asks a player there again.
+local lockedCorpses = {}
+local unlockTimer = nil
+
+customEventHooks.registerHandler("OnActorDeath", function(eventStatus, pid, cellDescription, actors)
+    for uniqueIndex in pairs(actors) do
+        table.insert(lockedCorpses, { cell = cellDescription, uniqueIndex = uniqueIndex, time = os.time() + 5 })
+    end
+end)
+
+function IsowindUnlockCorpses()
+    local now = os.time()
+    local waiting = {}
+    for _, corpse in ipairs(lockedCorpses) do
+        if corpse.time > now then
+            table.insert(waiting, corpse)
+        else
+            local cell = LoadedCells[corpse.cell]
+            if cell ~= nil and tableHelper.containsValue(cell.unusableContainerUniqueIndexes, corpse.uniqueIndex) then
+                tableHelper.removeValue(cell.unusableContainerUniqueIndexes, corpse.uniqueIndex)
+                tes3mp.LogMessage(enumerations.log.WARN, "[Isowind] No contents came for the body of " ..
+                    corpse.uniqueIndex .. " in " .. corpse.cell .. "; unlocked it and asked again")
+                local visitor = cell.visitors[1]
+                if visitor ~= nil and Players[visitor] ~= nil and Players[visitor]:IsLoggedIn() then
+                    cell:RequestContainers(visitor, { corpse.uniqueIndex })
+                end
+            end
+        end
+    end
+    lockedCorpses = waiting
+    tes3mp.RestartTimer(unlockTimer, time.seconds(2))
+end
+
+customEventHooks.registerHandler("OnServerPostInit", function(eventStatus)
+    unlockTimer = tes3mp.CreateTimer("IsowindUnlockCorpses", time.seconds(2))
+    tes3mp.StartTimer(unlockTimer)
+end)

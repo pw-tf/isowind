@@ -120,7 +120,6 @@ bool MechanicsHelper::respawnActor(const MWWorld::Ptr& ptr)
         ptr.getCellRef().setCount(1);
     MWBase::Environment::get().getWindowManager()->onDeleteCustomData(ptr);
     ptr.getRefData().setCustomData(nullptr);
-    ptr.getRefData().enable();
 
     const ESM::Position& start = ptr.getCellRef().getPosition();
     MWWorld::Ptr moved = world->moveObject(ptr, ptr.getCell()->getOriginCell(ptr), start.asVec3());

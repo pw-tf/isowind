@@ -677,6 +677,9 @@ function BaseCell:SaveContainers(pid)
         tableHelper.insertValueIfMissing(self.data.packets.container, uniqueIndex)
 
         local inventory = self.data.objectData[uniqueIndex].inventory
+        -- Isowind: whether the server knows what this holds; if not (its contents never came), what a player
+        -- takes from it is taken as it is instead of refused
+        local isInventoryKnown = inventory ~= nil
 
         -- If this object's inventory is nil, or if the action is SET,
         -- change the inventory to an empty table
@@ -734,7 +737,10 @@ function BaseCell:SaveContainers(pid)
                     end
                 end
             else
-                if action == enumerations.container.REMOVE then
+                if action == enumerations.container.REMOVE and not isInventoryKnown then
+                    tes3mp.LogAppend(enumerations.log.INFO, "- Removing count of " .. actionCount .. " of " ..
+                        itemRefId .. " from a container whose contents the server doesn't know")
+                elseif action == enumerations.container.REMOVE then
                     tes3mp.LogAppend(enumerations.log.WARN, "- Attempt to remove count of " .. actionCount .. 
                         " from non-existent item " .. itemRefId)
                     tes3mp.SetContainerItemActionCountByIndex(objectIndex, itemIndex, 0)
@@ -757,7 +763,10 @@ function BaseCell:SaveContainers(pid)
         end
 
         tableHelper.cleanNils(inventory)
-        self.data.objectData[uniqueIndex].inventory = inventory
+        -- (Taking from a container whose contents are unknown leaves them unknown)
+        if isInventoryKnown or action ~= enumerations.container.REMOVE then
+            self.data.objectData[uniqueIndex].inventory = inventory
+        end
     end
 
     -- Is this a player replying to our request for container contents?

@@ -188,7 +188,8 @@ void Networking::processPlayerPacket(RakNet::Packet *packet)
     }
 
 
-    if (!PlayerProcessor::Process(*packet))
+    // (BaseInfo was handled above)
+    if (packet->data[0] != ID_PLAYER_BASEINFO && !PlayerProcessor::Process(*packet))
         LOG_MESSAGE_SIMPLE(TimedLog::LOG_WARN, "Unhandled PlayerPacket with identifier %i has arrived", packet->data[0]);
 
 }

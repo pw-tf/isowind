@@ -205,73 +205,51 @@ eventHandler.InitializeDefaultHandlers = function()
 			tes3mp.SendWorldKillCount(pid, true)
 
 		else
-			
-			if Players[pid].data.kills == nil then
-				Players[pid].data.kills = {}
-			end
 
+			-- Isowind: each player's own kill counts - the killer's, their allies' and those of the players who hit
+			-- it in the last 10 minutes - each sent only to them
 			for uniqueIndex, actor in pairs(actors) do
-			
-				if Players[pid].data.kills[actor.refId] == nil then
-					Players[pid].data.kills[actor.refId] = 0
+
+				local recipients = { pid }
+				local names = {}
+
+				for _, alliedName in ipairs(Players[pid].data.alliedPlayers or {}) do
+					table.insert(names, alliedName)
 				end
 
-				Players[pid].data.kills[actor.refId] = Players[pid].data.kills[actor.refId] + 1
-				Players[pid]:QuicksaveToDrive()
-				
-				if sendKills[uniqueIndex] == nil then
-					sendKills[uniqueIndex] = {timestamp = os.time(), playersName = {}}
-				end
-				tableHelper.insertValueIfMissing(sendKills[uniqueIndex].playersName, string.lower(Players[pid].accountName))
-				
-				tes3mp.AddKill(actor.refId, Players[pid].data.kills[actor.refId])
-				
-				for _, alliedName in ipairs(Players[pid].data.alliedPlayers) do	
-
-					if logicHandler.GetPlayerByName(alliedName) then
-					
-						local alliedPid = logicHandler.GetPlayerByName(alliedName).pid
-						
-						if Players[alliedPid] ~= nil and Players[alliedPid]:IsLoggedIn() then	
-						
-							if Players[alliedPid].data.kills == nil then
-								Players[alliedPid].data.kills = {}
-							end
-							
-							if Players[alliedPid].data.kills[actor.refId] == nil then
-								Players[alliedPid].data.kills[actor.refId] = 0
-							end
-							
-							Players[alliedPid].data.kills[actor.refId] = Players[alliedPid].data.kills[actor.refId] + 1
-							Players[alliedPid]:QuicksaveToDrive()
-							tableHelper.insertValueIfMissing(sendKills[uniqueIndex].playersName, string.lower(Players[alliedPid].accountName))
-							
-						end
-						
+				if sendKills[uniqueIndex] ~= nil and os.time() - sendKills[uniqueIndex].timestamp < 600 then
+					for _, hitterName in ipairs(sendKills[uniqueIndex].playersName) do
+						table.insert(names, hitterName)
 					end
-					
+				end
+				sendKills[uniqueIndex] = nil
+
+				for _, name in ipairs(names) do
+					local player = logicHandler.GetPlayerByName(name)
+
+					if player ~= nil and player:IsLoggedIn() then
+						tableHelper.insertValueIfMissing(recipients, player.pid)
+					end
+				end
+
+				for _, recipientPid in ipairs(recipients) do
+					local recipient = Players[recipientPid]
+
+					if recipient.data.kills == nil then
+						recipient.data.kills = {}
+					end
+
+					recipient.data.kills[actor.refId] = (recipient.data.kills[actor.refId] or 0) + 1
+					recipient:QuicksaveToDrive()
+
+					tes3mp.ClearKillChanges()
+					tes3mp.AddKill(actor.refId, recipient.data.kills[actor.refId])
+					tes3mp.SendWorldKillCount(recipientPid, false)
 				end
 
 				table.insert(cell.unusableContainerUniqueIndexes, uniqueIndex)
-				
-			end		
-			
-			for targetIndex, actor in pairs(actors) do
-			
-				for _, targetName in ipairs(sendKills[targetIndex].playersName) do
-				
-					local targetPid = logicHandler.GetPlayerByName(targetName).pid
-					
-					if Players[targetPid] ~= nil and Players[targetPid]:IsLoggedIn() then
-						tes3mp.SendWorldKillCount(targetPid, false)
-					end
-					
-				end
-				
-				sendKills[targetIndex] = nil
-				
 			end
-			
+
 		end
 
         cell:RequestContainers(pid, tableHelper.getArrayFromIndexes(actors))
@@ -1216,6 +1194,10 @@ eventHandler.OnCellLoad = function(pid, cellDescription)
             logicHandler.LoadCellForPlayer(pid, cellDescription)
         end
         customEventHooks.triggerHandlers("OnCellLoad", eventStatus, {pid, cellDescription})
+    elseif Players[pid] ~= nil then
+        -- Isowind: a game still at the login reports the cells around where it waits; nothing to do
+        tes3mp.LogMessage(enumerations.log.VERBOSE, "- " .. pid .. " loaded cell " .. cellDescription ..
+            " before logging in")
     else
         tes3mp.LogMessage(enumerations.log.WARN, "Undefined behavior: invalid player " .. pid ..
             " loaded cell " .. cellDescription)

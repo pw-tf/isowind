@@ -485,8 +485,10 @@ local function respawnInCell(cellDescription, uniqueIndexes)
         for _, uniqueIndex in ipairs(uniqueIndexes) do
             local objectData = cell.data.objectData[uniqueIndex]
             local moved = objectData ~= nil and (objectData.cellChangeTo ~= nil or objectData.cellChangeFrom ~= nil)
+            -- One a script disabled (a quest removing someone) stays gone
+            local disabled = objectData ~= nil and objectData.state == false
             local _, mpNum = splitIndex(uniqueIndex)
-            if not moved then
+            if not moved and not disabled then
                 if cell.data.isowindLoot ~= nil then
                     cell.data.isowindLoot[uniqueIndex] = nil
                 end
