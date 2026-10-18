@@ -1,0 +1,50 @@
+uniform_vec4 uSelection {
+    default = vec4(0.0, 0.0, 0.0, 0.0);
+    static = false;
+    description = "Feet position (xyz) and ring radius (w, 0 = no ring) of the creature under the cursor.";
+}
+
+uniform_vec4 uSelectionColor {
+    default = vec4(1.0, 1.0, 1.0, 0.0);
+    static = false;
+    description = "Ring colour (rgb) and strength (a).";
+}
+
+fragment ring {
+    // Selection ring for the Isowind top-down mode (scripts/isowind/topdown.lua sets the uniforms): a ring
+    // painted onto the ground around the hovered creature's feet. It is placed using each pixel's world position from
+    // the depth buffer, so only the ground shows it and the creature's own body covers it, like a decal.
+
+    omw_In vec2 omw_TexCoord;
+
+    const float WIDTH = 10.0;         // ring thickness, world units
+    const float GROUND_RANGE = 40.0;  // how far above or below the feet the ground may be
+
+    void main()
+    {
+        vec4 scene = omw_GetLastShader(omw_TexCoord);
+
+        if (uSelection.w > 0.0)
+        {
+            vec3 world = omw_GetWorldPosFromUV(omw_TexCoord);
+            float dist = length(world.xy - uSelection.xy);
+            float ring = 1.0 - smoothstep(WIDTH * 0.5, WIDTH, abs(dist - uSelection.w));
+            float ground = 1.0 - smoothstep(GROUND_RANGE * 0.5, GROUND_RANGE, abs(world.z - uSelection.z));
+            // A faint fill inside the ring helps it read on busy ground.
+            float fill = (1.0 - smoothstep(uSelection.w - WIDTH, uSelection.w, dist)) * 0.18;
+            float amount = max(ring, fill) * ground * uSelectionColor.a;
+            scene.rgb = mix(scene.rgb, uSelectionColor.rgb, amount);
+        }
+
+        omw_FragColor = scene;
+    }
+}
+
+technique {
+    description = "Selection ring under the creature under the cursor (Isowind top-down mode).";
+    version = "1.0";
+    author = "Isowind";
+    passes = ring;
+    flags = hidden;
+    dynamic = true;
+}

@@ -615,8 +615,9 @@ set(OPENMW_PATCH
 ExternalProject_Add(crabnet
         GIT_REPOSITORY https://github.com/TES3MP/CrabNet.git
         GIT_TAG 19e66190e83f53bcdcbcd6513238ed2e54878a21
-        # Newer compilers don't pull in <cstdint> for it
+        # Newer compilers don't pull in <cstdint> for it; the NDK has no <asm/io.h> (nothing there uses it)
         PATCH_COMMAND sed -i "1i #include <cstdint>" <SOURCE_DIR>/Source/Utils/_FindFirst.h
+        COMMAND sed -i "s|<asm/io.h>|<unistd.h>|" <SOURCE_DIR>/Source/Plugins/FileList.cpp
 
         CONFIGURE_COMMAND ${wrapper_command} cmake <SOURCE_DIR>
         ${COMMON_CMAKE_ARGS}

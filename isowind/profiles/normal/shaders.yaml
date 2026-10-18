@@ -1,0 +1,7 @@
+config:
+  # Isowind: Rafael's Shader Pack for a camera high above the player. Distance (atmospheric) fog would fill the air
+  # between it and the ground with haze, so it is off, and the volumetric fog is lighter.
+  VAIO:
+    AtmosphericFogEnabled: false
+    FogIntensity: 0.15
+    InteriorFogIntensity: 0.2

@@ -1,0 +1,241 @@
+uniform_int uPixelSize {
+    default = 5;
+    min = 1;
+    max = 32;
+    step = 1;
+    display_name = "Pixel size";
+    description = "Size of one art pixel in screen pixels, relative to 1080p (scaled to your resolution).";
+}
+
+uniform_int uPalette {
+    default = 1;
+    display_name = "Palette";
+    description = "Colour palettes clustered from Morrowind's own textures. 'Posterize' quantises each channel to 'Colours per channel' instead.";
+    widget_type = choice(
+        "Posterize (no palette)" = 0,
+        "Vvardenfell 48" = 1,
+        "Vvardenfell 32" = 2,
+        "Vvardenfell 24" = 3,
+        "Vvardenfell 16" = 4,
+        "Vvardenfell 64" = 5
+    );
+}
+
+uniform_int uColorCount {
+    default = 6;
+    min = 2;
+    max = 32;
+    step = 1;
+    display_name = "Colours per channel";
+    description = "Posterize only: number of levels per colour channel.";
+}
+
+uniform_float uDither {
+    default = 0.15;
+    min = 0.0;
+    max = 3.0;
+    step = 0.05;
+    display_name = "Dither";
+    description = "Ordered dither before the palette lookup. Low values only break up banding in skies and gradients.";
+}
+
+uniform_float uSharpness {
+    default = 0.35;
+    min = 0.0;
+    max = 1.0;
+    step = 0.05;
+    display_name = "Pixel sharpness";
+    description = "0 averages everything under an art pixel (stable, little crawl when turning), 1 takes a single sample (crisp, crawls).";
+}
+
+uniform_float uBrightness {
+    default = 1.05;
+    min = 0.25;
+    max = 3.0;
+    step = 0.01;
+    display_name = "Brightness";
+}
+
+uniform_float uShadowDepth {
+    default = 1.15;
+    min = 0.5;
+    max = 3.0;
+    step = 0.01;
+    display_name = "Shadow depth";
+    description = "Above 1 pushes darks down for deeper, more readable shadow shapes.";
+}
+
+uniform_float uSaturation {
+    default = 0.9;
+    min = 0.0;
+    max = 2.0;
+    step = 0.01;
+    display_name = "Saturation";
+}
+
+uniform_float uContrast {
+    default = 1.1;
+    min = 0.5;
+    max = 2.0;
+    step = 0.01;
+    display_name = "Contrast";
+}
+
+uniform_float uOutline {
+    default = 0.5;
+    min = 0.0;
+    max = 1.0;
+    step = 0.01;
+    display_name = "Outline darkness";
+    description = "Darkens the outermost art pixel of objects against whatever is behind them. 0 turns outlines off.";
+}
+
+uniform_float uOutlineThreshold {
+    default = 0.1;
+    min = 0.01;
+    max = 1.0;
+    step = 0.01;
+    display_name = "Outline threshold";
+    description = "Relative depth jump that counts as a silhouette. Lower draws more outlines.";
+}
+
+uniform_float uFogColour {
+    default = 0.6;
+    min = 0.0;
+    max = 1.0;
+    step = 0.01;
+    display_name = "Full colour fog";
+    description = "How much fogged areas (and the sky) skip the palette and keep smooth colour.";
+}
+
+sampler_3d sgPalettes {
+    source = "textures/isowind/palettes.dds";
+    min_filter = nearest;
+    mag_filter = nearest;
+    wrap_s = clamp_to_edge;
+    wrap_t = clamp_to_edge;
+    wrap_r = clamp_to_edge;
+}
+
+fragment pixelart {
+    // Isowind 3D pixel art: low resolution art pixels, a small palette taken
+    // from the game's own colours, depth outlines, deep shadows and full colour fog.
+    // No CRT: the look is clean pixel art, not an old screen.
+
+    omw_In vec2 omw_TexCoord;
+
+    // Number of palettes stacked in palettes.dds (see tools/make_palettes.py).
+    const float PALETTE_COUNT = 5.0;
+    const vec3 LUMA = vec3(0.299, 0.587, 0.114);
+
+    float pixelSize()
+    {
+        return max(1.0, floor(float(uPixelSize) / 1080.0 * omw.resolution.y + 0.5));
+    }
+
+    // Screen uv of point o (0..1 across the art pixel) inside art pixel `cell`.
+    vec2 cellUv(vec2 cell, vec2 o)
+    {
+        vec2 inset = 0.5 / omw.resolution;
+        return clamp((cell + o) * pixelSize() / omw.resolution, inset, 1.0 - inset);
+    }
+
+    // Box filter over the art pixel. Every screen pixel in it gets the same result, and
+    // averaging (rather than point sampling) keeps it from flickering as the camera turns.
+    vec3 average(vec2 cell)
+    {
+        vec3 sum = vec3(0.0);
+        for (int x = 0; x < 4; x++)
+        {
+            for (int y = 0; y < 4; y++)
+                sum += omw_GetLastShader(cellUv(cell, (vec2(float(x), float(y)) + 0.5) / 4.0)).rgb;
+        }
+        return sum / 16.0;
+    }
+
+    float depthAt(vec2 cell)
+    {
+        return max(omw_GetLinearDepth(cellUv(cell, vec2(0.5))), 0.001);
+    }
+
+    float outline(vec2 cell)
+    {
+        float c = depthAt(cell);
+        float l = depthAt(cell + vec2(-1.0, 0.0));
+        float r = depthAt(cell + vec2(1.0, 0.0));
+        float d = depthAt(cell + vec2(0.0, -1.0));
+        float u = depthAt(cell + vec2(0.0, 1.0));
+
+        // Inverse depth is linear across a flat surface on screen, so its second difference
+        // stays ~0 on walls and floors at any angle and only spikes at silhouettes.
+        float wc = 1.0 / c;
+        float lap = max(abs(1.0 / l + 1.0 / r - 2.0 * wc), abs(1.0 / d + 1.0 / u - 2.0 * wc)) / wc;
+
+        // Only the near side of the silhouette is outlined, as a pixel artist would.
+        float nearSide = step(c * 1.05, max(max(l, r), max(d, u)));
+
+        return smoothstep(uOutlineThreshold, uOutlineThreshold * 2.0, lap) * nearSide;
+    }
+
+    vec3 grade(vec3 c)
+    {
+        c = max(c * uBrightness, 0.0);
+        c = max(mix(vec3(dot(c, LUMA)), c, uSaturation), 0.0);
+        c = pow(c, vec3(uShadowDepth));
+        c = (c - 0.5) * uContrast + 0.5;
+        return clamp(c, 0.0, 1.0);
+    }
+
+    // 4x4 Bayer matrix, 0..15/16.
+    float bayer2(vec2 a)
+    {
+        a = floor(a);
+        return fract(dot(a, vec2(0.5, a.y * 0.75)));
+    }
+
+    float bayer4(vec2 a)
+    {
+        return bayer2(0.5 * a) * 0.25 + bayer2(a);
+    }
+
+    // Colours are matched in gamma-encoded space, as the LUT was built (more room for darks).
+    vec3 quantize(vec3 c, vec2 cell)
+    {
+        vec3 e = pow(c, vec3(1.0 / 2.2)) + (bayer4(cell) - 0.46875) * uDither * 0.15;
+        e = clamp(e, 0.0, 1.0);
+
+        if (uPalette == 0)
+        {
+            float n = float(uColorCount) - 1.0;
+            return pow(floor(e * n + 0.5) / n, vec3(2.2));
+        }
+
+        vec3 idx = min(floor(e * 64.0), 63.0);
+        idx.z += 64.0 * float(uPalette - 1);
+        return omw_Texture3D(sgPalettes, (idx + 0.5) / vec3(64.0, 64.0, 64.0 * PALETTE_COUNT)).rgb;
+    }
+
+    void main()
+    {
+        vec2 cell = floor(omw_TexCoord * omw.resolution / pixelSize());
+        vec2 centre = cellUv(cell, vec2(0.5));
+
+        vec3 c = mix(average(cell), omw_GetLastShader(centre).rgb, uSharpness);
+        c = grade(c);
+        c *= 1.0 - uOutline * outline(cell);
+
+        vec3 q = quantize(c, cell);
+
+        // The developer keeps fog full-spectrum for atmosphere while the rest stays paletted.
+        float fog = clamp(omw_EstimateFogCoverageFromUV(centre), 0.0, 1.0);
+
+        omw_FragColor = vec4(mix(q, c, fog * uFogColour), 1.0);
+    }
+}
+
+technique {
+    passes = pixelart;
+    description = "Isowind 3D pixel art: art pixels, Morrowind palette, depth outlines, deep shadows, full colour fog.";
+    author = "Isowind";
+    version = "1.0";
+}

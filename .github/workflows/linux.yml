@@ -43,26 +43,36 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=mold \
             -DUSE_SYSTEM_TINYXML=ON -DOPENMW_USE_SYSTEM_RECASTNAVIGATION=ON \
             -DBUILD_OPENCS=OFF -DBUILD_BSATOOL=OFF -DBUILD_ESMTOOL=OFF -DBUILD_ESSIMPORTER=OFF -DBUILD_NIFTEST=OFF \
-            -DBUILD_NAVMESHTOOL=OFF -DBUILD_BULLETOBJECTTOOL=OFF \
+            -DBUILD_NAVMESHTOOL=OFF -DBUILD_BULLETOBJECTTOOL=OFF -DBUILD_LAUNCHER=OFF -DBUILD_WIZARD=OFF \
             -DRakNet_INCLUDES=$PWD/crabnet/include \
             -DRakNet_LIBRARY_RELEASE=$(find $PWD/crabnet/build -name 'libRakNetLibStatic.a' | head -1) \
             -DRakNet_LIBRARY_DEBUG=$(find $PWD/crabnet/build -name 'libRakNetLibStatic.a' | head -1)
 
       - name: Build
-        run: cmake --build build -j$(nproc)
+        # -k: report every file that fails, not just the first
+        run: cmake --build build -j$(nproc) -- -k
 
-      # Runs from its own folder like the Windows engine folder: the executables, their configs and resources
-      - name: Package
+      # The bundled mods (third-party, so not in git): bundled-mods.zip on this repository's "bundled-mods" release
+      - name: Bundled mods
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p isowind-linux
-          cd build
-          cp -r resources openmw.cfg defaults.bin gamecontrollerdb.txt ../isowind-linux/
-          for f in openmw openmw-launcher openmw-wizard openmw-iniimporter tes3mp-server; do
-            [ -f "$f" ] && cp "$f" ../isowind-linux/
-          done
-          cp -n *.cfg ../isowind-linux/ 2>/dev/null || true
-          cd ..
-          tar -czf isowind-linux-x86_64.tar.gz isowind-linux
+          if gh release download bundled-mods -p bundled-mods.zip; then
+            unzip -q bundled-mods.zip -d bundled-mods
+          else
+            echo "::warning::No bundled-mods release: the package goes without the bundled mods"
+          fi
+
+      # Laid out like the Windows zip, with isowind.sh in place of Isowind.exe
+      - name: Package
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1
+        run: |
+          sudo wget -q -O /usr/local/bin/linuxdeploy \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          sudo chmod +x /usr/local/bin/linuxdeploy
+          sh isowind/linux/package.sh build Isowind bundled-mods
+          tar -czf isowind-linux-x86_64.tar.gz Isowind
 
       - uses: actions/upload-artifact@v4
         with:

@@ -2,6 +2,8 @@
 #define OPENMW_LOG_HPP
 
 
+#include <string>
+
 #ifdef __GNUC__
 #pragma GCC system_header
 #endif

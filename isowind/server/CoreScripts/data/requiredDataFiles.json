@@ -1,0 +1,22 @@
+// This file lets you enforce a certain plugin list and order for all clients
+// attempting to join this server
+//
+// By default, only the English and Russian editions of Morrowind are allowed,
+// because the German and French editions have hardcoded translations, whereas
+// the Russian edition has localization files that make it compatible with the
+// English edition
+//
+// Isowind also ships plugins every player loads after the expansions, in this order (its profiles' openmw.cfg):
+// No Flickering, Morrowind Optimization Patch's Lake Fjalding and Chuzei fixes, Glow in the Dahrk's Telvanni
+// dormers and Expansion Delay
+
+[
+    {"Morrowind.esm": ["0x7B6AF5B9", "0x34282D67"]},
+    {"Tribunal.esm": ["0xF481F334", "0x211329EF"]},
+    {"Bloodmoon.esm": ["0x43DD2132", "0x9EB62F26"]},
+    {"No Flickering.ESP": ["0xE3DFBFC4"]},
+    {"Lake Fjalding Anti-Suck.ESP": ["0x069B7D10"]},
+    {"chuzei_helm_no_neck.esp": ["0x0AFA7D6D"]},
+    {"GITD_Telvanni_Dormers.ESP": ["0x67ABDCC2"]},
+    {"Expansion Delay.ESP": ["0xC8424096"]}
+]
