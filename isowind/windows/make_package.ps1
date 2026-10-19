@@ -66,10 +66,26 @@ Copy-Item (Join-Path $isowind 'README.txt') $dist -Force
 # Source: OpenMW is GPL v3, so ship the changes (against the openmw-0.51.0 tag) and this project's own code.
 $source = Join-Path $dist 'source'
 New-Item -ItemType Directory -Force $source | Out-Null
-# Everything since the openmw-0.51.0 tag, committed or not (new files included)
-& git -C $src add --intent-to-add -A -- . ':!MSVC2022_64' ':!deps' ':!android' ':!isowind' ':!.github'
-& git -C $src diff openmw-0.51.0 -- . ':!MSVC2022_64' ':!deps' ':!android' ':!isowind' ':!.github' | Set-Content -Encoding utf8 (Join-Path $source 'isowind-openmw-0.51.0.patch')
-& git -C $src reset --quiet
+# Everything since the openmw-0.51.0 tag, committed or not (new files included). The tag is OpenMW's, not this
+# repository's: it is fetched on its own (shallow, just that tag) from OpenMW's GitLab the first time
+$tag = 'openmw-0.51.0'
+& git -C $src rev-parse --verify --quiet "$tag^{commit}" | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Fetching OpenMW's $tag tag for the source patch (once)..."
+    & git -C $src fetch --depth 1 https://gitlab.com/OpenMW/openmw.git "refs/tags/${tag}:refs/tags/$tag"
+}
+& git -C $src rev-parse --verify --quiet "$tag^{commit}" | Out-Null
+if ($LASTEXITCODE -eq 0) {
+    & git -C $src add --intent-to-add -A -- . ':!MSVC2022_64' ':!deps' ':!android' ':!isowind' ':!.github'
+    & git -C $src diff $tag -- . ':!MSVC2022_64' ':!deps' ':!android' ':!isowind' ':!.github' | Set-Content -Encoding utf8 (Join-Path $source "isowind-$tag.patch")
+    & git -C $src reset --quiet
+}
+else {
+    Write-Warning "Couldn't get OpenMW's $tag tag (offline?): the source folder names the repository and commit instead of carrying the patch"
+    $commit = (& git -C $src rev-parse HEAD)
+    "The changes to OpenMW are in the Isowind repository, https://github.com/pw-tf/isowind, at commit $commit`r`n(the patch against OpenMW's $tag tag couldn't be made when this package was built)" |
+        Set-Content -Encoding utf8 (Join-Path $source "isowind-$tag.patch.txt")
+}
 Copy-Item (Join-Path $PSScriptRoot 'Isowind.cs'), (Join-Path $PSScriptRoot 'make_icon.py') $source -Force
 Copy-Item (Join-Path $isowind 'tools\make_palettes.py'), (Join-Path $isowind 'tools\retro_textures.py') $source -Force
 @"
