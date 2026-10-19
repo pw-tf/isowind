@@ -32,6 +32,12 @@ FIND_LIBRARY (RakNet_LIBRARY_DEBUG NAMES RakNetLibStaticd
 	
 	
 
+# Isowind: with no debug build of the library, the release one serves debug configurations too (as the Linux
+# build passes it), rather than the generate step failing on RakNet_LIBRARY_DEBUG-NOTFOUND
+IF(NOT RakNet_LIBRARY_DEBUG AND RakNet_LIBRARY_RELEASE)
+    SET(RakNet_LIBRARY_DEBUG ${RakNet_LIBRARY_RELEASE})
+ENDIF()
+
 FIND_PATH (RakNet_INCLUDES raknet/RakPeer.h
     ENV CPATH
     /usr/include

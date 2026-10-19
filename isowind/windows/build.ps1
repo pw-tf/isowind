@@ -92,6 +92,11 @@ if (-not $rakLib) {
     $rakLib = Get-ChildItem (Join-Path $crabnet 'build') -Recurse -Filter 'RakNetLibStatic.lib' |
         Where-Object { $_.FullName -match "\\$Configuration\\" } | Select-Object -First 1
     if (-not $rakLib) { throw 'CrabNet built but RakNetLibStatic.lib is nowhere under crabnet\build' }
+    # A Debug build too, so a Debug engine links a matching library (the engine's solution has both configurations)
+    if ($Configuration -ne 'Debug') {
+        try { Run cmake @('--build', (Join-Path $crabnet 'build'), '--config', 'Debug', '--parallel') }
+        catch { Write-Warning "CrabNet's Debug build failed; Debug builds of the engine will link the $Configuration library" }
+    }
 }
 Write-Host "RakNet: $($rakLib.FullName)"
 # The dependency script runs the engine's CMake configure itself, and that needs RakNet; cmake\FindRakNet.cmake
@@ -102,7 +107,8 @@ Copy-Item (Join-Path $crabnet 'include\*') (Join-Path $rakRoot 'include') -Recur
 Copy-Item $rakLib.FullName (Join-Path $rakRoot 'lib\RakNetLibStatic.lib') -Force
 $rakDebug = Get-ChildItem (Join-Path $crabnet 'build') -Recurse -Filter 'RakNetLibStatic.lib' |
     Where-Object { $_.FullName -match '\\Debug\\' } | Select-Object -First 1
-if ($rakDebug) { Copy-Item $rakDebug.FullName (Join-Path $rakRoot 'lib\RakNetLibStaticd.lib') -Force }
+# (the find module wants RakNetLibStaticd.lib for debug configurations; without a Debug build the release one does)
+Copy-Item ($(if ($rakDebug) { $rakDebug.FullName } else { $rakLib.FullName })) (Join-Path $rakRoot 'lib\RakNetLibStaticd.lib') -Force
 $env:RAKNET_ROOT = $rakRoot.Replace('\', '/')
 Write-Host "RAKNET_ROOT: $env:RAKNET_ROOT"
 
