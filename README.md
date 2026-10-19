@@ -1,3 +1,108 @@
+Isowind
+=======
+
+Morrowind as a top-down / isometric game, with an optional pixel art look and cooperative multiplayer:
+[OpenMW](https://openmw.org) 0.51 with TES3MP's multiplayer, a camera mod and menus made for a controller.
+This repository is OpenMW's source with Isowind's changes; OpenMW's own README follows further down.
+
+* `isowind/` - the mod (`mod/`), the pixel art look, the profiles, the server files and the player's `README.txt`
+* `isowind/windows/` - the Windows build script, `Isowind.exe`'s source and the packaging script
+* `isowind/linux/` - `isowind.sh`, the launcher window and the Linux packaging script
+* `.github/workflows/linux.yml` - the Linux build, which is the reference recipe
+
+Building on Windows
+-------------------
+
+`isowind\windows\build.ps1` does the whole chain: CrabNet (the multiplayer networking), OpenMW's dependency
+pack, the engine, `Isowind.exe` and the package.
+
+You need, on the PATH:
+
+* Git for Windows (its bash runs OpenMW's dependency script)
+* CMake
+* Visual Studio 2022 with the "Desktop development with C++" workload (2026 works, with `-VsVersion 2026`)
+* Python 3 (python.org or the Microsoft Store), for the launcher's icon; Pillow is installed for you if it is missing
+* GitHub CLI, logged in (`winget install GitHub.cli`, then `gh auth login`), for the bundled mods: they come from
+  this repository's private `bundled-mods` release. Or put the mod folders in `<root>\bundled-mods` yourself.
+* 7-Zip, unless you are on Windows 11, whose own `tar.exe` extracts the dependency pack
+
+Clone the repository into a folder of its own. Everything that isn't source goes beside the repository, in its
+parent folder (`<root>`):
+
+    <root>\
+        <repository>\             this clone; the engine builds in MSVC2022_64 inside it
+        crabnet\                  cloned and built by the script
+        bundled-mods\             the third-party mods, fetched by the script
+        dist\Isowind\             the package, and dist\Isowind.zip beside it
+
+Then, in PowerShell, from the repository:
+
+    Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # once, if PowerShell refuses to run scripts
+    .\isowind\windows\build.ps1
+
+The first run clones and builds CrabNet, downloads and unpacks the dependency pack, configures and builds the
+engine (the final link with link-time optimisation alone takes ten to twenty minutes), compiles `Isowind.exe`,
+fetches the bundled mods and packages. Later runs are incremental; after pulling changes:
+
+    .\isowind\windows\build.ps1 -SkipDependencies
+
+The engine ends up in `MSVC2022_64\Release`, `Isowind.exe` in `MSVC2022_64\launcher`, and the package in
+`<root>\dist\Isowind` with `<root>\dist\Isowind.zip` beside it.
+
+| Switch                  | What it does                                                                                   |
+|-------------------------|------------------------------------------------------------------------------------------------|
+| `-SkipDependencies`     | Doesn't check or re-extract the dependency downloads. Use it on every build after the first.  |
+| `-NoLto`                | No link-time optimisation: the final link takes a minute or two instead of ten to twenty. The game runs a little slower, so it is for working on the code, not for a release. |
+| `-SkipLauncher`         | Doesn't build `Isowind.exe`.                                                                   |
+| `-SkipPackage`          | Doesn't run `make_package.ps1`.                                                                |
+| `-Clean`                | A fresh build folder instead of keeping the existing one.                                      |
+| `-Configuration Debug`  | `Release` (the default), `Debug` or `RelWithDebInfo`. Only a Release build is packaged.         |
+| `-VsVersion 2026`       | Visual Studio 2026 instead of 2022; the build folder is then `MSVC2026_64`.                    |
+
+The pieces, if you need one on its own:
+
+* `make_package.ps1` assembles `<root>\dist\Isowind` from `MSVC2022_64\Release`, the mod, the bundled mods, the
+  pixel art, profiles, server, licenses, `README.txt` and the GPL source patch against OpenMW's `openmw-0.51.0`
+  tag (fetched if the clone lacks it), then zips it. It finds the repository from its own location.
+* `make_icon.py` draws the icon; `Isowind.cs` compiles with .NET Framework 4's `csc.exe`, which comes with Windows.
+
+If something goes wrong:
+
+* **RakNet not found** at configure: the script lays CrabNet out as `<root>\crabnet\root` (`include\raknet`,
+  `lib\RakNetLibStatic.lib`, `lib\RakNetLibStaticd.lib`) and sets `RAKNET_ROOT` to it, which
+  `cmake\FindRakNet.cmake` honours; without a debug library the release one serves Debug too.
+* **Windows Defender quarantines `openmw.exe`**: a fresh, unsigned binary can trip its heuristics. Restore it from
+  Protection history, exclude `<root>` in Windows Security, and report the file to Microsoft as a false positive.
+  The zip step fails while the file is quarantined.
+* **No bundled mods**: `gh auth login` and build again, or put the mods in `<root>\bundled-mods`.
+
+Building on Linux
+-----------------
+
+`.github/workflows/linux.yml` has the recipe: the Debian/Ubuntu packages from `CI/install_debian_deps.sh`, CrabNet
+at commit `19e6619`, a CMake configure that points `RakNet_INCLUDES` and `RakNet_LIBRARY_RELEASE`/`_DEBUG` at it,
+then `cmake --build`. `isowind/linux/package.sh BUILD_DIR OUT_DIR [BUNDLED_MODS_DIR]` assembles the folder (it
+needs `linuxdeploy` on the PATH). On Arch, build Bullet and TinyXML in-tree (`-DOPENMW_USE_SYSTEM_BULLET=OFF
+-DUSE_SYSTEM_TINYXML=OFF`), and CMake 4 wants `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` for CrabNet.
+
+Running with a controller
+-------------------------
+
+The menus made for a controller are the `controller menus` setting in the look's `settings.cfg`
+(`profiles\pixelart`, `profiles\normal`); the launchers set it, the game itself never does.
+
+* Windows: `Isowind.exe` has a **Controller** tick box, ticked when a controller is connected as it opens.
+* Linux: `isowind.sh gui` is the same window. The commands (`isowind.sh`, `isowind.sh normal`, `isowind.sh join
+  ADDRESS`, `isowind.sh host`) go by what is plugged in, and `--controller` or `--no-controller` anywhere among the
+  arguments overrides that. A controller that comes with a stream, as Moonlight's does, isn't there to be seen,
+  so a streamed entry wants the flag:
+
+      ./isowind.sh pixelart --controller
+      ./isowind.sh join 203.0.113.7:25565 --controller
+
+The in-game controller layout is in `isowind/README.txt`.
+
+
 OpenMW
 ======
 
