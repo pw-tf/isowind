@@ -6,6 +6,11 @@
 #   ./isowind.sh join ADDRESS     play on a server, e.g. ./isowind.sh join 203.0.113.7:25565 (look optional after it)
 #   ./isowind.sh host             run a server here, in this terminal, after asking its settings (others join
 #                                 with this computer's address)
+#   ./isowind.sh gui              the launcher window (look, controller, join, host), like Isowind.exe; also what
+#                                 isowind.sh opens when started from a file manager
+#   --controller, --no-controller menus made for a controller, or Morrowind's own, with any of the above; otherwise
+#                                 whichever fits what is plugged in (a controller that comes with a stream, as
+#                                 Moonlight's does, wants --controller)
 #
 # The first time, it finds Morrowind (Steam's usual places; otherwise run it as MORROWIND=/path/to/Morrowind
 # ./isowind.sh, the folder with "Data Files" and Morrowind.ini) and sets up OpenMW for it, like OpenMW's wizard.
@@ -147,11 +152,34 @@ play() {
     echo "$LOOK" > "$LOOK_FILE"
     setup_morrowind
     [ "$LOOK" = pixelart ] && build_textures
-    # Menus made for a controller when one is plugged in, Morrowind's own (drag and drop) otherwise
-    if ls /dev/input/js* >/dev/null 2>&1; then MENUS=true; else MENUS=false; fi
+    # Menus made for a controller when one is plugged in (or asked for with --controller), Morrowind's own (drag and
+    # drop) otherwise
+    if [ -z "$MENUS" ]; then
+        if ls /dev/input/js* >/dev/null 2>&1; then MENUS=true; else MENUS=false; fi
+    fi
     set_setting "$ROOT/profiles/$LOOK/settings.cfg" GUI "controller menus" "$MENUS"
     exec "$ENGINE/openmw" --config "$ROOT/profiles/$LOOK" $CONNECT
 }
+
+launcher() {
+    [ -f "$ROOT/isowind-launcher.py" ] || die "no launcher window here (isowind-launcher.py); use the commands above"
+    python3 -c 'import tkinter' 2>/dev/null \
+        || die "the launcher window needs Python 3's Tk: install python3-tk (Debian, Ubuntu) or tk (Arch, Fedora), or use the commands above"
+    exec python3 "$ROOT/isowind-launcher.py"
+}
+
+# --controller / --no-controller, anywhere among the arguments (none of the others has spaces in it)
+MENUS=""
+ARGS=""
+for arg in "$@"; do
+    case $arg in
+        --controller) MENUS=true ;;
+        --no-controller) MENUS=false ;;
+        *) ARGS="$ARGS $arg" ;;
+    esac
+done
+# shellcheck disable=SC2086
+set -- $ARGS
 
 case $1 in
     host)
@@ -165,9 +193,15 @@ case $1 in
         [ -n "$2" ] || die "join needs the server's address, e.g. $0 join 203.0.113.7"
         CONNECT="--connect=$2"
         play "$3" ;;
-    ""|pixelart|normal)
+    gui)
+        launcher ;;
+    "")
+        # Started from a file manager (no terminal): the launcher window
+        if [ ! -t 0 ] && [ -f "$ROOT/isowind-launcher.py" ]; then launcher; fi
+        play "" ;;
+    pixelart|normal)
         play "$1" ;;
     *)
-        sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
         exit 1 ;;
 esac

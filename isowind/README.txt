@@ -24,6 +24,10 @@ On Linux, unpack the folder and use isowind.sh instead of Isowind.exe, from a te
    ./isowind.sh                 play (pixel art; ./isowind.sh normal for the normal look)
    ./isowind.sh join ADDRESS    play on a server
    ./isowind.sh host            run a server in that terminal (it asks its settings first)
+   ./isowind.sh gui             a launcher window like Isowind.exe (also what a file manager opens)
+   Add --controller (or --no-controller) to get the menus made for a controller (or Morrowind's own)
+   whatever is plugged in; without it, isowind.sh picks by what is. A controller that comes with a
+   stream, as Moonlight's does, wants --controller.
    The first time it finds Morrowind in Steam's usual places and sets up OpenMW for it; otherwise run it as
    MORROWIND=/path/to/Morrowind ./isowind.sh (the folder with "Data Files" in it). The pixel art look
    needs Python 3; it fetches Pillow for itself if your system doesn't have it.
@@ -70,7 +74,8 @@ server\logs. Keep the same game (co-op or MMO) for a world: an MMO world switche
 what each player looted, so it's all back.
 
 In multiplayer
-Enter          Talk in the chat; F2 hides or shows the chat window.
+Enter          Talk in the chat (D-pad left on a controller, which brings up a keyboard on the screen);
+               F2 hides or shows the chat window.
 The world never pauses, not even in menus. Saving and loading are off: the server keeps everything.
 When you die you wake up at the nearest temple.
 
@@ -102,11 +107,33 @@ E                 Use what is under the cursor, or the nearest thing in front of
 Space             Jump
 F / R             Ready weapon / ready magic
 Tab               Inventory
-Mouse wheel       Zoom
-F7                Switch between the top-down camera and the normal one.
+Mouse wheel       Zoom. All the way out is the top-down view; zoom in and it becomes Morrowind's third person
+                  view, all the way in first person.
+F7                Hop between the top-down view and the normal one.
 1 - 0             Quick keys, shown along the bottom of the screen. To set one, open the inventory (Tab),
                   point at an item, spell or enchanted item and press the number. Right-click a slot for
                   Morrowind's own quick key menu.
+
+With a controller (it takes over as soon as a stick or button is used, the mouse as soon as it moves):
+Left stick        Move                            Right stick       Aim, or point at what X uses
+A                 Jump                            B                 Ready weapon
+X                 Use / talk                      Y                 Ready magic
+Right trigger     Attack / cast                   Left trigger      Power attack
+Bumpers           Previous / next quick key       D-pad up / down   Zoom (hold to keep going)
+D-pad left        Quick keys menu (on a server: the chat)
+D-pad right       Quest log                       Start             Menu
+Back              Inventory (hold: journal)
+Left stick in     Sneak                           Right stick in    Rest
+Menus are made for the controller: the D-pad and A choose, B goes back, and where several windows are open
+side by side (the inventory screen, a chest, a shop) the bumpers switch between them, the one in use lit,
+while the triggers switch the tabs within a window. The right stick pressed in shows an item's info, and in
+the inventory and magic windows Y puts the item or spell on a quick key. In Options the bumpers switch tabs,
+the D-pad steps a pointer through the settings (up / down) and adjusts the one it is on (left / right), and A
+works it. The legend along the bottom of each menu says what the buttons do there. A keyboard appears on the
+screen wherever there is something to type (your name on a server, the chat, a save's name); press Y to bring
+it up if it doesn't. Whether you get these menus or Morrowind's own is decided as the game starts, from
+whether a controller is plugged in (Isowind.exe's launcher and isowind.sh's --controller flag decide too); the
+mouse works in them as well.
 
 The minimap turns so that up on it is up on the screen, and shows other players in multiplayer (as
 does the map). Zoom it with the mouse wheel over it while a menu is open, or in Options > Interface,
