@@ -11,7 +11,10 @@ function wrappedExit {
 
 MISSINGTOOLS=0
 
-command -v 7z >/dev/null 2>&1 || { echo "Error: 7z (7zip) is not on the path."; MISSINGTOOLS=1; }
+# Isowind: the dependency pack (a .7z) is extracted with 7-Zip, or else with Windows' own tar (libarchive, which reads
+# .7z on Windows 11); Git Bash's own tar is GNU tar and can't
+WINDOWS_TAR="$(cygpath -u "${SYSTEMROOT:-C:\\Windows}" 2>/dev/null)/System32/tar.exe"
+command -v 7z >/dev/null 2>&1 || [ -x "$WINDOWS_TAR" ] || { echo "Error: neither 7z (7-Zip) nor Windows' tar.exe is available."; MISSINGTOOLS=1; }
 command -v cmake >/dev/null 2>&1 || { echo "Error: cmake (CMake) is not on the path."; MISSINGTOOLS=1; }
 
 if [ $MISSINGTOOLS -ne 0 ]; then
@@ -275,6 +278,16 @@ download() {
 }
 
 MANIFEST_FILE=""
+# extract_archive DIR FILE: the .7z into DIR, with 7-Zip or Windows' tar
+extract_archive() {
+	if command -v 7z >/dev/null 2>&1; then
+		eval 7z x -y -o"$1" "$2" ${STRIP}
+	else
+		mkdir -p "$1"
+		eval "\"$WINDOWS_TAR\"" -xf "$2" -C "$1" ${STRIP}
+	fi
+}
+
 download_from_manifest() {
 	if [ $# -ne 1 ]; then
 		echo "Invalid parameters to download_from_manifest."
@@ -631,14 +644,14 @@ printf "vcpkg packages ${VCPKG_TAG:?}... "
 		printf "Exists. "
 	else
 		download_from_manifest "${VCPKG_MANIFEST:?}"
-		eval 7z x -y -o"${VCPKG_PATH:?}" "${MANIFEST_FILE:?}" ${STRIP}
+		extract_archive "${VCPKG_PATH:?}" "${MANIFEST_FILE:?}"
 	fi
 	if [ -n "${PDBS}" ]; then
 		if [[ -d "${VCPKG_PDB_PATH:?}" ]]; then
 			printf "PDB exists. "
 		else
 			download_from_manifest "${VCPKG_PDB_MANIFEST:?}"
-			eval 7z x -y -o"${VCPKG_PDB_PATH:?}" "${MANIFEST_FILE:?}" ${STRIP}
+			extract_archive "${VCPKG_PDB_PATH:?}" "${MANIFEST_FILE:?}"
 		fi
 	fi
 

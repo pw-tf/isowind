@@ -7,10 +7,12 @@
 #   <root>\bundled-mods\     the third-party mods (make_package.ps1 wants them)
 #   <root>\make_package.ps1
 # and makes <root>\crabnet, <root>\openmw-src\MSVC2022_64 (the build), <root>\launcher\Isowind.exe, <root>\dist.
+# (The repository folder may have another name; only make_package.ps1 insists on openmw-src.)
 #
-# Needs on PATH: git (Git for Windows, whose bash runs OpenMW's dependency script), cmake, 7z (7-Zip), and Visual
-# Studio 2022 with the C++ workload. For Isowind.exe: Python 3 with Pillow (py -m pip install Pillow) for the icon;
-# the C# compiler comes with Windows.
+# Needs on PATH: git (Git for Windows, whose bash runs OpenMW's dependency script), cmake, and Visual Studio 2022
+# with the C++ workload. The dependency pack (a .7z) is extracted with 7-Zip if it is on the PATH, otherwise with
+# Windows' own tar.exe (which reads .7z on Windows 11). For Isowind.exe: Python 3 with Pillow (py -m pip install
+# Pillow) for the icon; the C# compiler comes with Windows.
 #
 #   .\build.ps1                    everything, incrementally (an existing build folder is kept)
 #   .\build.ps1 -Clean             a fresh build folder
@@ -57,11 +59,20 @@ function Require($name, $hint) {
 Step 'Tools'
 Require git 'Install Git for Windows.'
 Require cmake 'Install CMake and tick "add to PATH".'
-Require 7z 'Install 7-Zip and add its folder to the PATH.'
-# Git for Windows' bash, which OpenMW's dependency script is written for (not WSL's)
-$bash = Join-Path (Split-Path -Parent (Split-Path -Parent (Get-Command git).Source)) 'bin\bash.exe'
-if (-not (Test-Path $bash)) { $bash = 'C:\Program Files\Git\bin\bash.exe' }
-if (-not (Test-Path $bash)) { throw "Git for Windows' bash.exe wasn't found beside git; install Git for Windows." }
+$windowsTar = if ($env:windir) { Join-Path $env:windir 'System32\tar.exe' } else { $null }
+if (-not (Get-Command 7z -ErrorAction SilentlyContinue) -and -not ($windowsTar -and (Test-Path $windowsTar))) {
+    throw 'Neither 7-Zip (7z on the PATH) nor Windows'' tar.exe is available to extract the dependency pack.'
+}
+# Git for Windows' bash, which OpenMW's dependency script is written for (not WSL's): bin\bash.exe in the Git
+# folder, found by walking up from wherever git.exe is (Git\cmd, Git\mingw64\bin, ...)
+$bash = $null
+$gitDir = Split-Path -Parent (Get-Command git).Source
+while ($gitDir -and -not $bash) {
+    if (Test-Path (Join-Path $gitDir 'bin\bash.exe')) { $bash = Join-Path $gitDir 'bin\bash.exe' }
+    else { $gitDir = Split-Path -Parent $gitDir }
+}
+if (-not $bash -and (Test-Path 'C:\Program Files\Git\bin\bash.exe')) { $bash = 'C:\Program Files\Git\bin\bash.exe' }
+if (-not $bash) { throw "Git for Windows' bash.exe wasn't found in the Git folder above git.exe; install Git for Windows." }
 if (-not (Test-Path (Join-Path $src 'CI\before_script.msvc.sh'))) { throw "$src doesn't look like the Isowind repository" }
 Write-Host "Repository: $src"
 Write-Host "Root:       $root"
@@ -83,6 +94,17 @@ if (-not $rakLib) {
     if (-not $rakLib) { throw 'CrabNet built but RakNetLibStatic.lib is nowhere under crabnet\build' }
 }
 Write-Host "RakNet: $($rakLib.FullName)"
+# The dependency script runs the engine's CMake configure itself, and that needs RakNet; cmake\FindRakNet.cmake
+# looks under $env:RAKNET_ROOT for include\raknet and lib\RakNetLibStatic.lib, so lay CrabNet out that way
+$rakRoot = Join-Path $crabnet 'root'
+New-Item -ItemType Directory -Force (Join-Path $rakRoot 'lib'), (Join-Path $rakRoot 'include') | Out-Null
+Copy-Item (Join-Path $crabnet 'include\*') (Join-Path $rakRoot 'include') -Recurse -Force
+Copy-Item $rakLib.FullName (Join-Path $rakRoot 'lib\RakNetLibStatic.lib') -Force
+$rakDebug = Get-ChildItem (Join-Path $crabnet 'build') -Recurse -Filter 'RakNetLibStatic.lib' |
+    Where-Object { $_.FullName -match '\\Debug\\' } | Select-Object -First 1
+if ($rakDebug) { Copy-Item $rakDebug.FullName (Join-Path $rakRoot 'lib\RakNetLibStaticd.lib') -Force }
+$env:RAKNET_ROOT = $rakRoot.Replace('\', '/')
+Write-Host "RAKNET_ROOT: $env:RAKNET_ROOT"
 
 # ---- OpenMW's dependencies and the build folder -----------------------------------------------------------------
 Step "OpenMW's dependencies and the $buildDir build folder (CI\before_script.msvc.sh)"
@@ -90,13 +112,10 @@ $scriptArgs = @('-v', $VsVersion, '-p', 'Win64', '-c', $Configuration)
 if (-not $Clean) { $scriptArgs += '-k' }
 if ($SkipDependencies) { $scriptArgs += @('-d', '-e') }
 Run $bash (@('CI/before_script.msvc.sh') + $scriptArgs) $src
-
-# The multiplayer library, as the Linux build passes it
-Step 'Configuring the engine with CrabNet'
-$rakPath = $rakLib.FullName.Replace('\', '/')
-Run cmake @('-B', $buildDir,
-    "-DRakNet_INCLUDES=$((Join-Path $crabnet 'include').Replace('\', '/'))",
-    "-DRakNet_LIBRARY_RELEASE=$rakPath", "-DRakNet_LIBRARY_DEBUG=$rakPath") $src
+$cache = Join-Path $src "$buildDir\CMakeCache.txt"
+if (-not (Test-Path $cache) -or (Select-String -Path $cache -Pattern 'RakNet_INCLUDES.*NOTFOUND' -Quiet)) {
+    throw "The engine's configure didn't find RakNet under RAKNET_ROOT=$env:RAKNET_ROOT (see the output above)"
+}
 
 # ---- The engine --------------------------------------------------------------------------------------------------
 Step "Building the engine ($Configuration)"
