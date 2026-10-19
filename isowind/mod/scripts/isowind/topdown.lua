@@ -7,21 +7,28 @@
 --   left click      attack / cast with a weapon or spell ready, otherwise interact with what is under the cursor
 --   right click     power attack with a weapon ready (the weapon's strongest attack type)
 --   E (Activate)    interact with what is under the cursor, or else the nearest thing in reach in front
---   mouse wheel     zoom (smoothly)
---   F7              switch between top-down and the normal camera
+--   mouse wheel     zoom: all the way out is the top-down view, in a little is Morrowind's third person view,
+--                   all the way in first person (the D-pad on a controller)
+--   F7              hop between the top-down view and the normal one
 --
 -- With a controller (it takes over as soon as a stick or button is used, the mouse as soon as it moves):
 --   left stick      move                     right stick     aim / pick what X uses
 --   A               jump                     B               ready weapon
 --   X               use / talk               Y               ready magic
 --   right trigger   attack / cast            left trigger    power attack
---   bumpers         previous / next quick key (D-pad left / right too)
---   D-pad up / down zoom (hold to keep zooming)
+--   bumpers         previous / next quick key
+--   D-pad up / down zoom (hold to keep zooming), through the three views
+--   D-pad left      quick keys menu (on a server: the chat, typed with the keyboard on the screen)
 --   Start           menu                     Back            inventory (hold: journal)
 --   left stick in   sneak                    right stick in  rest
 -- There is no cursor then: what the right stick points at (or else what is nearest in front) gets the ring and the
 -- label, and with a weapon or spell ready the aim locks onto the nearest hostile creature in front.
+-- The menus are the engine's controller menus ('controller menus' in the profile's settings.cfg): D-pad and A / B,
+-- the triggers switch pages, Y puts an item or spell on a quick key, and a keyboard on the screen types.
 --
+-- The zoom picks the view: zoomed out to TOPDOWN_FROM or farther it is this top-down view; in closer, Morrowind's
+-- third person view at that distance; closer than FIRST_PERSON_BELOW, first person. Zooming and the first / third
+-- person switch are taken from the built-in camera script for good (claimCamera).
 -- The view is a fixed isometric angle: turned 45 degrees, looking down at the classic isometric 35.26 degrees.
 -- The camera slides in toward the player rather than go underground on slopes, and creatures (and hurt or hostile
 -- people) get health bars (healthbars.lua).
@@ -61,7 +68,10 @@ local ownSettings = storage.playerSection('IsowindTopDown')
 local VIEW_YAW = math.rad(45)       -- the view is turned 45 degrees, so the world's grid runs diagonally
 local PITCH = math.atan(1 / math.sqrt(2)) -- true isometric: looking down 35.26 degrees
 local FOV = math.rad(30)            -- a narrow view from far away looks close to isometric
-local MIN_DISTANCE, MAX_DISTANCE = 500, 3500 -- zoom range
+local MIN_DISTANCE, MAX_DISTANCE = 25, 3500 -- zoom range, from first person out to the farthest top-down view
+local TOPDOWN_FROM = 500            -- zoomed out to here or farther the view is top-down...
+local FIRST_PERSON_BELOW = 50       -- ...zoomed in closer than this it is first person; third person in between
+local THIRD_PERSON_DISTANCE = 200   -- where F7 puts the zoom when leaving the top-down view
 local ZOOM_SPEED = 8                -- how quickly the camera eases to the zoom level (per second)
 local GROUND_CLEARANCE = 60         -- the camera stays at least this far above the ground
 local CLOSEST_DISTANCE = 150        -- how close it may slide in to stay above the ground
@@ -69,7 +79,7 @@ local FOCUS_HEIGHT = 80             -- the camera looks at the player's waist, n
 local TURN_SPEED = math.rad(720)    -- how fast the character turns (per second)
 local AIM_DEAD_ZONE = 80            -- ignore the cursor for aiming when it is this close to the character
 local CURSOR_SPEED = 1.0            -- cursor speed relative to the mouse
-local ZOOM_STEP = 0.1               -- about this fraction of the distance per wheel notch
+local ZOOM_STEP = 0.15              -- about this fraction of the distance per wheel notch
 local ACTIVATE_SLACK = 64           -- extra reach on top of the game's activation distance (top-down is imprecise)
 local SNAP_RADIUS = 0.06            -- the cursor picks a creature this close to its figure (fraction of screen height)
 local SNAP_RANGE = 3000             -- only creatures this close to the player are picked that way
@@ -80,11 +90,13 @@ local AIM_ASSIST_COS = math.cos(math.rad(55)) -- ...within this angle of where t
 local STICK_PICK_COS = math.cos(math.rad(30)) -- what the right stick points at, for X
 local JOURNAL_HOLD = 0.5            -- seconds Back is held to open the journal instead of the inventory
 local DPAD_ZOOM_DELAY = 0.3         -- D-pad up / down held this long zooms continuously...
-local DPAD_ZOOM_RATE = 1.2          -- ...this many times faster (or slower) per second
+local DPAD_ZOOM_RATE = 1.6          -- ...this many times faster (or slower) per second
 --------------------------------------------------------------------------------------------------------------------
 
-local enabled = true
-local active = false                -- whether our overrides are currently applied
+local active = false                -- whether the top-down view's overrides are currently applied
+local viewMode = nil                -- 'topdown', 'third' or 'first', from the zoom (wantedView)
+local cameraClaimed = false         -- zoom and the first / third person switch are this script's, once claimed
+local lastTopDownDistance = 1000    -- where F7 brings the zoom back to
 local viewYaw = VIEW_YAW
 local targetDistance = 1000         -- the zoom level asked for with the wheel
 local distance = targetDistance     -- the camera's actual distance (eased, and kept above the ground)
@@ -98,7 +110,7 @@ local stickAim = nil                -- the world direction the right stick point
 local backPressedAt, journalOpened, dpadHeld = nil, false, 0
 
 -- Defined further down
-local nearestUsable
+local nearestUsable, setRingVisible
 
 local cursorElement, labelElement
 
@@ -159,10 +171,8 @@ local function apply()
         ownSettings:set('runByDefault', true)
     end
     I.Controls.overrideMovementControls(true)
-    I.Camera.disableModeControl(TAG)
     I.Camera.disableStandingPreview(TAG)
     I.Camera.disableHeadBobbing(TAG)
-    I.Camera.disableZoom(TAG)
     Player.setControlSwitch(self, Player.CONTROL_SWITCH.Looking, false)
     camera.showCrosshair(false)
 end
@@ -171,12 +181,9 @@ local function release()
     if not active then return end
     active = false
     I.Controls.overrideMovementControls(false)
-    I.Camera.enableModeControl(TAG)
     I.Camera.enableStandingPreview(TAG)
     I.Camera.enableHeadBobbing(TAG)
-    I.Camera.enableZoom(TAG)
     Player.setControlSwitch(self, Player.CONTROL_SWITCH.Looking, true)
-    camera.setMode(MODE.ThirdPerson)
     camera.setFieldOfView(camera.getBaseFieldOfView())
     self.controls.movement = 0
     self.controls.sideMovement = 0
@@ -406,7 +413,7 @@ local function getRingShader()
     return ringShader
 end
 
-local function setRingVisible(visible)
+setRingVisible = function(visible)
     local shader = getRingShader()
     if not shader then return end
     if visible and not shader:isEnabled() then
@@ -704,14 +711,47 @@ local function updateControllerHolds(dt)
     end
 end
 
-local function onFrame(dt)
-    if not enabled then
+-- Which view the zoom asks for
+local function wantedView()
+    if targetDistance >= TOPDOWN_FROM then return 'topdown' end
+    if targetDistance < FIRST_PERSON_BELOW then return 'first' end
+    return 'third'
+end
+
+-- Zooming and the choice of first or third person are this script's for good, so the built-in camera script
+-- doesn't zoom or switch views on its own
+local function claimCamera()
+    if cameraClaimed then return end
+    cameraClaimed = true
+    I.Camera.disableZoom(TAG)
+    I.Camera.disableModeControl(TAG)
+end
+
+local function switchView(wanted)
+    viewMode = wanted
+    if wanted == 'topdown' then
+        distance = targetDistance
+        apply()
+    else
         release()
+        camera.setMode(wanted == 'first' and MODE.FirstPerson or MODE.ThirdPerson)
+    end
+end
+
+local function onFrame(dt)
+    claimCamera()
+    updateDevice()
+    updateControllerHolds(dt)
+    if controlsAllowed() then updateZoom() end
+
+    local wanted = wantedView()
+    if wanted ~= viewMode then switchView(wanted) end
+    if wanted ~= 'topdown' then
+        -- Morrowind's own views: the camera script runs them, at the distance zoomed to
+        if wanted == 'third' then camera.setPreferredThirdPersonDistance(targetDistance) end
         return
     end
     apply()
-    updateDevice()
-    updateControllerHolds(dt)
 
     if not controlsAllowed() then
         -- Menus, dialogue, paused: keep the camera, stop driving the character.
@@ -727,7 +767,6 @@ local function onFrame(dt)
     end
 
     updateCursor()
-    updateZoom()
     updateCamera(dt)
     updateFadedObjects()
     if gamepad then updateGamepadPick() else updatePick() end
@@ -791,7 +830,7 @@ nearestUsable = function(direction)
 end
 
 local function onMouseButtonPress(button)
-    if not (enabled and active and button == 1 and controlsAllowed()) then return end
+    if not (active and button == 1 and controlsAllowed()) then return end
     if Actor.getStance(self) ~= Actor.STANCE.Nothing then return end
     activateHovered()
 end
@@ -799,7 +838,7 @@ end
 -- Activate (E): what is under the cursor, or else the nearest thing in reach. The engine's own activation looks at
 -- the middle of the screen, which in top-down is never within reach, so it does nothing.
 local function onInputAction(action)
-    if not (enabled and active and action == input.ACTION.Activate and controlsAllowed()) then return end
+    if not (active and action == input.ACTION.Activate and controlsAllowed()) then return end
     if gamepad then
         -- X: what is nearest in the right stick's direction (or ahead), whatever the aim is locked on
         local object = nearestUsable(stickAim)
@@ -813,8 +852,14 @@ end
 
 local function onKeyPress(key)
     if key.code == input.KEY.F7 then
-        enabled = not enabled
-        ui.showMessage(enabled and 'Top-down view' or 'Normal view')
+        if targetDistance >= TOPDOWN_FROM then
+            lastTopDownDistance = targetDistance
+            targetDistance = THIRD_PERSON_DISTANCE
+            ui.showMessage('Normal view')
+        else
+            targetDistance = lastTopDownDistance
+            ui.showMessage('Top-down view')
+        end
     end
 end
 
@@ -842,13 +887,18 @@ return {
         onControllerButtonPress = function() gamepad = true end,
         onTeleported = function() camera.instantTransition() end,
         onSave = function()
-            return { enabled = enabled, distance = targetDistance }
+            return { distance = targetDistance, topDownDistance = lastTopDownDistance }
         end,
         onLoad = function(data)
             if not data then return end
-            if data.enabled ~= nil then enabled = data.enabled end
             targetDistance = data.distance or targetDistance
+            lastTopDownDistance = data.topDownDistance or lastTopDownDistance
+            -- A save from before the zoom chose the view, made in the normal view
+            if data.enabled == false and targetDistance >= TOPDOWN_FROM then
+                targetDistance = THIRD_PERSON_DISTANCE
+            end
             distance = targetDistance
+            viewMode = nil
         end,
     },
 }
