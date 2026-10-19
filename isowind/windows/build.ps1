@@ -1,14 +1,13 @@
 # Builds Isowind on Windows, the whole way: CrabNet (the multiplayer networking), OpenMW's dependencies, the engine,
 # Isowind.exe, and the package (make_package.ps1). Run it from PowerShell, from anywhere; it works out the folders.
 #
-# Expects the layout make_package.ps1 expects:
-#   <root>\openmw-src\       this repository (this script is isowind\windows\build.ps1 in it)
-#   <root>\launcher\         Isowind.cs and make_icon.py (the Windows launcher's source, kept outside the repository)
+# Everything is in the repository (isowind\windows: this script, Isowind.cs and make_icon.py for the launcher,
+# make_package.ps1), and the rest goes beside the repository, in the folder it is checked out into (<root>):
+#   <root>\crabnet\          the multiplayer networking library, cloned and built here
 #   <root>\bundled-mods\     the third-party mods (make_package.ps1 wants them); fetched from this repository's
 #                            "bundled-mods" release (bundled-mods.zip, as the Linux CI does) when the folder is missing
-#   <root>\make_package.ps1
-# and makes <root>\crabnet, <root>\openmw-src\MSVC2022_64 (the build), <root>\launcher\Isowind.exe, <root>\dist.
-# (The repository folder may have another name; only make_package.ps1 insists on openmw-src.)
+#   <root>\dist\             the package
+# The engine builds in MSVC2022_64 in the repository, Isowind.exe in MSVC2022_64\launcher.
 #
 # Needs on PATH: git (Git for Windows, whose bash runs OpenMW's dependency script), cmake, and Visual Studio 2022
 # with the C++ workload. The dependency pack (a .7z) is extracted with 7-Zip if it is on the PATH, otherwise with
@@ -39,7 +38,7 @@ $ErrorActionPreference = 'Stop'
 $src = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path   # the repository
 $root = Split-Path -Parent $src
 $crabnet = Join-Path $root 'crabnet'
-$launcher = Join-Path $root 'launcher'
+$launcherSrc = Join-Path $src 'isowind\windows'   # Isowind.cs, make_icon.py, make_package.ps1
 $buildDir = "MSVC${VsVersion}_64"
 $CrabNetCommit = '19e6619'   # the one every Isowind build uses (see .github\workflows\linux.yml)
 
@@ -141,15 +140,18 @@ foreach ($exe in 'openmw.exe', 'tes3mp-server.exe', 'openmw-launcher.exe', 'open
 # ---- Isowind.exe -------------------------------------------------------------------------------------------------
 if (-not $SkipLauncher) {
     Step 'Isowind.exe'
-    if (-not (Test-Path (Join-Path $launcher 'Isowind.cs'))) {
-        Write-Warning "No $launcher\Isowind.cs: Isowind.exe isn't built (the launcher's source lives outside the repository)"
+    $launcherOut = Join-Path $src "$buildDir\launcher"
+    if (-not (Test-Path (Join-Path $launcherSrc 'Isowind.cs'))) {
+        Write-Warning "No $launcherSrc\Isowind.cs: Isowind.exe isn't built"
     }
     else {
+        New-Item -ItemType Directory -Force $launcherOut | Out-Null
         $csc = Join-Path $env:windir 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
         if (-not (Test-Path $csc)) { $csc = Join-Path $env:windir 'Microsoft.NET\Framework\v4.0.30319\csc.exe' }
         if (-not (Test-Path $csc)) { throw "The C# compiler (.NET Framework 4's csc.exe) wasn't found under $env:windir\Microsoft.NET" }
         # The icon, drawn once by make_icon.py (Python with Pillow; Pillow is installed for the user if it is missing)
-        if (-not (Test-Path (Join-Path $launcher 'isowind.ico'))) {
+        $icon = Join-Path $launcherOut 'isowind.ico'
+        if (-not (Test-Path $icon)) {
             $python = (Get-Command py -ErrorAction SilentlyContinue), (Get-Command python -ErrorAction SilentlyContinue) |
                 Where-Object { $_ } | Select-Object -First 1
             if (-not $python) { throw 'Python 3 is needed to draw the icon (make_icon.py): install it from python.org or the Microsoft Store' }
@@ -158,17 +160,17 @@ if (-not $SkipLauncher) {
                 Write-Host 'Pillow (the Python imaging library) is missing; installing it for this user...'
                 Run $python.Source @('-m', 'pip', 'install', '--user', '--quiet', 'Pillow')
             }
-            Run $python.Source @('make_icon.py', 'isowind.ico') $launcher
+            Run $python.Source @('make_icon.py', $icon) $launcherSrc
         }
-        Run $csc @('/nologo', '/target:winexe', '/out:Isowind.exe', '/win32icon:isowind.ico', 'Isowind.cs') $launcher
-        Write-Host "Launcher: $launcher\Isowind.exe"
+        Run $csc @('/nologo', '/target:winexe', "/out:$launcherOut\Isowind.exe", "/win32icon:$icon", 'Isowind.cs') $launcherSrc
+        Write-Host "Launcher: $launcherOut\Isowind.exe"
     }
 }
 
 # ---- The package ---------------------------------------------------------------------------------------------------
 if (-not $SkipPackage) {
     Step 'The package (make_package.ps1)'
-    $package = Join-Path $root 'make_package.ps1'
+    $package = Join-Path $launcherSrc 'make_package.ps1'
     if (-not (Test-Path $package)) { Write-Warning "No ${package}: nothing packaged" }
     elseif ($Configuration -ne 'Release') { Write-Warning "make_package.ps1 packages $buildDir\Release; this was a $Configuration build, so it isn't run" }
     else {
