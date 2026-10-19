@@ -4,7 +4,8 @@
 # Expects the layout make_package.ps1 expects:
 #   <root>\openmw-src\       this repository (this script is isowind\windows\build.ps1 in it)
 #   <root>\launcher\         Isowind.cs and make_icon.py (the Windows launcher's source, kept outside the repository)
-#   <root>\bundled-mods\     the third-party mods (make_package.ps1 wants them)
+#   <root>\bundled-mods\     the third-party mods (make_package.ps1 wants them); fetched from this repository's
+#                            "bundled-mods" release (bundled-mods.zip, as the Linux CI does) when the folder is missing
 #   <root>\make_package.ps1
 # and makes <root>\crabnet, <root>\openmw-src\MSVC2022_64 (the build), <root>\launcher\Isowind.exe, <root>\dist.
 # (The repository folder may have another name; only make_package.ps1 insists on openmw-src.)
@@ -19,6 +20,8 @@
 #   .\build.ps1 -SkipDependencies  don't check or re-extract OpenMW's dependency downloads (faster once they're there)
 #   .\build.ps1 -SkipLauncher      no Isowind.exe
 #   .\build.ps1 -SkipPackage       no dist\Isowind.zip
+#   .\build.ps1 -NoLto             no link-time optimisation: the final link takes a minute or two instead of ten to
+#                                  twenty (the game runs a little slower; for working on it, not for a release)
 #   .\build.ps1 -Configuration Debug -VsVersion 2026
 
 [CmdletBinding()]
@@ -28,7 +31,8 @@ param(
     [switch]$Clean,
     [switch]$SkipDependencies,
     [switch]$SkipLauncher,
-    [switch]$SkipPackage
+    [switch]$SkipPackage,
+    [switch]$NoLto
 )
 
 $ErrorActionPreference = 'Stop'
@@ -122,6 +126,9 @@ $cache = Join-Path $src "$buildDir\CMakeCache.txt"
 if (-not (Test-Path $cache) -or (Select-String -Path $cache -Pattern 'RakNet_INCLUDES.*NOTFOUND' -Quiet)) {
     throw "The engine's configure didn't find RakNet under RAKNET_ROOT=$env:RAKNET_ROOT (see the output above)"
 }
+# The dependency script turns link-time optimisation on; -NoLto turns it off again (a release keeps it)
+$lto = if ($NoLto) { 'OFF' } else { 'ON' }
+Run cmake @('-B', $buildDir, "-DOPENMW_LTO_BUILD=$lto") $src
 
 # ---- The engine --------------------------------------------------------------------------------------------------
 Step "Building the engine ($Configuration)"
@@ -141,10 +148,18 @@ if (-not $SkipLauncher) {
         $csc = Join-Path $env:windir 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
         if (-not (Test-Path $csc)) { $csc = Join-Path $env:windir 'Microsoft.NET\Framework\v4.0.30319\csc.exe' }
         if (-not (Test-Path $csc)) { throw "The C# compiler (.NET Framework 4's csc.exe) wasn't found under $env:windir\Microsoft.NET" }
-        $python = (Get-Command py -ErrorAction SilentlyContinue), (Get-Command python -ErrorAction SilentlyContinue) |
-            Where-Object { $_ } | Select-Object -First 1
-        if (-not $python) { throw 'Python 3 (with Pillow) is needed for the icon: install it, then py -m pip install Pillow' }
-        Run $python.Source @('make_icon.py', 'isowind.ico') $launcher
+        # The icon, drawn once by make_icon.py (Python with Pillow; Pillow is installed for the user if it is missing)
+        if (-not (Test-Path (Join-Path $launcher 'isowind.ico'))) {
+            $python = (Get-Command py -ErrorAction SilentlyContinue), (Get-Command python -ErrorAction SilentlyContinue) |
+                Where-Object { $_ } | Select-Object -First 1
+            if (-not $python) { throw 'Python 3 is needed to draw the icon (make_icon.py): install it from python.org or the Microsoft Store' }
+            & $python.Source -c 'import PIL'
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host 'Pillow (the Python imaging library) is missing; installing it for this user...'
+                Run $python.Source @('-m', 'pip', 'install', '--user', '--quiet', 'Pillow')
+            }
+            Run $python.Source @('make_icon.py', 'isowind.ico') $launcher
+        }
         Run $csc @('/nologo', '/target:winexe', '/out:Isowind.exe', '/win32icon:isowind.ico', 'Isowind.cs') $launcher
         Write-Host "Launcher: $launcher\Isowind.exe"
     }
@@ -156,8 +171,23 @@ if (-not $SkipPackage) {
     $package = Join-Path $root 'make_package.ps1'
     if (-not (Test-Path $package)) { Write-Warning "No ${package}: nothing packaged" }
     elseif ($Configuration -ne 'Release') { Write-Warning "make_package.ps1 packages $buildDir\Release; this was a $Configuration build, so it isn't run" }
-    elseif (-not (Test-Path (Join-Path $root 'bundled-mods'))) { Write-Warning "No $root\bundled-mods: make_package.ps1 would fail, so it isn't run" }
-    else { & $package }
+    else {
+        # The bundled mods are third-party and kept out of git: the "bundled-mods" release holds them, as for the Linux CI
+        $mods = Join-Path $root 'bundled-mods'
+        if (-not (Test-Path $mods)) {
+            $zip = Join-Path $root 'bundled-mods.zip'
+            Write-Host "Fetching the bundled mods (bundled-mods.zip from the repository's bundled-mods release)..."
+            # (the repository is private, so this needs GitHub's CLI, logged in: gh auth login)
+            if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+                throw "The bundled mods come from the repository's private release: install GitHub CLI (winget install GitHub.cli), run gh auth login, and build again; or put the mods in $mods yourself"
+            }
+            Run gh @('release', 'download', 'bundled-mods', '--repo', 'pw-tf/isowind', '--pattern', 'bundled-mods.zip',
+                '--output', $zip, '--clobber')
+            Expand-Archive -Path $zip -DestinationPath $mods -Force
+            Remove-Item $zip -Force
+        }
+        & $package
+    }
 }
 
 Step 'Done'
