@@ -26,8 +26,9 @@ namespace mwmp
         {
             GM_VR_MetaMenu = MWGui::GM_QuickKeysMenu + 1, // Put this dummy GuiMode here because it's used in VR
             GM_TES3MP_InputBox,
-            GM_TES3MP_ListBox
-
+            GM_TES3MP_ListBox,
+            // Isowind: the chat opened with a controller (openChatWithController)
+            GM_TES3MP_Chat
         };
         GUIController();
         ~GUIController();
@@ -53,6 +54,12 @@ namespace mwmp
 
         void changeChatMode();
 
+        /// Isowind: a controller opens the chat line, in a GUI mode of its own so that the sticks and buttons work the
+        /// chat (and the keyboard on the screen) and not the character. False if there is no chat to open.
+        bool openChatWithController();
+        /// Isowind: the chat line closed (the message sent, or nothing to send); leaves that mode
+        void chatInputEnded();
+
         bool getChatEditState();
 
         void update(float dt);
@@ -76,6 +83,10 @@ namespace mwmp
         // Whether a menu was open in the last frame: the Enter that closes a menu (the password box at login, a
         // message box) mustn't also start typing in the chat
         bool mMenuWasOpen = true;
+        // Isowind: the chat is open in its own GUI mode (openChatWithController), and the keyboard on the screen
+        // has come up for it
+        bool mChatModeOpen = false;
+        bool mChatKeyboardShown = false;
         int keyChatMode;
 
         long id;

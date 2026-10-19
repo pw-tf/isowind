@@ -17,6 +17,8 @@
 #include "../mwbase/statemanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 #include "../mwgui/windowbase.hpp"
+#include "../mwmp/GUIController.hpp"
+#include "../mwmp/Main.hpp"
 
 #include "actions.hpp"
 #include "bindingsmanager.hpp"
@@ -161,7 +163,13 @@ namespace MWInput
             }
         }
         else
+        {
+            // Isowind multiplayer: D-pad left opens the chat, typed with the keyboard on the screen
+            if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_LEFT && Settings::gui().mControllerMenus
+                && mwmp::Main::isInitialized() && mwmp::Main::get().getGUIController()->openChatWithController())
+                return;
             mBindingsManager->setPlayerControlsEnabled(true);
+        }
 
         // esc, to leave initial movie screen
         auto kc = SDLUtil::sdlKeyToMyGUI(SDLK_ESCAPE);
@@ -259,6 +267,15 @@ namespace MWInput
 
         if (Settings::gui().mControllerMenus)
         {
+            // Isowind: Y brings up the keyboard on the screen for a text box being typed into
+            if (arg.button == SDL_CONTROLLER_BUTTON_Y && SDL_IsTextInputActive()
+                && !winMgr->isOnScreenKeyboardVisible())
+            {
+                winMgr->openOnScreenKeyboard();
+                if (winMgr->isOnScreenKeyboardVisible())
+                    return true;
+            }
+
             // Update cursor state.
             bool treatAsMouse = winMgr->getCursorVisible();
             winMgr->setCursorActive(false);
@@ -274,7 +291,8 @@ namespace MWInput
                 mGamepadGuiCursorEnabled = topWin->isGamepadCursorAllowed();
 
                 // Fall through to mouse click
-                if (mGamepadGuiCursorEnabled && treatAsMouse && arg.button == SDL_CONTROLLER_BUTTON_A)
+                if (mGamepadGuiCursorEnabled && treatAsMouse && arg.button == SDL_CONTROLLER_BUTTON_A
+                    && !topWin->handlesPointerSelect())
                     return false;
 
                 // Isowind: in menus with several windows side by side the bumpers switch between them
@@ -373,16 +391,18 @@ namespace MWInput
         if (Settings::gui().mControllerMenus)
         {
             // Left and right triggers toggle through open GUI windows. Isowind: where the bumpers do that (several
-            // windows side by side), the triggers instead do what the bumpers do in the active window.
+            // windows side by side), the triggers instead do what the bumpers do in the active window; and not while
+            // the keyboard on the screen is up, they would switch pages under it.
             const auto triggerPressed = [&](bool right) {
+                if (winMgr->isOnScreenKeyboardVisible())
+                    return;
                 MWGui::WindowBase* activeWin = winMgr->getActiveControllerWindow();
                 if (winMgr->controllerCyclesWindows() && activeWin && activeWin->isVisible())
                 {
                     SDL_ControllerButtonEvent bumper{};
                     bumper.type = SDL_CONTROLLERBUTTONDOWN;
                     bumper.state = SDL_PRESSED;
-                    bumper.button
-                        = right ? SDL_CONTROLLER_BUTTON_RIGHTSHOULDER : SDL_CONTROLLER_BUTTON_LEFTSHOULDER;
+                    bumper.button = right ? SDL_CONTROLLER_BUTTON_RIGHTSHOULDER : SDL_CONTROLLER_BUTTON_LEFTSHOULDER;
                     activeWin->onControllerButtonEvent(bumper);
                 }
                 else

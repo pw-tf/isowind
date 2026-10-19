@@ -32,6 +32,9 @@ namespace mwmp
         */
         EventHandle_WindowBase eventDone;
 
+        /// Isowind: A is OK (the keyboard on the screen comes up with the dialog, or with Y)
+        bool onControllerButtonEvent(const SDL_ControllerButtonEvent& arg) override;
+
     protected:
         void onOkClicked(MyGUI::Widget *_sender);
         void onTextAccepted(MyGUI::EditBox *_sender);

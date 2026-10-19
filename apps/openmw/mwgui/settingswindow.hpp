@@ -4,6 +4,8 @@
 #include <components/files/configurationmanager.hpp>
 #include <components/lua_ui/adapter.hpp>
 
+#include <vector>
+
 #include "windowbase.hpp"
 
 namespace MWGui
@@ -122,6 +124,22 @@ namespace MWGui
         void renderScriptSettings();
 
         void computeMinimumWindowSize();
+
+        /// Isowind: the D-pad steps the pointer through the page's controls, A works the one it is on and left /
+        /// right adjust it; the left stick still moves the pointer freely
+        bool handlesPointerSelect() const override { return true; }
+        std::vector<MyGUI::Widget*> collectControls() const;
+        void collectControls(MyGUI::Widget* parent, std::vector<MyGUI::Widget*>& controls) const;
+        MyGUI::Widget* controlUnderPointer(const std::vector<MyGUI::Widget*>& controls) const;
+        void pointAt(MyGUI::Widget* control);
+        void pointAtFirstControl();
+        void stepControl(int delta);
+        void adjustControl(int delta);
+        void selectControl();
+        /// A frame around the control the pointer is on (nullptr: none)
+        void frameControl(MyGUI::Widget* control);
+        MyGUI::Widget* mControllerFrame = nullptr;
+        MyGUI::Widget* mFramedControl = nullptr;
 
     private:
         void resetScrollbars();

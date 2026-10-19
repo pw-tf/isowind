@@ -235,3 +235,11 @@ JournalShowAll: "Show All"
 LoadingSelectCharacter: "Change Character"
 RechargeSelect: "Recharge"
 RepairTool: "Tool"
+
+# Isowind: the keyboard on the screen
+Keyboard: "Keyboard"
+KeyboardBackspace: "Backspace"
+KeyboardShift: "Shift"
+KeyboardShiftHeld: "SHIFT"
+KeyboardSpace: "Space"
+KeyboardType: "Type"

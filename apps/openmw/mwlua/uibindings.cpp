@@ -60,6 +60,7 @@ namespace MWLua
             // Isowind multiplayer: the server's text input and list dialogs
             { static_cast<MWGui::GuiMode>(mwmp::GUIController::GM_TES3MP_InputBox), "MultiplayerInput" },
             { static_cast<MWGui::GuiMode>(mwmp::GUIController::GM_TES3MP_ListBox), "MultiplayerList" },
+            { static_cast<MWGui::GuiMode>(mwmp::GUIController::GM_TES3MP_Chat), "MultiplayerChat" },
         };
 
         const auto nameToMode = [] {

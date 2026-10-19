@@ -197,6 +197,7 @@ set(BUILTIN_DATA_FILES
     mygui/openmw_console.skin.xml
     mygui/openmw_container_window.layout
     mygui/openmw_controllerbuttons.layout
+    mygui/openmw_onscreen_keyboard.layout
     mygui/openmw_count_window.layout
     mygui/openmw_dialogue_window.layout
     mygui/openmw_dialogue_window.skin.xml

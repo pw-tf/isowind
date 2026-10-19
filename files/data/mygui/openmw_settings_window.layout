@@ -904,6 +904,16 @@
                         <Property key="Caption" value="Minimap turns with the view"/>
                     </Widget>
                 </Widget>
+                <Widget type="HBox" position="4 216 352 28">
+                    <Widget type="AutoSizedButton" skin="MW_Button" position="0 0 24 24" align="Left Top">
+                        <UserString key="SettingCategory" value="GUI"/>
+                        <UserString key="SettingName" value="controller tooltips"/>
+                        <UserString key="SettingType" value="CheckButton"/>
+                    </Widget>
+                    <Widget type="AutoSizedTextBox" skin="SandText" position="28 4 95 16" align="Left Top">
+                        <Property key="Caption" value="Item info in controller menus without pressing the right stick in"/>
+                    </Widget>
+                </Widget>
             </Widget>
             <Widget type="TabItem">
                 <Property key="Caption" value=" #{OMWEngine:Language} "/>

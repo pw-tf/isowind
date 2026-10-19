@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Isowind: the keyboard on the screen for typing with a controller (OnScreenKeyboard builds the keys) -->
+<MyGUI type="Layout">
+    <Widget type="Window" skin="MW_Dialog" layer="Popup" position="0 0 560 196" name="_Main">
+        <Property key="Visible" value="false"/>
+        <Widget type="Widget" skin="" position="8 8 544 180" align="Default" name="Keys"/>
+    </Widget>
+</MyGUI>

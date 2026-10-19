@@ -83,6 +83,8 @@ namespace MWGui
         virtual ControllerButtons* getControllerButtons() { return &mControllerButtons; }
         MyGUI::Widget* getControllerScrollWidget() { return mControllerScrollWidget; }
         bool isGamepadCursorAllowed() { return !mDisableGamepadCursor; }
+        /// Isowind: whether A goes to onControllerButtonEvent even while the pointer is shown (otherwise it is a click)
+        virtual bool handlesPointerSelect() const { return false; }
         virtual bool onControllerButtonEvent(const SDL_ControllerButtonEvent& arg) { return true; }
         virtual bool onControllerThumbstickEvent(const SDL_ControllerAxisEvent& arg) { return false; }
         virtual void setActiveControllerWindow(bool active);

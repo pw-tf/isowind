@@ -283,15 +283,17 @@ namespace MWInput
 
     void MouseManager::warpMouse()
     {
-        float guiUiScale = Settings::gui().mScalingFactor;
+        // Isowind: the scale the window reports (the setting times the drawable to window ratio), the same one
+        // mouseMoved divides by, or the warp lands off target where the compositor scales
+        float guiUiScale = MWBase::Environment::get().getWindowManager()->getScalingFactor();
         mInputWrapper->warpMouse(
             static_cast<int>(mGuiCursorX * guiUiScale), static_cast<int>(mGuiCursorY * guiUiScale));
     }
 
-    void MouseManager::warpMouseToWidget(MyGUI::Widget* widget)
+    void MouseManager::warpMouseToWidget(MyGUI::Widget* widget, float yFraction)
     {
         float widgetX = widget->getAbsoluteCoord().left + widget->getWidth() / 2.f;
-        float widgetY = widget->getAbsoluteCoord().top + widget->getHeight() / 4.f;
+        float widgetY = widget->getAbsoluteCoord().top + widget->getHeight() * yFraction;
         if (std::abs(mGuiCursorX - widgetX) > 1 || std::abs(mGuiCursorY - widgetY) > 1)
         {
             mGuiCursorX = widgetX;

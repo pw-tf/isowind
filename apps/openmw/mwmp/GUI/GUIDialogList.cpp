@@ -7,6 +7,9 @@
 #include <MyGUI_Button.h>
 #include <MyGUI_ListBox.h>
 
+#include <components/esm/refid.hpp>
+#include <components/settings/values.hpp>
+
 #include "GUIDialogList.hpp"
 #include "../Main.hpp"
 #include "../Networking.hpp"
@@ -28,6 +31,38 @@ GUIDialogList::GUIDialogList(const std::string &message, const std::vector<std::
     for (size_t i = 0; i < list.size(); i++)
         mListBox->addItem(list[i]);
 
+    // Isowind: with a controller the first entry starts picked, so A always answers with something
+    if (Settings::gui().mControllerMenus)
+    {
+        mDisableGamepadCursor = true;
+        mControllerButtons.mA = "#{Interface:Select}";
+        mControllerButtons.mDpad = "#{Interface:Move}";
+        if (!list.empty())
+            mListBox->setIndexSelected(0);
+    }
+}
+
+bool GUIDialogList::onControllerButtonEvent(const SDL_ControllerButtonEvent& arg)
+{
+    if (arg.button == SDL_CONTROLLER_BUTTON_A)
+    {
+        MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
+        mousePressed(mButton);
+    }
+    else if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_UP || arg.button == SDL_CONTROLLER_BUTTON_DPAD_DOWN)
+    {
+        const size_t count = mListBox->getItemCount();
+        if (count == 0)
+            return true;
+        size_t index = mListBox->getIndexSelected();
+        if (index == MyGUI::ITEM_NONE)
+            index = 0;
+        else
+            index = MWGui::wrap(index, count, arg.button == SDL_CONTROLLER_BUTTON_DPAD_UP ? -1 : 1);
+        mListBox->setIndexSelected(index);
+        mListBox->beginToItemAt(index);
+    }
+    return true;
 }
 
 void GUIDialogList::mousePressed(MyGUI::Widget * /*widget*/)
