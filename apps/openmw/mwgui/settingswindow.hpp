@@ -136,6 +136,10 @@ namespace MWGui
         void stepControl(int delta);
         void adjustControl(int delta);
         void selectControl();
+        /// A frame around the control the pointer is on (nullptr: none)
+        void frameControl(MyGUI::Widget* control);
+        MyGUI::Widget* mControllerFrame = nullptr;
+        MyGUI::Widget* mFramedControl = nullptr;
 
     private:
         void resetScrollbars();

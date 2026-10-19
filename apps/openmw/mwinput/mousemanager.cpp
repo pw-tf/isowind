@@ -283,7 +283,9 @@ namespace MWInput
 
     void MouseManager::warpMouse()
     {
-        float guiUiScale = Settings::gui().mScalingFactor;
+        // Isowind: the scale the window reports (the setting times the drawable to window ratio), the same one
+        // mouseMoved divides by, or the warp lands off target where the compositor scales
+        float guiUiScale = MWBase::Environment::get().getWindowManager()->getScalingFactor();
         mInputWrapper->warpMouse(
             static_cast<int>(mGuiCursorX * guiUiScale), static_cast<int>(mGuiCursorY * guiUiScale));
     }

@@ -232,6 +232,12 @@ namespace MWGui
 
     void SettingsWindow::onFrame(float duration)
     {
+        // Isowind: with a controller the control the pointer is on is framed, however the pointer got there
+        if (Settings::gui().mControllerMenus && MWBase::Environment::get().getInputManager()->joystickLastUsed())
+            frameControl(controlUnderPointer(collectControls()));
+        else if (mControllerFrame)
+            frameControl(nullptr);
+
         if (mScriptView->getVisible())
         {
             const auto scriptsSize = mScriptAdapter->getSize();
@@ -816,6 +822,7 @@ namespace MWGui
 
     void SettingsWindow::updateControlsBox()
     {
+        frameControl(nullptr); // (it may be among the rows about to go)
         while (mControlsBox->getChildCount())
             MyGUI::Gui::getInstance().destroyWidget(mControlsBox->getChildAt(0));
 
@@ -1089,6 +1096,7 @@ namespace MWGui
 
     void SettingsWindow::onClose()
     {
+        frameControl(nullptr);
         // Save user settings
         Settings::Manager::saveUser(mCfgMgr.getUserConfigPath() / "settings.cfg");
         MWBase::Environment::get().getLuaManager()->savePermanentStorage(mCfgMgr.getUserConfigPath());
@@ -1309,6 +1317,33 @@ namespace MWGui
         MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
         winMgr->setCursorVisible(true);
         winMgr->setCursorActive(true);
+        frameControl(control);
+    }
+
+    // Morrowind's gold box frame around the control, drawn beside it in its own parent so it scrolls along
+    void SettingsWindow::frameControl(MyGUI::Widget* control)
+    {
+        constexpr int margin = 3;
+        if (control != mFramedControl || !control)
+        {
+            if (mControllerFrame)
+            {
+                MyGUI::Gui::getInstance().destroyWidget(mControllerFrame);
+                mControllerFrame = nullptr;
+            }
+            mFramedControl = control;
+            if (!control || !control->getParent())
+                return;
+            mControllerFrame = control->getParent()->createWidget<MyGUI::Widget>(
+                "MW_Box_Overlay", MyGUI::IntCoord(), MyGUI::Align::Default);
+            mControllerFrame->setNeedMouseFocus(false);
+        }
+        if (mControllerFrame)
+        {
+            MyGUI::IntCoord coord = control->getCoord();
+            mControllerFrame->setCoord(
+                coord.left - margin, coord.top - margin, coord.width + 2 * margin, coord.height + 2 * margin);
+        }
     }
 
     void SettingsWindow::pointAtFirstControl()
