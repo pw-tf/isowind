@@ -1,5 +1,6 @@
 #include <components/openmw-mp/TimedLog.hpp>
 #include <components/openmw-mp/Base/BasePlayer.hpp>
+#include <components/settings/values.hpp>
 
 #include <SDL_system.h>
 
@@ -248,6 +249,37 @@ void mwmp::GUIController::changeChatMode()
     mChat->pressedChatMode();
 }
 
+bool mwmp::GUIController::openChatWithController()
+{
+    MWBase::WindowManager* windowManager = MWBase::Environment::get().getWindowManager();
+    if (mChat == nullptr || !Settings::gui().mControllerMenus || windowManager->isGuiMode()
+        || windowManager->isConsoleMode())
+        return false;
+
+    if (mChat->windowState == GUIChat::CHAT_DISABLED)
+        mChat->pressedChatMode();
+
+    // The mode first, so the keyboard on the screen comes up with the chat line (it does only in a menu); the mode
+    // ends with the typing (chatInputEnded), with the keyboard put away, or with B
+    mChatModeOpen = true;
+    mChatKeyboardShown = false;
+    windowManager->pushGuiMode(static_cast<MWGui::GuiMode>(GM_TES3MP_Chat));
+    mChat->pressedSay();
+    return true;
+}
+
+void mwmp::GUIController::chatInputEnded()
+{
+    if (!mChatModeOpen)
+        return;
+    mChatModeOpen = false;
+    mChatKeyboardShown = false;
+    MWBase::WindowManager* windowManager = MWBase::Environment::get().getWindowManager();
+    const MWGui::GuiMode chatMode = static_cast<MWGui::GuiMode>(GM_TES3MP_Chat);
+    if (windowManager->containsMode(chatMode))
+        windowManager->removeGuiMode(chatMode);
+}
+
 bool mwmp::GUIController::getChatEditState()
 {
     return mChat->editState;
@@ -259,6 +291,17 @@ void mwmp::GUIController::update(float dt)
         mChat->update(dt);
 
     MWBase::WindowManager* windowManager = MWBase::Environment::get().getWindowManager();
+
+    // Isowind: the chat opened with a controller is over once its mode was left (B), or the keyboard on the
+    // screen was put away
+    if (mChatModeOpen && mChat != nullptr)
+    {
+        if (windowManager->isOnScreenKeyboardVisible())
+            mChatKeyboardShown = true;
+        else if (mChatKeyboardShown || !windowManager->containsMode(static_cast<MWGui::GuiMode>(GM_TES3MP_Chat)))
+            mChat->setEditState(false);
+    }
+
     mMenuWasOpen = windowManager->isGuiMode() || windowManager->isConsoleMode();
 }
 

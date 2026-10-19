@@ -12,6 +12,8 @@ namespace mwmp
         GUIDialogList(const std::string &message, const std::vector<std::string> &list);
         void mousePressed(MyGUI::Widget *_widget);
         void onFrame(float frameDuration);
+        /// Isowind: the D-pad picks, A answers
+        bool onControllerButtonEvent(const SDL_ControllerButtonEvent& arg) override;
     private:
         bool mMarkedToDelete;
         MyGUI::EditBox *mMessage;

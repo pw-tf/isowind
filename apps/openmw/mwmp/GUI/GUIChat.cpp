@@ -191,6 +191,9 @@ namespace mwmp
         editState = state;
         mCommandLine->setVisible(editState);
         MWBase::Environment::get().getWindowManager()->setKeyFocusWidget(editState ? mCommandLine : nullptr);
+        // Isowind: opened with a controller, the chat has a GUI mode of its own that ends here
+        if (!editState)
+            Main::get().getGUIController()->chatInputEnded();
     }
 
     void GUIChat::pressedSay()

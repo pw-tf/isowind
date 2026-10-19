@@ -119,6 +119,7 @@ namespace MWGui
     class KeyboardNavigation;
     class ItemTransfer;
     class ControllerButtonsOverlay;
+    class OnScreenKeyboard;
     class InventoryTabsOverlay;
 
     class WindowManager : public MWBase::WindowManager
@@ -412,6 +413,8 @@ namespace MWGui
         void setControllerTooltipEnabled(bool enabled) override;
         void restoreControllerTooltips() override;
         void updateControllerButtonsOverlay() override;
+        bool isOnScreenKeyboardVisible() const override;
+        void openOnScreenKeyboard() override;
 
         // Used in Lua bindings
         const std::vector<GuiMode>& getGuiModeStack() const override { return mGuiModes; }
@@ -484,6 +487,8 @@ namespace MWGui
         ContainerWindow* mContainerWindow;
         ControllerButtonsOverlay* mControllerButtonsOverlay;
         InventoryTabsOverlay* mInventoryTabsOverlay;
+        // Isowind: the keyboard on the screen for typing with a controller
+        OnScreenKeyboard* mOnScreenKeyboard = nullptr;
 
         std::vector<std::unique_ptr<WindowBase>> mWindows;
 

@@ -189,7 +189,7 @@ namespace MWInput
         return mMouseManager->getMouseMoveY();
     }
 
-    void InputManager::warpMouseToWidget(MyGUI::Widget* widget)
+    void InputManager::warpMouseToWidget(MyGUI::Widget* widget, float yFraction)
     {
         // This is currently used to simulate mouse movement when the gamepad UI is used.
         // Sometimes this is called in reaction to layout changes.
@@ -209,7 +209,7 @@ namespace MWInput
             return;
 
         MWBase::Environment::get().getWindowManager()->setCursorVisible(false);
-        mMouseManager->warpMouseToWidget(widget);
+        mMouseManager->warpMouseToWidget(widget, yFraction);
         mMouseManager->injectMouseMove(1, 0, 0);
         MWBase::Environment::get().getWindowManager()->setCursorActive(true);
     }

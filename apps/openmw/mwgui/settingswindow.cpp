@@ -1,15 +1,21 @@
 #include "settingswindow.hpp"
 
+#include <algorithm>
 #include <array>
 
 #include <unicode/locid.h>
 
+#include <MyGUI_Button.h>
 #include <MyGUI_ComboBox.h>
+#include <MyGUI_EditBox.h>
 #include <MyGUI_Gui.h>
+#include <MyGUI_InputManager.h>
 #include <MyGUI_LanguageManager.h>
+#include <MyGUI_ListBox.h>
 #include <MyGUI_ScrollBar.h>
 #include <MyGUI_ScrollView.h>
 #include <MyGUI_TabControl.h>
+#include <MyGUI_TabItem.h>
 #include <MyGUI_UString.h>
 #include <MyGUI_Window.h>
 
@@ -37,8 +43,8 @@
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 
-#include "../mwmp/Main.hpp"
 #include "../mwlua/luamanagerimp.hpp"
+#include "../mwmp/Main.hpp"
 
 #include "confirmationdialog.hpp"
 #include "weightedsearch.hpp"
@@ -463,6 +469,9 @@ namespace MWGui
         mControllerButtons.mA = "#{Interface:Select}";
         mControllerButtons.mB = "#{Interface:OK}";
         mControllerButtons.mLStick = "#{Interface:Mouse}";
+        mControllerButtons.mDpad = "#{Interface:Move}";
+        mControllerButtons.mL1 = "#{Interface:Prev}";
+        mControllerButtons.mR1 = "#{Interface:Next}";
     }
 
     void SettingsWindow::onTabChanged(MyGUI::TabControl* /*sender*/, size_t /*index*/)
@@ -1072,6 +1081,10 @@ namespace MWGui
         difficultyText->getParent()->setVisible(!mwmp::Main::isInitialized());
 
         MWBase::Environment::get().getWindowManager()->setKeyFocusWidget(mOkButton);
+
+        // Isowind: with a controller the pointer starts on the page's first control
+        if (Settings::gui().mControllerMenus && MWBase::Environment::get().getInputManager()->joystickLastUsed())
+            pointAtFirstControl();
     }
 
     void SettingsWindow::onClose()
@@ -1132,6 +1145,7 @@ namespace MWGui
             index = wrap(index, mSettingsTab->getItemCount(), -1);
             mSettingsTab->setIndexSelected(index);
             MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
+            pointAtFirstControl();
             return true;
         }
         else if (arg.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
@@ -1140,10 +1154,292 @@ namespace MWGui
             index = wrap(index, mSettingsTab->getItemCount(), 1);
             mSettingsTab->setIndexSelected(index);
             MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
+            pointAtFirstControl();
+            return true;
+        }
+        // Isowind: the D-pad steps the pointer through the page's controls, A works the one it is on
+        else if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_UP)
+        {
+            stepControl(-1);
+            return true;
+        }
+        else if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_DOWN)
+        {
+            stepControl(1);
+            return true;
+        }
+        else if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_LEFT)
+        {
+            adjustControl(-1);
+            return true;
+        }
+        else if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_RIGHT)
+        {
+            adjustControl(1);
+            return true;
+        }
+        else if (arg.button == SDL_CONTROLLER_BUTTON_A)
+        {
+            selectControl();
             return true;
         }
 
         return false;
+    }
+
+    namespace
+    {
+        bool isInside(const MyGUI::Widget* widget, const MyGUI::Widget* parent)
+        {
+            for (; widget != nullptr; widget = widget->getParent())
+            {
+                if (widget == parent)
+                    return true;
+            }
+            return false;
+        }
+
+        void clickAtPointer()
+        {
+            MyGUI::InputManager& input = MyGUI::InputManager::getInstance();
+            const MyGUI::IntPoint mouse = input.getMousePosition();
+            input.injectMousePress(mouse.left, mouse.top, MyGUI::MouseButton::Left);
+            input.injectMouseRelease(mouse.left, mouse.top, MyGUI::MouseButton::Left);
+        }
+    }
+
+    // The controls of the page: buttons (checkboxes among them), sliders, drop-down lists, lists, text boxes and
+    // inner tab bars (the outer tabs are the bumpers'), top to bottom
+    void SettingsWindow::collectControls(MyGUI::Widget* parent, std::vector<MyGUI::Widget*>& controls) const
+    {
+        MyGUI::EnumeratorWidgetPtr children = parent->getEnumerator();
+        while (children.next())
+        {
+            MyGUI::Widget* widget = children.current();
+            if (!widget->getVisible() || !widget->getEnabled())
+                continue;
+            if (MyGUI::TabControl* tabs = widget->castType<MyGUI::TabControl>(false))
+            {
+                if (tabs != mSettingsTab)
+                    controls.push_back(tabs);
+                if (tabs->getIndexSelected() != MyGUI::ITEM_NONE)
+                    collectControls(tabs->getItemAt(tabs->getIndexSelected()), controls);
+            }
+            else if (widget->castType<MyGUI::ComboBox>(false) || widget->castType<MyGUI::ListBox>(false)
+                || widget->castType<MyGUI::ScrollBar>(false))
+                controls.push_back(widget);
+            else if (MyGUI::EditBox* edit = widget->castType<MyGUI::EditBox>(false))
+            {
+                if (!edit->getEditStatic() && !edit->getEditReadOnly())
+                    controls.push_back(widget);
+            }
+            else if (widget->castType<MyGUI::Button>(false))
+            {
+                // The names in the controls list are buttons too; only the bindings beside them do anything
+                if (!isInside(widget, mControlsBox) || widget->getUserData<int>(false) != nullptr)
+                    controls.push_back(widget);
+            }
+            else
+                collectControls(widget, controls);
+        }
+    }
+
+    std::vector<MyGUI::Widget*> SettingsWindow::collectControls() const
+    {
+        std::vector<MyGUI::Widget*> controls;
+        collectControls(mMainWidget, controls);
+        std::stable_sort(controls.begin(), controls.end(), [](const MyGUI::Widget* a, const MyGUI::Widget* b) {
+            const MyGUI::IntCoord coordA = a->getAbsoluteCoord();
+            const MyGUI::IntCoord coordB = b->getAbsoluteCoord();
+            return coordA.top != coordB.top ? coordA.top < coordB.top : coordA.left < coordB.left;
+        });
+        return controls;
+    }
+
+    MyGUI::Widget* SettingsWindow::controlUnderPointer(const std::vector<MyGUI::Widget*>& controls) const
+    {
+        for (MyGUI::Widget* widget = MyGUI::InputManager::getInstance().getMouseFocusWidget(); widget != nullptr;
+            widget = widget->getParent())
+        {
+            if (std::find(controls.begin(), controls.end(), widget) != controls.end())
+                return widget;
+        }
+        return nullptr;
+    }
+
+    void SettingsWindow::pointAt(MyGUI::Widget* control)
+    {
+        if (!control)
+            return;
+        // A row of the controls list scrolls into view first
+        if (isInside(control, mControlsBox) && control != mControlsBox)
+        {
+            MyGUI::IntPoint offset = mControlsBox->getViewOffset();
+            const int viewHeight = mControlsBox->getViewCoord().height;
+            const int top = control->getTop() + offset.top;
+            if (top < 0)
+                offset.top = -control->getTop();
+            else if (top + control->getHeight() > viewHeight)
+                offset.top = viewHeight - control->getTop() - control->getHeight();
+            mControlsBox->setViewOffset(offset);
+        }
+        // The middle of the control; an inner tab bar on the tabs themselves along its top, and a list on the row
+        // it has chosen, if that is in view
+        MyGUI::Widget* target = control;
+        float yFraction = 0.5f;
+        if (control->castType<MyGUI::TabControl>(false))
+            yFraction = std::min(0.5f, 12.f / static_cast<float>(std::max(1, control->getHeight())));
+        else if (MyGUI::ListBox* list = control->castType<MyGUI::ListBox>(false))
+        {
+            MyGUI::Widget* row = list->getIndexSelected() != MyGUI::ITEM_NONE
+                ? list->getWidgetByIndex(list->getIndexSelected())
+                : nullptr;
+            if (row && row->getVisible())
+                target = row;
+            else
+                yFraction = std::min(0.5f, 12.f / static_cast<float>(std::max(1, control->getHeight())));
+        }
+        MWBase::InputManager* input = MWBase::Environment::get().getInputManager();
+        input->setGamepadGuiCursorEnabled(true);
+        input->warpMouseToWidget(target, yFraction);
+        // The warp may not come back as a mouse move (Wayland): tell the GUI where the pointer is ourselves
+        const MyGUI::IntCoord coord = target->getAbsoluteCoord();
+        MyGUI::InputManager::getInstance().injectMouseMove(
+            coord.left + coord.width / 2, coord.top + static_cast<int>(coord.height * yFraction), 0);
+        MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
+        winMgr->setCursorVisible(true);
+        winMgr->setCursorActive(true);
+    }
+
+    void SettingsWindow::pointAtFirstControl()
+    {
+        const std::vector<MyGUI::Widget*> controls = collectControls();
+        if (!controls.empty())
+            pointAt(controls.front());
+    }
+
+    void SettingsWindow::stepControl(int delta)
+    {
+        const std::vector<MyGUI::Widget*> controls = collectControls();
+        if (controls.empty())
+            return;
+        // From the control the pointer is on, or else from the pointer itself
+        MyGUI::IntPoint from = MyGUI::InputManager::getInstance().getMousePosition();
+        if (const MyGUI::Widget* current = controlUnderPointer(controls))
+        {
+            const MyGUI::IntCoord coord = current->getAbsoluteCoord();
+            from = MyGUI::IntPoint(coord.left + coord.width / 2, coord.top + coord.height / 2);
+        }
+        // The nearest control below (or above): the next row down wins over a nearer one off to the side, so a
+        // column is walked before the next one. None: round to the far end.
+        MyGUI::Widget* best = nullptr;
+        MyGUI::Widget* farthest = nullptr;
+        int bestScore = 0;
+        int farthestY = 0;
+        for (MyGUI::Widget* control : controls)
+        {
+            const MyGUI::IntCoord coord = control->getAbsoluteCoord();
+            const int x = coord.left + coord.width / 2;
+            const int y = coord.top + coord.height / 2;
+            const int dy = (y - from.top) * delta;
+            if (dy > 2)
+            {
+                const int score = dy + std::abs(x - from.left) / 2;
+                if (!best || score < bestScore)
+                {
+                    best = control;
+                    bestScore = score;
+                }
+            }
+            const int toward = -y * delta;
+            if (!farthest || toward > farthestY)
+            {
+                farthest = control;
+                farthestY = toward;
+            }
+        }
+        pointAt(best ? best : farthest);
+    }
+
+    void SettingsWindow::adjustControl(int delta)
+    {
+        MyGUI::Widget* control = controlUnderPointer(collectControls());
+        if (!control)
+            return;
+        if (MyGUI::ScrollBar* slider = control->castType<MyGUI::ScrollBar>(false))
+        {
+            const int range = static_cast<int>(slider->getScrollRange());
+            if (range <= 0)
+                return;
+            const int step = std::max(1, static_cast<int>(slider->getScrollPage()));
+            const int position = std::clamp(static_cast<int>(slider->getScrollPosition()) + delta * step, 0, range - 1);
+            slider->setScrollPosition(position);
+            onSliderChangePosition(slider, position);
+        }
+        else if (MyGUI::ComboBox* combo = control->castType<MyGUI::ComboBox>(false))
+        {
+            if (combo->getItemCount() == 0)
+                return;
+            const size_t index = wrap(combo->getIndexSelected(), combo->getItemCount(), delta);
+            combo->setIndexSelected(index);
+            combo->eventComboChangePosition(combo, index);
+        }
+        else if (MyGUI::ListBox* list = control->castType<MyGUI::ListBox>(false))
+        {
+            const size_t count = list->getItemCount();
+            if (count == 0)
+                return;
+            size_t index = list->getIndexSelected();
+            if (index == MyGUI::ITEM_NONE)
+                index = 0;
+            else if (delta < 0)
+                index = index == 0 ? 0 : index - 1;
+            else
+                index = std::min(index + 1, count - 1);
+            list->setIndexSelected(index);
+            list->beginToItemAt(index);
+            list->eventListChangePosition(list, index);
+        }
+        else if (MyGUI::TabControl* tabs = control->castType<MyGUI::TabControl>(false))
+        {
+            if (tabs->getItemCount() == 0)
+                return;
+            tabs->setIndexSelected(wrap(tabs->getIndexSelected(), tabs->getItemCount(), delta));
+            pointAt(tabs);
+        }
+        else
+            return;
+        MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
+        winMgr->playSound(ESM::RefId::stringRefId("Menu Click"));
+        winMgr->setCursorActive(true);
+    }
+
+    void SettingsWindow::selectControl()
+    {
+        MyGUI::Widget* control = controlUnderPointer(collectControls());
+        MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
+        if (control
+            && (control->castType<MyGUI::ComboBox>(false) || control->castType<MyGUI::ScrollBar>(false)
+                || control->castType<MyGUI::TabControl>(false)))
+        {
+            // Stepped through rather than dropped down
+            adjustControl(1);
+            return;
+        }
+        if (!control || control->castType<MyGUI::ListBox>(false))
+        {
+            // A row of a list, or something the page doesn't know (a script's own settings): a click there
+            clickAtPointer();
+        }
+        else if (MyGUI::EditBox* edit = control->castType<MyGUI::EditBox>(false))
+        {
+            // The keyboard on the screen comes up for it
+            winMgr->setKeyFocusWidget(edit);
+        }
+        else if (MyGUI::Button* button = control->castType<MyGUI::Button>(false))
+            button->eventMouseButtonClick(button);
+        winMgr->playSound(ESM::RefId::stringRefId("Menu Click"));
+        winMgr->setCursorActive(true);
     }
 
 }

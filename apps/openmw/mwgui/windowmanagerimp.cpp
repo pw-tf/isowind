@@ -102,6 +102,7 @@
 #include "hud.hpp"
 #include "maptileskin.hpp"
 #include "inventorytabsoverlay.hpp"
+#include "onscreenkeyboard.hpp"
 #include "inventorywindow.hpp"
 #include "itemchargeview.hpp"
 #include "itemtransfer.hpp"
@@ -532,6 +533,11 @@ namespace MWGui
         mInventoryTabsOverlay = inventoryTabsOverlay.get();
         mWindows.push_back(std::move(inventoryTabsOverlay));
 
+        // Isowind: a keyboard on the screen for typing with a controller
+        auto onScreenKeyboard = std::make_unique<OnScreenKeyboard>();
+        mOnScreenKeyboard = onScreenKeyboard.get();
+        mWindows.push_back(std::move(onScreenKeyboard));
+
         mControllerTooltipEnabled = Settings::gui().mControllerTooltips;
         mActiveControllerWindows[GM_Inventory] = 1; // Start on Inventory page
 
@@ -928,6 +934,10 @@ namespace MWGui
 
     WindowBase* WindowManager::getActiveControllerWindow()
     {
+        // Isowind: the keyboard on the screen has the controller while it is up
+        if (mOnScreenKeyboard && mOnScreenKeyboard->isVisible())
+            return mOnScreenKeyboard;
+
         if (!mCurrentModals.empty())
             return mCurrentModals.back();
 
@@ -1097,6 +1107,9 @@ namespace MWGui
 
         if (mInventoryTabsOverlay && mInventoryTabsOverlay->isVisible())
             mInventoryTabsOverlay->onFrame(frameDuration);
+
+        if (mOnScreenKeyboard && mOnScreenKeyboard->isVisible())
+            mOnScreenKeyboard->onFrame(frameDuration);
 
         if (!gameRunning)
             return;
@@ -2011,6 +2024,17 @@ namespace MWGui
                 capturesInput = widget->castType<MyGUI::EditBox>(false);
         }
 
+        // Isowind: the keyboard on the screen comes up for a text box when a controller is in use, and goes away
+        // with the focus
+        if (mOnScreenKeyboard)
+        {
+            if (!capturesInput)
+                mOnScreenKeyboard->close();
+            else if (Settings::gui().mControllerMenus && isGuiMode() && mOnScreenKeyboard->getTarget() != widget
+                && MWBase::Environment::get().getInputManager()->joystickLastUsed())
+                mOnScreenKeyboard->open();
+        }
+
         // The SDL_IsTextInputActive() check helps to avoid duplicate calls in SDL2.
         // This may no longer be required when switching to SDL3 where the function
         // has also been renamed to SDL_TextInputActive() and returns bool instead
@@ -2024,6 +2048,9 @@ namespace MWGui
             SDL_StartTextInput();
         else
             SDL_StopTextInput();
+
+        // Isowind: the legend offers the keyboard on the screen (Y) while there is something to type into
+        updateControllerButtonsOverlay();
     }
 
     void WindowManager::setEnemy(const MWWorld::Ptr& enemy)
@@ -2912,7 +2939,11 @@ namespace MWGui
         }
 
         // setButtons will handle setting visibility based on if any buttons are defined.
-        mControllerButtonsOverlay->setButtons(topWin->getControllerButtons());
+        ControllerButtons buttons = *topWin->getControllerButtons();
+        // Isowind: Y brings up the keyboard on the screen for a text box being typed into
+        if (buttons.mY.empty() && SDL_IsTextInputActive() && !isOnScreenKeyboardVisible())
+            buttons.mY = "#{OMWEngine:Keyboard}";
+        mControllerButtonsOverlay->setButtons(&buttons);
         if (getMode() == GM_Inventory)
         {
             mInventoryTabsOverlay->setVisible(true);
@@ -2920,6 +2951,17 @@ namespace MWGui
         }
         else
             mInventoryTabsOverlay->setVisible(false);
+    }
+
+    bool WindowManager::isOnScreenKeyboardVisible() const
+    {
+        return mOnScreenKeyboard && mOnScreenKeyboard->isVisible();
+    }
+
+    void WindowManager::openOnScreenKeyboard()
+    {
+        if (mOnScreenKeyboard && Settings::gui().mControllerMenus)
+            mOnScreenKeyboard->open();
     }
 
     void WindowManager::inventoryUpdated(const MWWorld::Ptr& ptr) const

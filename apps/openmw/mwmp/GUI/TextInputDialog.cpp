@@ -7,6 +7,8 @@
 #include <MyGUI_Button.h>
 #include <MyGUI_InputManager.h>
 
+#include <components/esm/refid.hpp>
+
 namespace mwmp
 {
     TextInputDialog::TextInputDialog()
@@ -24,6 +26,8 @@ namespace mwmp
 
         // Make sure the edit box has focus
         MWBase::Environment::get().getWindowManager()->setKeyFocusWidget(mTextEdit);
+
+        mControllerButtons.mA = "#{Interface:OK}";
     }
 
     void TextInputDialog::setNextButtonShow(bool shown)
@@ -90,5 +94,16 @@ namespace mwmp
     void TextInputDialog::setTextInput(const std::string &text)
     {
         mTextEdit->setCaption(text);
+    }
+
+    bool TextInputDialog::onControllerButtonEvent(const SDL_ControllerButtonEvent& arg)
+    {
+        if (arg.button == SDL_CONTROLLER_BUTTON_A)
+        {
+            onOkClicked(nullptr);
+            MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
+            return true;
+        }
+        return false;
     }
 }
