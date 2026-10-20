@@ -6,7 +6,10 @@
 #   <root>\crabnet\          the multiplayer networking library, cloned and built here
 #   <root>\bundled-mods\     the third-party mods (make_package.ps1 wants them); fetched from this repository's
 #                            "bundled-mods" release (bundled-mods.zip, as the Linux CI does) when the folder is missing
-#   <root>\dist\             the package
+#   <root>\dist\             the package. Rebuilding keeps what testing it made (the server's players and world,
+#                            the host's settings); the zip never has them
+#   <root>\backups\          those and the single-player saves (Documents\My Games\OpenMW\saves), zipped by
+#                            make_package.ps1 before each packaging; the last five are kept
 # The engine builds in MSVC2022_64 in the repository, Isowind.exe in MSVC2022_64\launcher.
 #
 # Needs on PATH: git (Git for Windows, whose bash runs OpenMW's dependency script), cmake, and Visual Studio 2022

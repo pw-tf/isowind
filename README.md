@@ -34,6 +34,7 @@ parent folder (`<root>`):
         crabnet\                  cloned and built by the script
         bundled-mods\             the third-party mods, fetched by the script
         dist\Isowind\             the package, and dist\Isowind.zip beside it
+        backups\                  test characters and saves, zipped before each packaging (the last five)
 
 Then, in PowerShell, from the repository:
 
@@ -48,6 +49,14 @@ fetches the bundled mods and packages. Later runs are incremental; after pulling
 
 The engine ends up in `MSVC2022_64\Release`, `Isowind.exe` in `MSVC2022_64\launcher`, and the package in
 `<root>\dist\Isowind` with `<root>\dist\Isowind.zip` beside it.
+
+Rebuilding keeps the test characters. The server's players, cells and world (`dist\Isowind\server\CoreScripts\data`)
+and the host's `server\tes3mp-server.cfg` stay in the package folder; single-player saves are in
+`Documents\My Games\OpenMW\saves`, which packaging never touches. `make_package.ps1` still zips both into
+`<root>\backups\isowind-data-<date>-<time>.zip` first, and keeps the last five. The zip takes the server's data from
+git (the empty folders and the default ban and plugin lists), so it never carries anyone's characters. To update a
+copy elsewhere (Bottles, another PC), unzip the new `Isowind.zip` over the old folder rather than deleting the folder:
+the players stay, and only the ban list goes back to empty.
 
 | Switch                  | What it does                                                                                   |
 |-------------------------|------------------------------------------------------------------------------------------------|
@@ -82,8 +91,11 @@ Building on Linux
 `.github/workflows/linux.yml` has the recipe: the Debian/Ubuntu packages from `CI/install_debian_deps.sh`, CrabNet
 at commit `19e6619`, a CMake configure that points `RakNet_INCLUDES` and `RakNet_LIBRARY_RELEASE`/`_DEBUG` at it,
 then `cmake --build`. `isowind/linux/package.sh BUILD_DIR OUT_DIR [BUNDLED_MODS_DIR]` assembles the folder (it
-needs `linuxdeploy` on the PATH). On Arch, build Bullet and TinyXML in-tree (`-DOPENMW_USE_SYSTEM_BULLET=OFF
--DUSE_SYSTEM_TINYXML=OFF`), and CMake 4 wants `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` for CrabNet.
+needs `linuxdeploy` on the PATH). Packaging into the same folder again keeps its server data and
+`server/tes3mp-server.cfg`, as on Windows, after backing them and `~/.local/share/openmw/saves` up into
+`~/.local/share/isowind/backups`; a release goes into a new folder, as the CI's does. On Arch, build Bullet and
+TinyXML in-tree (`-DOPENMW_USE_SYSTEM_BULLET=OFF -DUSE_SYSTEM_TINYXML=OFF`), and CMake 4 wants
+`-DCMAKE_POLICY_VERSION_MINIMUM=3.5` for CrabNet.
 
 Running with a controller
 -------------------------
