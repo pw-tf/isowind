@@ -11,6 +11,7 @@
 #include <osgViewer/Viewer>
 
 #include <MyGUI_ClipboardManager.h>
+#include <MyGUI_ComboBox.h>
 #include <MyGUI_EditBox.h>
 #include <MyGUI_FactoryManager.h>
 #include <MyGUI_InputManager.h>
@@ -47,6 +48,7 @@
 
 #include <components/vfs/manager.hpp>
 
+#include <components/widgets/numericeditbox.hpp>
 #include <components/widgets/tags.hpp>
 #include <components/widgets/widgets.hpp>
 
@@ -154,6 +156,22 @@ namespace MWGui
                 default:
                     return nullptr;
             }
+        }
+
+        // Isowind: whether the keyboard on the screen comes up by itself for a widget given the keyboard focus. Only
+        // for a box to type words into: not for a number (the count of items to take or buy is set with the D-pad), a
+        // drop-down list or text that can't be changed. Y still brings it up for those.
+        bool opensOnScreenKeyboard(MyGUI::Widget* widget)
+        {
+            if (LuaUi::WidgetExtension* luaWidget = dynamic_cast<LuaUi::WidgetExtension*>(widget))
+                return luaWidget->isTextInput();
+            MyGUI::EditBox* edit = widget->castType<MyGUI::EditBox>(false);
+            if (!edit || edit->getEditReadOnly() || edit->getEditStatic()
+                || widget->castType<Gui::NumericEditBox>(false))
+                return false;
+            if (MyGUI::ComboBox* comboBox = widget->castType<MyGUI::ComboBox>(false))
+                return !comboBox->getComboModeDrop();
+            return true;
         }
     }
 
@@ -2031,7 +2049,7 @@ namespace MWGui
             if (!capturesInput)
                 mOnScreenKeyboard->close();
             else if (Settings::gui().mControllerMenus && isGuiMode() && mOnScreenKeyboard->getTarget() != widget
-                && MWBase::Environment::get().getInputManager()->joystickLastUsed())
+                && MWBase::Environment::get().getInputManager()->joystickLastUsed() && opensOnScreenKeyboard(widget))
                 mOnScreenKeyboard->open();
         }
 

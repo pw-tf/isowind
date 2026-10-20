@@ -249,6 +249,7 @@ void mwmp::GUIController::changeChatMode()
     mChat->pressedChatMode();
 }
 
+// No controller button opens the chat for now (D-pad left did); it is opened with the keyboard
 bool mwmp::GUIController::openChatWithController()
 {
     MWBase::WindowManager* windowManager = MWBase::Environment::get().getWindowManager();

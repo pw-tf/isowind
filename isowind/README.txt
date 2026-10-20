@@ -74,7 +74,7 @@ server\logs. Keep the same game (co-op or MMO) for a world: an MMO world switche
 what each player looted, so it's all back.
 
 In multiplayer
-Enter          Talk in the chat (D-pad left on a controller, which brings up a keyboard on the screen);
+Enter          Talk in the chat (with a keyboard; a controller has no button for it for now);
                F2 hides or shows the chat window.
 The world never pauses, not even in menus. Saving and loading are off: the server keeps everything.
 When you die you wake up at the nearest temple.
@@ -120,7 +120,7 @@ A                 Jump                            B                 Ready weapon
 X                 Use / talk                      Y                 Ready magic
 Right trigger     Attack / cast                   Left trigger      Power attack
 Bumpers           Previous / next quick key       D-pad up / down   Zoom (hold to keep going)
-D-pad left        Quick keys menu (on a server: the chat)
+D-pad left        (nothing for now)
 D-pad right       Quest log                       Start             Menu
 Back              Inventory (hold: journal)
 Left stick in     Sneak                           Right stick in    Rest

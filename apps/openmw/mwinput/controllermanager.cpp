@@ -17,8 +17,6 @@
 #include "../mwbase/statemanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 #include "../mwgui/windowbase.hpp"
-#include "../mwmp/GUIController.hpp"
-#include "../mwmp/Main.hpp"
 
 #include "actions.hpp"
 #include "bindingsmanager.hpp"
@@ -26,6 +24,20 @@
 
 namespace MWInput
 {
+    namespace
+    {
+        // Isowind: a D-pad direction held in a menu steps again after this long, then this often (as the left stick
+        // does on the keyboard on the screen). Real time: the game may be paused under a menu.
+        constexpr std::chrono::milliseconds sGuiRepeatDelay(400);
+        constexpr std::chrono::milliseconds sGuiRepeatInterval(100);
+
+        bool isDpadButton(Uint8 button)
+        {
+            return button == SDL_CONTROLLER_BUTTON_DPAD_UP || button == SDL_CONTROLLER_BUTTON_DPAD_DOWN
+                || button == SDL_CONTROLLER_BUTTON_DPAD_LEFT || button == SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
+        }
+    }
+
     ControllerManager::ControllerManager(BindingsManager* bindingsManager, MouseManager* mouseManager,
         const std::filesystem::path& userControllerBindingsFile, const std::filesystem::path& controllerBindingsFile)
         : mBindingsManager(bindingsManager)
@@ -126,10 +138,15 @@ namespace MWInput
                 MWBase::Environment::get().getInputManager()->resetIdleTime();
             }
         }
+
+        updateGuiRepeat();
     }
 
     void ControllerManager::buttonPressed(int deviceID, const SDL_ControllerButtonEvent& arg)
     {
+        // Isowind: another button pressed stops a D-pad direction repeating
+        mGuiRepeatButton = SDL_CONTROLLER_BUTTON_INVALID;
+
         if (!Settings::input().mEnableController || mBindingsManager->isDetectingBindingState())
             return;
 
@@ -140,7 +157,10 @@ namespace MWInput
         if (MWBase::Environment::get().getWindowManager()->isGuiMode())
         {
             if (gamepadToGuiControl(arg))
+            {
+                startGuiRepeat(arg);
                 return;
+            }
 
             if (mGamepadGuiCursorEnabled)
             {
@@ -163,13 +183,7 @@ namespace MWInput
             }
         }
         else
-        {
-            // Isowind multiplayer: D-pad left opens the chat, typed with the keyboard on the screen
-            if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_LEFT && Settings::gui().mControllerMenus
-                && mwmp::Main::isInitialized() && mwmp::Main::get().getGUIController()->openChatWithController())
-                return;
             mBindingsManager->setPlayerControlsEnabled(true);
-        }
 
         // esc, to leave initial movie screen
         auto kc = SDLUtil::sdlKeyToMyGUI(SDLK_ESCAPE);
@@ -181,6 +195,9 @@ namespace MWInput
 
     void ControllerManager::buttonReleased(int deviceID, const SDL_ControllerButtonEvent& arg)
     {
+        if (arg.button == mGuiRepeatButton)
+            mGuiRepeatButton = SDL_CONTROLLER_BUTTON_INVALID;
+
         if (mBindingsManager->isDetectingBindingState())
         {
             mBindingsManager->controllerButtonReleased(deviceID, arg);
@@ -261,7 +278,7 @@ namespace MWInput
         mBindingsManager->controllerRemoved(arg);
     }
 
-    bool ControllerManager::gamepadToGuiControl(const SDL_ControllerButtonEvent& arg)
+    bool ControllerManager::gamepadToGuiControl(const SDL_ControllerButtonEvent& arg, bool repeat)
     {
         MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
 
@@ -364,8 +381,62 @@ namespace MWInput
         if (SDL_IsTextInputActive())
             return false;
 
-        winMgr->injectKeyPress(key, 0, false);
+        winMgr->injectKeyPress(key, 0, repeat);
         return true;
+    }
+
+    void ControllerManager::startGuiRepeat(const SDL_ControllerButtonEvent& arg)
+    {
+        if (!isDpadButton(arg.button))
+            return;
+
+        // MyGUI repeats a key it is given until a key is let go (the arrow keys the D-pad stands for, which also set
+        // the count of items to take or buy): the D-pad repeats here instead, at one pace in every menu
+        MyGUI::InputManager::getInstance().injectKeyRelease(MyGUI::KeyCode::None);
+
+        MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
+        if (!winMgr->isGuiMode())
+            return;
+        mGuiRepeatButton = arg.button;
+        mGuiRepeatController = arg.which;
+        mGuiRepeatWindow = winMgr->getActiveControllerWindow();
+        mGuiRepeatNext = std::chrono::steady_clock::now() + sGuiRepeatDelay;
+    }
+
+    void ControllerManager::updateGuiRepeat()
+    {
+        if (mGuiRepeatButton == SDL_CONTROLLER_BUTTON_INVALID)
+            return;
+
+        // Over once the direction is let go (its release can be missed), the menu is closed or another window has
+        // the controller (the keyboard on the screen has come up, a message box)
+        MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
+        SDL_GameController* controller = SDL_GameControllerFromInstanceID(mGuiRepeatController);
+        if (!controller
+            || !SDL_GameControllerGetButton(controller, static_cast<SDL_GameControllerButton>(mGuiRepeatButton))
+            || !Settings::input().mEnableController || mBindingsManager->isDetectingBindingState()
+            || !winMgr->isGuiMode() || winMgr->getActiveControllerWindow() != mGuiRepeatWindow)
+        {
+            mGuiRepeatButton = SDL_CONTROLLER_BUTTON_INVALID;
+            return;
+        }
+
+        const auto now = std::chrono::steady_clock::now();
+        if (now < mGuiRepeatNext)
+            return;
+        // From now, not from when it was due: a slow frame doesn't bring a burst of steps
+        mGuiRepeatNext = now + sGuiRepeatInterval;
+
+        // To the menu only, not to scripts or the key bindings (D-pad up and down zoom the camera)
+        SDL_ControllerButtonEvent event{};
+        event.type = SDL_CONTROLLERBUTTONDOWN;
+        event.which = mGuiRepeatController;
+        event.button = static_cast<Uint8>(mGuiRepeatButton);
+        event.state = SDL_PRESSED;
+        if (gamepadToGuiControl(event, true))
+            MyGUI::InputManager::getInstance().injectKeyRelease(MyGUI::KeyCode::None);
+        else
+            mGuiRepeatButton = SDL_CONTROLLER_BUTTON_INVALID;
     }
 
     bool ControllerManager::gamepadToGuiControl(const SDL_ControllerAxisEvent& arg)
