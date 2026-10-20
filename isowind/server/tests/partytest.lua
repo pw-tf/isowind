@@ -132,7 +132,9 @@ local function runTests()
     check("quest disable kept for both members", record.players.alpha == false and record.players.beta == false)
     local toBeta = sentTo("SendObjectState", 1)
     check("Beta's game told now", toBeta ~= nil and toBeta.objects[1] ~= nil and toBeta.objects[1].state == false)
-    check("Alpha's game not told (it did it)", sentTo("SendObjectState", 0) == nil)
+    local toAlpha = sentTo("SendObjectState", 0)
+    check("Alpha's game told too (it waits for the server)", toAlpha ~= nil and toAlpha.objects[1] ~= nil and
+        toAlpha.objects[1].state == false)
 
     -- Kill credit for the ally
     beta.data.kills = nil

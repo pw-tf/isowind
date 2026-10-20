@@ -10,7 +10,8 @@
 -- * Enemies and NPCs come back after they die, players there or not, after a time from how
 --   tough they were (WoW-like tiers, from their health): trash 1.5 minutes, normal 5, elite 15, bosses 20, divided by
 --   the host's respawn speed. Ones from the game's files are reset on each client ("isowind respawn", a console
---   command packet the game handles itself); leveled-list ones are spawned again where they first appeared.
+--   command packet the game handles itself); leveled-list ones are spawned again where they first appeared. Someone a
+--   quest script brought into the world (Tarhiel falling from the sky) is a one-off and stays dead.
 
 if not IsowindHost.IsMmo() then
     return
@@ -327,8 +328,11 @@ local function onObjectState(eventStatus, pid, cellDescription, objects)
         end
         cell.data.isowindStates[uniqueIndex] = record
     end
-    -- The party's others who are on see it now (the player's own game already made the change)
-    for _, recipient in ipairs(otherOnlinePids(pid, names)) do
+    -- The player and the party's others who are on see it now (the player's own game waits for the server to make
+    -- the change, mwmp::hooks::requestScriptObjectState)
+    local recipients = otherOnlinePids(pid, names)
+    table.insert(recipients, pid)
+    for _, recipient in ipairs(recipients) do
         tes3mp.ClearObjectList()
         tes3mp.SetObjectListPid(recipient)
         tes3mp.SetObjectListCell(cellDescription)
@@ -564,6 +568,21 @@ local function onObjectSpawn(eventStatus, pid, cellDescription, objects)
     end
 end
 
+-- Someone a quest script brought into the world (enabled) for a player, like Tarhiel falling from the sky near Seyda
+-- Neen: a one-off, so their death stays and they don't come back to fall again
+local function isQuestAppearance(cell, uniqueIndex)
+    local record = cell.data.isowindStates ~= nil and cell.data.isowindStates[uniqueIndex] or nil
+    if record == nil then
+        return false
+    end
+    for _, state in pairs(record.players) do
+        if state == true then
+            return true
+        end
+    end
+    return false
+end
+
 local function onActorDeath(eventStatus, pid, cellDescription, actors)
     local cell = LoadedCells[cellDescription]
     if cell == nil then
@@ -576,7 +595,8 @@ local function onActorDeath(eventStatus, pid, cellDescription, actors)
         local _, mpNum = splitIndex(uniqueIndex)
         local isSummon = objectData ~= nil and objectData.summon ~= nil
         local spawnPoints = cell.data.isowindSpawnPoints or {}
-        if not isSummon and (mpNum == 0 or spawnPoints[uniqueIndex] ~= nil) then
+        if not isSummon and not isQuestAppearance(cell, uniqueIndex) and
+            (mpNum == 0 or spawnPoints[uniqueIndex] ~= nil) then
             local minutes = respawnMinutes(actor.refId or (objectData and objectData.refId), objectData)
             respawns[cellDescription] = respawns[cellDescription] or {}
             respawns[cellDescription][uniqueIndex] = now + math.floor(minutes * 60 / IsowindHost.respawnSpeed)
