@@ -38,6 +38,13 @@ namespace MWGui
         /// Isowind: where \a count of \a item come from when taken (in the order removeItem takes them)
         std::vector<SourceItem> getSourceItems(const MWWorld::Ptr& item, int count);
 
+        /// Isowind: show only this one of the containers (its index in those given), as if it were opened alone: only
+        /// its items show, are taken, and items put in go to it; -1: all of them (items put in go to the first)
+        void setShownSource(int index);
+        int getShownSource() const { return mShownSource; }
+        /// Isowind: the container items put in go to
+        const MWWorld::Ptr& getDropTarget() const;
+
         bool allowedToUseItems() const override;
 
         bool onDropItem(const MWWorld::Ptr& item, int count) override;
@@ -57,10 +64,14 @@ namespace MWGui
         void removeItem(const ItemStack& item, size_t count) override;
 
     private:
+        /// Isowind: whether this source's items show (see setShownSource)
+        bool isShown(size_t index) const { return mShownSource < 0 || index == static_cast<size_t>(mShownSource); }
+
         std::vector<std::pair<MWWorld::Ptr, MWWorld::ResolutionHandle>> mItemSources;
         std::vector<MWWorld::Ptr> mWorldItems;
         const bool mTrading;
         std::vector<ItemStack> mItems;
+        int mShownSource = -1;
     };
 
 }

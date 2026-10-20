@@ -329,13 +329,17 @@ void ObjectList::editContainers(MWWorld::CellStore* cellStore)
             // If this container was open for us, update its view
             if (isCurrentContainer)
             {
-                if (isLocalTakeAll)
+                // (Isowind: not a Take All from one container's tab, of several opened together: that stays open)
+                if (isLocalTakeAll
+                    && !MWBase::Environment::get().getWindowManager()->getContainerWindow()->keepsOpenAfterTakeAll())
                 {
                     MWBase::Environment::get().getWindowManager()->removeGuiMode(MWGui::GM_Container);
                     MWBase::Environment::get().getWindowManager()->playSound(takeAllSound);
                 }
                 else
                 {
+                    if (isLocalTakeAll)
+                        MWBase::Environment::get().getWindowManager()->playSound(takeAllSound);
                     // (Isowind: the window stays on the container it was opened on, which may not be this one)
                     MWGui::ContainerWindow* containerWindow = MWBase::Environment::get().getWindowManager()->getContainerWindow();
                     containerWindow->onContainerChanged(ptrFound);
@@ -582,9 +586,12 @@ void ObjectList::deleteObjects(MWWorld::CellStore* cellStore)
                                ptrFound.getCellRef().getMpRefNum(), ptrFound.getCellRef().getMpNum());
 
             // If we are in a container, and it happens to be this object, exit it
-            // (Isowind: or one opened with it, shown in its window)
+            // (Isowind: not for one opened with it, shown in its window: that shows the others, see
+            // ContainerWindow::onFrame)
+            const CurrentContainer& currentContainer = mwmp::Main::get().getLocalPlayer()->currentContainer;
             if (MWBase::Environment::get().getWindowManager()->containsMode(MWGui::GM_Container)
-                && hooks::isCurrentContainer(ptrFound))
+                && currentContainer.refNum == ptrFound.getCellRef().getMpRefNum()
+                && currentContainer.mpNum == ptrFound.getCellRef().getMpNum())
             {
                 MWBase::Environment::get().getWindowManager()->removeGuiMode(MWGui::GM_Container);
                 MWBase::Environment::get().getWindowManager()->setDragDrop(false);

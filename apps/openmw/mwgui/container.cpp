@@ -4,15 +4,21 @@
 #include <cmath>
 
 #include <MyGUI_Button.h>
+#include <MyGUI_Gui.h>
+#include <MyGUI_ImageBox.h>
 #include <MyGUI_InputManager.h>
+#include <MyGUI_TextIterator.h>
+#include <MyGUI_Window.h>
 
 #include <osg/Vec2f>
 #include <osg/Vec3f>
 
 #include <components/esm3/loadcont.hpp>
 #include <components/settings/values.hpp>
+#include <components/widgets/box.hpp>
 
 #include "../mwbase/environment.hpp"
+#include "../mwbase/inputmanager.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/scriptmanager.hpp"
 #include "../mwbase/windowmanager.hpp"
@@ -51,6 +57,10 @@ namespace
     // one: crates stacked on it or right beside it, a row of barrels
     constexpr float sNearbyContainerRange = 128.f; // across
     constexpr float sNearbyContainerHeight = 256.f; // above or below
+
+    // Isowind: the tabs for them, above the items
+    constexpr int sTabHeight = 24;
+    constexpr int sTabSpacing = 4;
 
     /// Isowind: the ownership rule for containers opening together: taking from \a other must be no different, as far
     /// as the law goes, from taking from \a opened (the same owner, or both unowned, and the same faction and rank)
@@ -107,8 +117,9 @@ namespace
             return true;
         });
 
+        // (the same order each time the window rebuilds: the tabs are in it)
         const osg::Vec3f position = opened.getRefData().getPosition().asVec3();
-        std::sort(found.begin(), found.end(), [&](const MWWorld::Ptr& left, const MWWorld::Ptr& right) {
+        std::stable_sort(found.begin(), found.end(), [&](const MWWorld::Ptr& left, const MWWorld::Ptr& right) {
             return (left.getRefData().getPosition().asVec3() - position).length2()
                 < (right.getRefData().getPosition().asVec3() - position).length2();
         });
@@ -126,6 +137,13 @@ namespace MWGui
         , mSortModel(nullptr)
         , mModel(nullptr)
         , mMergedModel(nullptr)
+        , mTabBar(nullptr)
+        , mPrevTabImage(nullptr)
+        , mNextTabImage(nullptr)
+        , mPrevTabButton(nullptr)
+        , mNextTabButton(nullptr)
+        , mTab(0)
+        , mItemViewTop(0)
         , mSelectedItem(-1)
         , mUpdateNextFrame(false)
         , mTreatNextOpenAsLoot(false)
@@ -137,6 +155,45 @@ namespace MWGui
         getWidget(mItemView, "ItemView");
         mItemView->eventBackgroundClicked += MyGUI::newDelegate(this, &ContainerWindow::onBackgroundSelected);
         mItemView->eventItemClicked += MyGUI::newDelegate(this, &ContainerWindow::onItemSelected);
+
+        // Isowind: the tabs for containers opened together, above the items (made here rather than in the layout, so
+        // an older copy of it still works)
+        const MyGUI::IntCoord itemViewCoord = mItemView->getCoord();
+        mItemViewTop = itemViewCoord.top;
+        mTabBar = mMainWidget->createWidget<MyGUI::Widget>({},
+            MyGUI::IntCoord(itemViewCoord.left, itemViewCoord.top, itemViewCoord.width, sTabHeight),
+            MyGUI::Align::Left | MyGUI::Align::Top | MyGUI::Align::HStretch);
+        mTabBar->setVisible(false);
+        mTabBar->eventMouseWheel += MyGUI::newDelegate(this, &ContainerWindow::onTabWheel);
+        auto makeArrow = [&](const char* caption, auto handler) {
+            MyGUI::Button* button = mTabBar->createWidget<Gui::AutoSizedButton>(
+                "MW_Button", MyGUI::IntCoord(0, 0, 24, sTabHeight), MyGUI::Align::Left | MyGUI::Align::Top);
+            button->setCaption(caption);
+            button->setNeedKeyFocus(false);
+            button->setVisible(false);
+            button->eventMouseButtonClick += MyGUI::newDelegate(this, handler);
+            button->eventMouseWheel += MyGUI::newDelegate(this, &ContainerWindow::onTabWheel);
+            return button;
+        };
+        mPrevTabButton = makeArrow("<", &ContainerWindow::onPrevTabClicked);
+        mNextTabButton = makeArrow(">", &ContainerWindow::onNextTabClicked);
+        if (Settings::gui().mControllerMenus)
+        {
+            // The triggers, as for the inventory's tabs (Isowind: the bumpers switch windows)
+            auto makeImage = [&](SDL_GameControllerAxis axis) {
+                MyGUI::ImageBox* image = mTabBar->createWidget<MyGUI::ImageBox>(
+                    "ImageBox", MyGUI::IntCoord(0, 0, sTabHeight, sTabHeight), MyGUI::Align::Left | MyGUI::Align::Top);
+                image->setImageTexture(MWBase::Environment::get().getInputManager()->getControllerAxisIcon(axis));
+                image->setColour(MyGUI::Colour::parse("#ccb589"));
+                image->setAlpha(0.7f);
+                image->setNeedMouseFocus(false);
+                return image;
+            };
+            mPrevTabImage = makeImage(SDL_CONTROLLER_AXIS_TRIGGERLEFT);
+            mNextTabImage = makeImage(SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
+        }
+        mMainWidget->castType<MyGUI::Window>()->eventWindowChangeCoord
+            += MyGUI::newDelegate(this, &ContainerWindow::onWindowResize);
 
         mDisposeCorpseButton->eventMouseButtonClick
             += MyGUI::newDelegate(this, &ContainerWindow::onDisposeCorpseButtonClicked);
@@ -248,7 +305,9 @@ namespace MWGui
         // Isowind multiplayer: the server puts the items in the container (for everyone); they leave the drag
         if (success && mwmp::hooks::isMultiplayer())
         {
-            mwmp::hooks::sendContainerChange(mPtr, mwmp::BaseObjectList::ADD, mwmp::BaseObjectList::DROP,
+            // (into the container whose tab is shown, of several)
+            const MWWorld::Ptr target = mMergedModel ? mMergedModel->getDropTarget() : mPtr;
+            mwmp::hooks::sendContainerChange(target, mwmp::BaseObjectList::ADD, mwmp::BaseObjectList::DROP,
                 { { mDragAndDrop->mItem.mBase, static_cast<int>(mDragAndDrop->mDraggedCount) } });
             mDragAndDrop->finish(true);
             return;
@@ -270,6 +329,8 @@ namespace MWGui
             throw std::runtime_error("Invalid argument in ContainerWindow::setPtr");
         bool lootAnyway = mTreatNextOpenAsLoot;
         mTreatNextOpenAsLoot = false;
+        // Isowind: shown afresh (the server changed one of its containers, one went away), not opened
+        const bool refresh = !mPtr.isEmpty() && mPtr == container;
         mPtr = container;
         // Isowind multiplayer: the container open here, for the server's replies
         if (mwmp::hooks::isMultiplayer())
@@ -307,6 +368,8 @@ namespace MWGui
                 model = std::move(mergedModel);
             }
         }
+        // (shown afresh, it stays on its tab)
+        updateTabs(refresh);
 
         mDisposeCorpseButton->setVisible(loot);
         mModel = model.get();
@@ -329,6 +392,7 @@ namespace MWGui
         mSortModel = nullptr;
         mMergedModel = nullptr;
         mNearbyContainers.clear();
+        clearTabs();
     }
 
     void ContainerWindow::onOpen()
@@ -368,6 +432,11 @@ namespace MWGui
 
         MWBase::Environment::get().getWindowManager()->setKeyFocusWidget(mCloseButton);
 
+        // Isowind: from one container's tab (of several opened together) it takes what that one holds, and the window
+        // stays open on it
+        const bool keepOpen = mTab != 0;
+        mTakeAllKeepsOpen = keepOpen;
+
         // Isowind multiplayer: the server hands everything over (and the window closes when it does)
         if (mwmp::hooks::isMultiplayer())
         {
@@ -386,7 +455,7 @@ namespace MWGui
             for (const auto& [container, containerItems] : bySource)
                 mwmp::hooks::sendContainerChange(
                     container, mwmp::BaseObjectList::REMOVE, mwmp::BaseObjectList::TAKE_ALL, containerItems);
-            if (bySource.empty())
+            if (bySource.empty() && !keepOpen)
                 MWBase::Environment::get().getWindowManager()->removeGuiMode(GM_Container);
             return;
         }
@@ -430,6 +499,12 @@ namespace MWGui
             mModel->moveItem(item, item.mCount, playerModel);
         }
 
+        if (keepOpen)
+        {
+            mItemView->update();
+            MWBase::Environment::get().getWindowManager()->getInventoryWindow()->updateItemView();
+            return;
+        }
         MWBase::Environment::get().getWindowManager()->removeGuiMode(GM_Container);
     }
 
@@ -512,6 +587,14 @@ namespace MWGui
 
     ControllerButtons* ContainerWindow::getControllerButtons()
     {
+        // Isowind: the tabs of containers opened together (never with a body to dispose of)
+        if (!mTabButtons.empty())
+        {
+            mControllerButtons.mL1 = "#{Interface:Prev}";
+            mControllerButtons.mR1 = "#{Interface:Next}";
+            return &mControllerButtons;
+        }
+        mControllerButtons.mL1.clear();
         if (mDisposeCorpseButton->getVisible())
             mControllerButtons.mR1 = "#{Interface:DisposeOfCorpse}";
         else
@@ -534,6 +617,13 @@ namespace MWGui
         else if (arg.button == SDL_CONTROLLER_BUTTON_X)
         {
             onTakeAllButtonClicked(mTakeButton);
+        }
+        else if (!mTabButtons.empty()
+            && (arg.button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER || arg.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER))
+        {
+            // Isowind: the tabs (the triggers, where the bumpers switch windows: they come here as the bumpers)
+            selectTab(wrap(mTab, mTabButtons.size(), arg.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER ? 1 : -1));
+            MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
         }
         else if (arg.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
         {
@@ -618,6 +708,210 @@ namespace MWGui
             }
         }
         return bySource;
+    }
+
+    void ContainerWindow::updateTabs(bool keepTab)
+    {
+        if (mMergedModel == nullptr)
+        {
+            clearTabs();
+            return;
+        }
+
+        const bool hadTabs = !mTabButtons.empty();
+        std::vector<MWWorld::Ptr> containers{ mPtr };
+        containers.insert(containers.end(), mNearbyContainers.begin(), mNearbyContainers.end());
+        // Made again only when the containers change, not each time the server changes what one holds
+        if (!hadTabs || containers != mTabContainers)
+        {
+            for (MyGUI::Button* button : mTabButtons)
+                MyGUI::Gui::getInstance().destroyWidget(button);
+            mTabButtons.clear();
+            mTabContainers = containers;
+
+            auto addTab = [&]() {
+                MyGUI::Button* button = mTabBar->createWidget<Gui::AutoSizedButton>(
+                    "MW_Button", MyGUI::IntCoord(0, 0, 60, sTabHeight), MyGUI::Align::Left | MyGUI::Align::Top);
+                button->setNeedKeyFocus(false);
+                button->eventMouseButtonClick += MyGUI::newDelegate(this, &ContainerWindow::onTabClicked);
+                button->eventMouseWheel += MyGUI::newDelegate(this, &ContainerWindow::onTabWheel);
+                mTabButtons.push_back(button);
+                return button;
+            };
+            addTab()->setCaptionWithReplacing("#{sAllTab}");
+
+            // Named by their containers; those with the same name are numbered, nearest first
+            std::vector<std::string> names;
+            for (const MWWorld::Ptr& container : containers)
+                names.emplace_back(container.getClass().getName(container));
+            for (size_t i = 0; i < names.size(); ++i)
+            {
+                std::string caption = names[i];
+                if (std::count(names.begin(), names.end(), names[i]) > 1)
+                    caption += " " + std::to_string(std::count(names.begin(), names.begin() + i + 1, names[i]));
+                addTab()->setCaption(MyGUI::TextIterator::toTagsString(caption));
+            }
+        }
+
+        // On the tab it was on if its container is still there, else on "All"
+        mTab = 0;
+        if (keepTab && !mTabContainer.isEmpty())
+        {
+            auto found = std::find(mTabContainers.begin(), mTabContainers.end(), mTabContainer);
+            if (found != mTabContainers.end())
+                mTab = static_cast<size_t>(found - mTabContainers.begin()) + 1;
+        }
+        mTabContainer = mTab == 0 ? MWWorld::Ptr() : mTabContainers[mTab - 1];
+        mMergedModel->setShownSource(static_cast<int>(mTab) - 1);
+        for (size_t i = 0; i < mTabButtons.size(); ++i)
+            mTabButtons[i]->setStateSelected(i == mTab);
+
+        setTabsVisible(true);
+        layoutTabs();
+        // (the controller's guide shows the tabs' buttons)
+        if (!hadTabs)
+            MWBase::Environment::get().getWindowManager()->updateControllerButtonsOverlay();
+    }
+
+    void ContainerWindow::clearTabs()
+    {
+        const bool hadTabs = !mTabButtons.empty();
+        for (MyGUI::Button* button : mTabButtons)
+            MyGUI::Gui::getInstance().destroyWidget(button);
+        mTabButtons.clear();
+        mTabContainers.clear();
+        mTabContainer = MWWorld::Ptr();
+        mTab = 0;
+        mTakeAllKeepsOpen = false;
+        setTabsVisible(false);
+        if (hadTabs)
+            MWBase::Environment::get().getWindowManager()->updateControllerButtonsOverlay();
+    }
+
+    void ContainerWindow::selectTab(size_t tab)
+    {
+        if (mMergedModel == nullptr || tab >= mTabButtons.size() || tab == mTab)
+            return;
+
+        mTab = tab;
+        mTabContainer = mTab == 0 ? MWWorld::Ptr() : mTabContainers[mTab - 1];
+        mMergedModel->setShownSource(static_cast<int>(mTab) - 1);
+        for (size_t i = 0; i < mTabButtons.size(); ++i)
+            mTabButtons[i]->setStateSelected(i == mTab);
+        layoutTabs();
+
+        mItemView->update();
+        mItemView->resetScrollBars();
+    }
+
+    void ContainerWindow::layoutTabs()
+    {
+        if (mTabButtons.empty())
+            return;
+
+        // As many tabs as fit, around the one shown (always that one), with arrows when some don't
+        std::vector<int> widths;
+        int total = 0;
+        for (MyGUI::Button* button : mTabButtons)
+        {
+            widths.push_back(static_cast<Gui::AutoSizedButton*>(button)->getRequestedSize().width);
+            total += widths.back() + (widths.size() > 1 ? sTabSpacing : 0);
+        }
+        int available = mTabBar->getWidth();
+        if (mPrevTabImage)
+            available -= 2 * (sTabHeight + sTabSpacing);
+
+        size_t first = 0;
+        size_t last = mTabButtons.size() - 1;
+        const bool overflow = total > available;
+        if (overflow)
+        {
+            available -= static_cast<Gui::AutoSizedButton*>(mPrevTabButton)->getRequestedSize().width
+                + static_cast<Gui::AutoSizedButton*>(mNextTabButton)->getRequestedSize().width + 2 * sTabSpacing;
+            first = last = mTab;
+            int used = widths[mTab];
+            bool grew = true;
+            while (grew)
+            {
+                grew = false;
+                if (last + 1 < widths.size() && used + sTabSpacing + widths[last + 1] <= available)
+                {
+                    used += sTabSpacing + widths[++last];
+                    grew = true;
+                }
+                if (first > 0 && used + sTabSpacing + widths[first - 1] <= available)
+                {
+                    used += sTabSpacing + widths[--first];
+                    grew = true;
+                }
+            }
+        }
+
+        int x = 0;
+        auto place = [&](MyGUI::Widget* widget, int width) {
+            widget->setVisible(true);
+            widget->setCoord(x, 0, width, sTabHeight);
+            x += width + sTabSpacing;
+        };
+        if (mPrevTabImage)
+            place(mPrevTabImage, sTabHeight);
+        mPrevTabButton->setVisible(false);
+        if (overflow)
+            place(mPrevTabButton, static_cast<Gui::AutoSizedButton*>(mPrevTabButton)->getRequestedSize().width);
+        for (size_t i = 0; i < mTabButtons.size(); ++i)
+        {
+            if (i < first || i > last)
+                mTabButtons[i]->setVisible(false);
+            else
+                place(mTabButtons[i], widths[i]);
+        }
+        mNextTabButton->setVisible(false);
+        if (overflow)
+            place(mNextTabButton, static_cast<Gui::AutoSizedButton*>(mNextTabButton)->getRequestedSize().width);
+        if (mNextTabImage)
+            place(mNextTabImage, sTabHeight);
+    }
+
+    void ContainerWindow::setTabsVisible(bool visible)
+    {
+        mTabBar->setVisible(visible);
+        // The items below the tabs, or where they were
+        const int top = visible ? mItemViewTop + sTabHeight + sTabSpacing : mItemViewTop;
+        MyGUI::IntCoord coord = mItemView->getCoord();
+        if (coord.top == top)
+            return;
+        coord.height += coord.top - top;
+        coord.top = top;
+        // (as a widget: the item view lays itself out again)
+        static_cast<MyGUI::Widget*>(mItemView)->setCoord(coord);
+    }
+
+    void ContainerWindow::onTabClicked(MyGUI::Widget* sender)
+    {
+        auto found = std::find(mTabButtons.begin(), mTabButtons.end(), sender);
+        if (found != mTabButtons.end())
+            selectTab(static_cast<size_t>(found - mTabButtons.begin()));
+    }
+
+    void ContainerWindow::onPrevTabClicked(MyGUI::Widget* /*sender*/)
+    {
+        selectTab(wrap(mTab, mTabButtons.size(), -1));
+    }
+
+    void ContainerWindow::onNextTabClicked(MyGUI::Widget* /*sender*/)
+    {
+        selectTab(wrap(mTab, mTabButtons.size(), 1));
+    }
+
+    void ContainerWindow::onTabWheel(MyGUI::Widget* /*sender*/, int rel)
+    {
+        if (!mTabButtons.empty() && rel != 0)
+            selectTab(wrap(mTab, mTabButtons.size(), rel > 0 ? -1 : 1));
+    }
+
+    void ContainerWindow::onWindowResize(MyGUI::Window* /*window*/)
+    {
+        layoutTabs();
     }
 
     bool ContainerWindow::dragItemByPtr(const MWWorld::Ptr& itemPtr, int dragCount)
