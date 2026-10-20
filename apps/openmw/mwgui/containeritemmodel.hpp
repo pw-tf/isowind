@@ -23,6 +23,21 @@ namespace MWGui
 
         ContainerItemModel(const MWWorld::Ptr& source);
 
+        /// Isowind: containers opened together as one (crates stacked on the one opened, see ContainerWindow::setPtr).
+        /// The first is the one opened: items put in go to it, and items are taken from it first.
+        explicit ContainerItemModel(const std::vector<MWWorld::Ptr>& itemSources);
+
+        /// Isowind: one container's share of an item stack
+        struct SourceItem
+        {
+            MWWorld::Ptr mContainer;
+            MWWorld::Ptr mItem; ///< The container's own item (that stacks with the one asked about)
+            int mCount; ///< How many of those taken come from it
+        };
+
+        /// Isowind: where \a count of \a item come from when taken (in the order removeItem takes them)
+        std::vector<SourceItem> getSourceItems(const MWWorld::Ptr& item, int count);
+
         bool allowedToUseItems() const override;
 
         bool onDropItem(const MWWorld::Ptr& item, int count) override;

@@ -6,6 +6,8 @@
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 
+#include "../mwgui/container.hpp"
+
 #include "../mwworld/cellstore.hpp"
 
 #include <components/misc/strings/algorithm.hpp>
@@ -258,8 +260,16 @@ namespace mwmp::hooks
         if (!isMultiplayer() || container.isEmpty())
             return false;
         const CurrentContainer& current = Main::get().getLocalPlayer()->currentContainer;
-        return current.refNum == container.getCellRef().getMpRefNum()
-            && current.mpNum == container.getCellRef().getMpNum();
+        if (current.refNum == container.getCellRef().getMpRefNum()
+            && current.mpNum == container.getCellRef().getMpNum())
+            return true;
+        // Containers next to it that opened with it, in its window, count as open too (ContainerWindow::setPtr)
+        MWBase::WindowManager* windowManager = MWBase::Environment::get().getWindowManager();
+        if (!windowManager->containsMode(MWGui::GM_Container))
+            return false;
+        MWGui::ContainerWindow* containerWindow = windowManager->getContainerWindow();
+        MWGui::ItemModel* model = containerWindow ? containerWindow->getModel() : nullptr;
+        return model && model->usesContainer(container);
     }
 
     bool denyRemoteCellChange(const MWWorld::Ptr& ptr, const MWWorld::CellStore& newCell)

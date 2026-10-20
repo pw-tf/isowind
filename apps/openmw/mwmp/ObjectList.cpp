@@ -206,16 +206,9 @@ void ObjectList::editContainers(MWWorld::CellStore* cellStore)
             bool hasActorEquipment = ptrFound.getClass().isActor() && ptrFound.getClass().hasInventoryStore(ptrFound);
 
             // If we are in a container, and it happens to be this container, keep track of that
+            // (Isowind: or one opened with it, shown in its window, see ContainerWindow::setPtr)
             if (MWBase::Environment::get().getWindowManager()->containsMode(MWGui::GM_Container))
-            {
-                CurrentContainer *currentContainer = &mwmp::Main::get().getLocalPlayer()->currentContainer;
-
-                if (currentContainer->refNum == ptrFound.getCellRef().getMpRefNum() &&
-                    currentContainer->mpNum == ptrFound.getCellRef().getMpNum())
-                {
-                    isCurrentContainer = true;
-                }
-            }
+                isCurrentContainer = hooks::isCurrentContainer(ptrFound);
 
             MWWorld::ContainerStore& containerStore = ptrFound.getClass().getContainerStore(ptrFound);
 
@@ -343,8 +336,9 @@ void ObjectList::editContainers(MWWorld::CellStore* cellStore)
                 }
                 else
                 {
+                    // (Isowind: the window stays on the container it was opened on, which may not be this one)
                     MWGui::ContainerWindow* containerWindow = MWBase::Environment::get().getWindowManager()->getContainerWindow();
-                    containerWindow->setPtr(ptrFound);
+                    containerWindow->onContainerChanged(ptrFound);
                 }
             }
         }
@@ -588,16 +582,12 @@ void ObjectList::deleteObjects(MWWorld::CellStore* cellStore)
                                ptrFound.getCellRef().getMpRefNum(), ptrFound.getCellRef().getMpNum());
 
             // If we are in a container, and it happens to be this object, exit it
-            if (MWBase::Environment::get().getWindowManager()->containsMode(MWGui::GM_Container))
+            // (Isowind: or one opened with it, shown in its window)
+            if (MWBase::Environment::get().getWindowManager()->containsMode(MWGui::GM_Container)
+                && hooks::isCurrentContainer(ptrFound))
             {
-                CurrentContainer *currentContainer = &mwmp::Main::get().getLocalPlayer()->currentContainer;
-
-                if (currentContainer->refNum == ptrFound.getCellRef().getMpRefNum() &&
-                    currentContainer->mpNum == ptrFound.getCellRef().getMpNum())
-                {
-                    MWBase::Environment::get().getWindowManager()->removeGuiMode(MWGui::GM_Container);
-                    MWBase::Environment::get().getWindowManager()->setDragDrop(false);
-                }
+                MWBase::Environment::get().getWindowManager()->removeGuiMode(MWGui::GM_Container);
+                MWBase::Environment::get().getWindowManager()->setDragDrop(false);
             }
 
             // Is this a dying actor being deleted before its death animation has finished? If so,

@@ -1,8 +1,15 @@
 #include "container.hpp"
 
+#include <algorithm>
+#include <cmath>
+
 #include <MyGUI_Button.h>
 #include <MyGUI_InputManager.h>
 
+#include <osg/Vec2f>
+#include <osg/Vec3f>
+
+#include <components/esm3/loadcont.hpp>
 #include <components/settings/values.hpp>
 
 #include "../mwbase/environment.hpp"
@@ -17,6 +24,7 @@
 #include "../mwmp/Networking.hpp"
 #include "../mwmp/ObjectList.hpp"
 
+#include "../mwworld/cellstore.hpp"
 #include "../mwworld/class.hpp"
 #include "../mwworld/inventorystore.hpp"
 
@@ -37,6 +45,77 @@
 #include "sortfilteritemmodel.hpp"
 #include "tooltips.hpp"
 
+namespace
+{
+    // Isowind: how near other containers have to be to the one opened (from where each stands) to open with it as
+    // one: crates stacked on it or right beside it, a row of barrels
+    constexpr float sNearbyContainerRange = 128.f; // across
+    constexpr float sNearbyContainerHeight = 256.f; // above or below
+
+    /// Isowind: the ownership rule for containers opening together: taking from \a other must be no different, as far
+    /// as the law goes, from taking from \a opened (the same owner, or both unowned, and the same faction and rank)
+    bool haveSameOwner(const MWWorld::Ptr& opened, const MWWorld::Ptr& other)
+    {
+        const MWWorld::CellRef& openedRef = opened.getCellRef();
+        const MWWorld::CellRef& otherRef = other.getCellRef();
+        if (openedRef.getOwner() != otherRef.getOwner() || openedRef.getFaction() != otherRef.getFaction()
+            || openedRef.getGlobalVariable() != otherRef.getGlobalVariable())
+            return false;
+        if (!openedRef.getFaction().empty() && openedRef.getFactionRank() != otherRef.getFactionRank())
+            return false;
+        // The evidence chest is never free to take from, whoever owns it (see MechanicsManager::isAllowedToUse)
+        return (openedRef.getRefId() == "stolen_goods") == (otherRef.getRefId() == "stolen_goods");
+    }
+
+    /// Isowind: whether \a other opens with \a opened, as one container
+    bool opensWith(const MWWorld::Ptr& opened, const MWWorld::Ptr& other)
+    {
+        if (other == opened || other.getType() != ESM::REC_CONT || other.getCell() != opened.getCell())
+            return false;
+        if (other.mRef->isDeleted() || !other.getRefData().isEnabled())
+            return false;
+
+        const osg::Vec3f offset
+            = other.getRefData().getPosition().asVec3() - opened.getRefData().getPosition().asVec3();
+        if (std::abs(offset.z()) > sNearbyContainerHeight
+            || osg::Vec2f(offset.x(), offset.y()).length() > sNearbyContainerRange)
+            return false;
+
+        // Ones that have to be opened by themselves: locked, trapped, or with a script (a quest's OnActivate)
+        const MWWorld::CellRef& cellRef = other.getCellRef();
+        if (cellRef.isLocked() || !cellRef.getTrap().empty() || !other.getClass().getScript(other).empty())
+            return false;
+        // Plants (harvested by themselves) and ones that refill
+        if (other.get<ESM::Container>()->mBase->mFlags & (ESM::Container::Organic | ESM::Container::Respawn))
+            return false;
+
+        return haveSameOwner(opened, other);
+    }
+
+    /// Isowind: the containers that open with \a opened (nearest first)
+    std::vector<MWWorld::Ptr> findNearbyContainers(const MWWorld::Ptr& opened)
+    {
+        std::vector<MWWorld::Ptr> found;
+        // Only a container (not a body), and not a plant
+        if (opened.getType() != ESM::REC_CONT || !opened.isInCell()
+            || (opened.get<ESM::Container>()->mBase->mFlags & ESM::Container::Organic))
+            return found;
+
+        opened.getCell()->forEachType<ESM::Container>([&](const MWWorld::Ptr& other) {
+            if (opensWith(opened, other))
+                found.push_back(other);
+            return true;
+        });
+
+        const osg::Vec3f position = opened.getRefData().getPosition().asVec3();
+        std::sort(found.begin(), found.end(), [&](const MWWorld::Ptr& left, const MWWorld::Ptr& right) {
+            return (left.getRefData().getPosition().asVec3() - position).length2()
+                < (right.getRefData().getPosition().asVec3() - position).length2();
+        });
+        return found;
+    }
+}
+
 namespace MWGui
 {
 
@@ -46,6 +125,7 @@ namespace MWGui
         , mItemTransfer(&itemTransfer)
         , mSortModel(nullptr)
         , mModel(nullptr)
+        , mMergedModel(nullptr)
         , mSelectedItem(-1)
         , mUpdateNextFrame(false)
         , mTreatNextOpenAsLoot(false)
@@ -126,10 +206,12 @@ namespace MWGui
             return;
 
         // Isowind multiplayer: the server decides; the drag starts when it agrees (ObjectList::editContainers)
+        // (asked of each container the items are in, when the window shows several)
         if (mwmp::hooks::isMultiplayer())
         {
-            mwmp::hooks::sendContainerChange(mPtr, mwmp::BaseObjectList::REMOVE, mwmp::BaseObjectList::DRAG,
-                { { item.mBase, static_cast<int>(count) } });
+            for (const auto& [container, items] : splitBySource({ { item.mBase, static_cast<int>(count) } }))
+                mwmp::hooks::sendContainerChange(
+                    container, mwmp::BaseObjectList::REMOVE, mwmp::BaseObjectList::DRAG, items);
             return;
         }
 
@@ -195,6 +277,8 @@ namespace MWGui
 
         bool loot = mPtr.getClass().isActor() && mPtr.getClass().getCreatureStats(mPtr).isDead();
 
+        mNearbyContainers.clear();
+        mMergedModel = nullptr;
         std::unique_ptr<ItemModel> model;
         if (mPtr.getClass().hasInventoryStore(mPtr))
         {
@@ -209,7 +293,19 @@ namespace MWGui
         }
         else
         {
-            model = std::make_unique<ContainerItemModel>(container);
+            // Isowind: crates stacked on this one or right beside it (hard to tell apart from above) open with it, as
+            // one; which ones is up to opensWith
+            mNearbyContainers = findNearbyContainers(mPtr);
+            if (mNearbyContainers.empty())
+                model = std::make_unique<ContainerItemModel>(container);
+            else
+            {
+                std::vector<MWWorld::Ptr> sources{ container };
+                sources.insert(sources.end(), mNearbyContainers.begin(), mNearbyContainers.end());
+                auto mergedModel = std::make_unique<ContainerItemModel>(sources);
+                mMergedModel = mergedModel.get();
+                model = std::move(mergedModel);
+            }
         }
 
         mDisposeCorpseButton->setVisible(loot);
@@ -231,6 +327,8 @@ namespace MWGui
         mItemView->setModel(nullptr);
         mModel = nullptr;
         mSortModel = nullptr;
+        mMergedModel = nullptr;
+        mNearbyContainers.clear();
     }
 
     void ContainerWindow::onOpen()
@@ -283,9 +381,12 @@ namespace MWGui
                     break;
                 items.emplace_back(item.mBase, static_cast<int>(item.mCount));
             }
-            mwmp::hooks::sendContainerChange(
-                mPtr, mwmp::BaseObjectList::REMOVE, mwmp::BaseObjectList::TAKE_ALL, items);
-            if (items.empty())
+            // (from each container the window shows; the first reply closes it)
+            const auto bySource = splitBySource(items);
+            for (const auto& [container, containerItems] : bySource)
+                mwmp::hooks::sendContainerChange(
+                    container, mwmp::BaseObjectList::REMOVE, mwmp::BaseObjectList::TAKE_ALL, containerItems);
+            if (bySource.empty())
                 MWBase::Environment::get().getWindowManager()->removeGuiMode(GM_Container);
             return;
         }
@@ -459,6 +560,13 @@ namespace MWGui
     {
         checkReferenceAvailable();
 
+        // Isowind: one of those opened with it went away (disabled, deleted): the window shows what's left
+        if (!mPtr.isEmpty()
+            && std::any_of(mNearbyContainers.begin(), mNearbyContainers.end(), [](const MWWorld::Ptr& container) {
+                   return container.mRef->isDeleted() || !container.getRefData().isEnabled();
+               }))
+            setPtr(mPtr);
+
         if (mUpdateNextFrame)
         {
             mItemView->update();
@@ -468,13 +576,48 @@ namespace MWGui
 
     void ContainerWindow::onInventoryUpdate(const MWWorld::Ptr& ptr)
     {
-        if (ptr == mPtr)
+        // (or one of those opened with it)
+        if (ptr == mPtr
+            || std::find(mNearbyContainers.begin(), mNearbyContainers.end(), ptr) != mNearbyContainers.end())
             mUpdateNextFrame = true;
     }
 
     bool ContainerWindow::isOnDragAndDrop() const
     {
         return mDragAndDrop->mIsOnDragAndDrop;
+    }
+
+    void ContainerWindow::onContainerChanged(const MWWorld::Ptr& container)
+    {
+        // (not opened afresh on that one: it may be one of those opened with the window's own; the window may have lost
+        // its own, a body being disposed of)
+        setPtr(mPtr.isEmpty() ? container : mPtr);
+    }
+
+    std::vector<std::pair<MWWorld::Ptr, ContainerWindow::ItemCounts>> ContainerWindow::splitBySource(
+        const ItemCounts& items)
+    {
+        std::vector<std::pair<MWWorld::Ptr, ItemCounts>> bySource;
+        auto add = [&](const MWWorld::Ptr& container, const MWWorld::Ptr& item, int count) {
+            auto found = std::find_if(
+                bySource.begin(), bySource.end(), [&](const auto& entry) { return entry.first == container; });
+            if (found == bySource.end())
+                found = bySource.emplace(bySource.end(), container, ItemCounts());
+            found->second.emplace_back(item, count);
+        };
+
+        for (const auto& [item, count] : items)
+        {
+            if (mMergedModel == nullptr)
+                add(mPtr, item, count);
+            else
+            {
+                // (each container's own item: the server is told how many of it there are)
+                for (const ContainerItemModel::SourceItem& source : mMergedModel->getSourceItems(item, count))
+                    add(source.mContainer, source.mItem, source.mCount);
+            }
+        }
+        return bySource;
     }
 
     bool ContainerWindow::dragItemByPtr(const MWWorld::Ptr& itemPtr, int dragCount)

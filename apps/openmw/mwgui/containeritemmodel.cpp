@@ -64,6 +64,41 @@ namespace MWGui
         mItemSources.emplace_back(source, store.resolveTemporarily());
     }
 
+    ContainerItemModel::ContainerItemModel(const std::vector<MWWorld::Ptr>& itemSources)
+        : mTrading(false)
+    {
+        assert(!itemSources.empty());
+        // Each keeps its own resolution, so each is saved as changed only if it was
+        mItemSources.reserve(itemSources.size());
+        for (const MWWorld::Ptr& source : itemSources)
+        {
+            MWWorld::ContainerStore& store = source.getClass().getContainerStore(source);
+            mItemSources.emplace_back(source, store.resolveTemporarily());
+        }
+    }
+
+    std::vector<ContainerItemModel::SourceItem> ContainerItemModel::getSourceItems(const MWWorld::Ptr& item, int count)
+    {
+        std::vector<SourceItem> result;
+        for (auto& source : mItemSources)
+        {
+            MWWorld::ContainerStore& store = source.first.getClass().getContainerStore(source.first);
+            for (MWWorld::ContainerStoreIterator it = store.begin(); it != store.end() && count > 0; ++it)
+            {
+                if (!stacks(*it, item))
+                    continue;
+                const int fromHere = std::min(count, it->getCellRef().getCount());
+                if (fromHere <= 0)
+                    continue;
+                result.push_back({ source.first, *it, fromHere });
+                count -= fromHere;
+            }
+            if (count <= 0)
+                break;
+        }
+        return result;
+    }
+
     bool ContainerItemModel::allowedToUseItems() const
     {
         if (mItemSources.empty())
@@ -74,6 +109,10 @@ namespace MWGui
 
         // Check if the player is allowed to use items from opened container
         MWBase::MechanicsManager* mm = MWBase::Environment::get().getMechanicsManager();
+        // Isowind: containers opened together (not a merchant's): only if allowed in all of them
+        if (!mTrading)
+            return std::all_of(mItemSources.begin(), mItemSources.end(),
+                [&](const auto& source) { return mm->isAllowedToUse(ptr, source.first, victim); });
         return mm->isAllowedToUse(ptr, mItemSources[0].first, victim);
     }
 
@@ -151,6 +190,9 @@ namespace MWGui
                     int quantity = it->mRef->mRef.getCount(false);
                     // Isowind multiplayer: the server removes it, for everyone, unless this is the container open
                     // here (whose items the server already agreed to hand over, see ContainerWindow)
+                    // (Containers opened with it count as open too: they're only taken from here by a drag
+                    // that starts once the server agreed, see ObjectList::editContainers. Any other way of
+                    // taking from them in multiplayer would need to go through the server first.)
                     if (mwmp::hooks::isMultiplayer() && source.first.isInCell()
                         && !mwmp::hooks::isCurrentContainer(source.first))
                     {
@@ -295,6 +337,24 @@ namespace MWGui
             return true;
 
         MWWorld::Ptr player = MWMechanics::getPlayer();
+
+        // Isowind: from containers opened together, taking from each is judged by whose it is
+        if (!mTrading && mItemSources.size() > 1)
+        {
+            std::vector<SourceItem> sources = getSourceItems(item, count);
+            for (auto it = sources.begin(); it != sources.end();)
+            {
+                // (one crime per container, however many stacks of it there)
+                int taken = 0;
+                auto next = it;
+                for (; next != sources.end() && next->mContainer == it->mContainer; ++next)
+                    taken += next->mCount;
+                MWBase::Environment::get().getMechanicsManager()->itemTaken(player, it->mItem, it->mContainer, taken);
+                it = next;
+            }
+            return true;
+        }
+
         MWBase::Environment::get().getMechanicsManager()->itemTaken(player, item, target, count);
 
         return true;

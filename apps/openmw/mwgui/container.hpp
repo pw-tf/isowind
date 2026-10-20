@@ -1,6 +1,9 @@
 #ifndef MGUI_CONTAINER_H
 #define MGUI_CONTAINER_H
 
+#include <utility>
+#include <vector>
+
 #include "itemmodel.hpp"
 #include "referenceinterface.hpp"
 #include "windowbase.hpp"
@@ -16,6 +19,7 @@ namespace MyGUI
 namespace MWGui
 {
     class ContainerWindow;
+    class ContainerItemModel;
     class ItemView;
     class SortFilterItemModel;
     class ItemTransfer;
@@ -56,14 +60,23 @@ namespace MWGui
         /// Starts dragging this item, once the server has approved it (its index may have changed meanwhile).
         bool dragItemByPtr(const MWWorld::Ptr& itemPtr, int dragCount);
         ItemModel* getModel() { return mModel; }
+        /// The server changed this container, which the window shows: shows the window's containers afresh (the
+        /// one it was opened on, and those opened with it)
+        void onContainerChanged(const MWWorld::Ptr& container);
 
     private:
+        using ItemCounts = std::vector<std::pair<MWWorld::Ptr, int>>;
+
         Misc::NotNullPtr<DragAndDrop> mDragAndDrop;
         Misc::NotNullPtr<ItemTransfer> mItemTransfer;
 
         MWGui::ItemView* mItemView;
         SortFilterItemModel* mSortModel;
         ItemModel* mModel;
+        /// Isowind: containers right by the one opened that open with it, as one (see setPtr), and the model showing
+        /// them all (null when there are none)
+        std::vector<MWWorld::Ptr> mNearbyContainers;
+        ContainerItemModel* mMergedModel;
         int mSelectedItem;
         bool mUpdateNextFrame;
         bool mTreatNextOpenAsLoot;
@@ -79,6 +92,9 @@ namespace MWGui
         void onCloseButtonClicked(MyGUI::Widget* sender);
         void onTakeAllButtonClicked(MyGUI::Widget* sender);
         void onDisposeCorpseButtonClicked(MyGUI::Widget* sender);
+
+        /// Isowind multiplayer: items taken, by the container each comes out of
+        std::vector<std::pair<MWWorld::Ptr, ItemCounts>> splitBySource(const ItemCounts& items);
 
         void onReferenceUnavailable() override;
     };
