@@ -131,9 +131,18 @@ namespace MWMechanics
             auto& prng = MWBase::Environment::get().getWorld()->getPrng();
             if (Misc::Rng::roll0to99(prng) <= x)
             {
-                trap.getCellRef().setTrap(ESM::RefId());
-
-                resultSound = "Disarm Trap";
+                // Isowind multiplayer: the server takes the trap away, for everyone it concerns, and its reply plays
+                // the sound (mwmp::ObjectList::triggerTrapObjects)
+                if (mwmp::hooks::isMultiplayer())
+                {
+                    mwmp::hooks::sendObjectTrap(trap, trap.getRefData().getPosition(), true);
+                    resultSound = {};
+                }
+                else
+                {
+                    trap.getCellRef().setTrap(ESM::RefId());
+                    resultSound = "Disarm Trap";
+                }
                 resultMessage = "#{sTrapSuccess}";
                 mActor.getClass().skillUsageSucceeded(mActor, ESM::Skill::Security, ESM::Skill::Security_DisarmTrap);
             }

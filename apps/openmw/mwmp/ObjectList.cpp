@@ -639,7 +639,9 @@ void ObjectList::lockObjects(MWWorld::CellStore* cellStore)
 
             if (baseObject.lockLevel > 0)
                 ptrFound.getCellRef().lock(baseObject.lockLevel);
-            else
+            // Isowind: only if locked, since unlock() turns the lock level around: the same unlock can come twice
+            // (an MMO server replays each player's locks whenever they load the cell, isowindLocks.lua)
+            else if (ptrFound.getCellRef().isLocked())
                 ptrFound.getCellRef().unlock();
         }
     }
@@ -653,7 +655,8 @@ void ObjectList::triggerTrapObjects(MWWorld::CellStore* cellStore)
 
         MWWorld::Ptr ptrFound = cellStore->searchExact(baseObject.refNum, baseObject.mpNum, mwmp::refId(baseObject.refId));
 
-        if (!ptrFound.isEmpty())
+        // Isowind: one whose trap is already gone has nothing to spring or disarm (an MMO server's replay at cell load)
+        if (!ptrFound.isEmpty() && !ptrFound.getCellRef().getTrap().empty())
         {
             LOG_APPEND(TimedLog::LOG_VERBOSE, "-- Found %s %i-%i", mwmp::idString(ptrFound.getCellRef().getRefId()).c_str(),
                 ptrFound.getCellRef().getMpRefNum(), ptrFound.getCellRef().getMpNum());

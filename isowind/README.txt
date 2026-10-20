@@ -56,7 +56,9 @@ Hosting a server
      (containers, corpses, plants, items lying around) and their own quests, and enemies and NPCs
      come back after they die, players there or not: weak ones after 1.5 minutes, normal ones 5,
      tough ones 15, bosses 20 ("Enemy respawns" speeds that up or slows it down). Plants and ore
-     you harvested grow back for you after 10 minutes; chests don't refill.
+     you harvested grow back for you after 10 minutes; chests don't refill. Locks and traps are
+     yours too: a door or chest you picked or unlocked stays locked for others, and a trap you
+     disarmed or set off is still there for them.
      Quests that count kills (like the Fighters Guild's rats) count the kills you made yourself,
      or your party made; someone else killing them first doesn't take them from you, they come back.
    - PvP (whether players can hurt each other), difficulty and how fast the time of day goes.
@@ -81,8 +83,8 @@ The world never pauses, not even in menus. Saving and loading are off: the serve
 When you die you wake up at the nearest temple.
 
 Parties (MMO servers): players in a party share their quests as on a co-op server - journal,
-topics, quest progress, kill credit and what quests change in the world - while each keeps their
-own loot. Type in the chat:
+topics, quest progress, kill credit and what quests change in the world - and the locks and traps
+they open, from when they joined, while each keeps their own loot. Type in the chat:
    /party invite NAME     invite a player (their name, or the number before it in the player list)
    /party accept          join the party you were invited to (or /party decline)
    /party                 who is in your party
