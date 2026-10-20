@@ -143,6 +143,15 @@ config.synchronizedClientScriptIds = {
     "helsethScript", "KarrodMovement"
 }
 
+-- Isowind MMO mode: the scripts of the game's one-off events, which happen once for each player, and once for the
+-- players near them together (see custom/isowindMmo.lua; MMO mode adds these to synchronizedClientScriptIds for the
+-- server to keep how far each player's got). Co-op mode leaves them as they are: one world, so each event happens once.
+-- Scripts that go by a quest's journal stages don't belong here: they already go by each player's own journal
+config.isowindEventScriptIds = {
+    -- Tarhiel falling from the sky near Seyda Neen (the script is on his journal, on the ground below)
+    "fallingScript"
+}
+
 -- Whether the instanced spawn should be used instead of the noninstanced one
 config.useInstancedSpawn = true
 

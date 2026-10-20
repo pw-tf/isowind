@@ -489,6 +489,9 @@ namespace mwmp::hooks
         const bool finished = actor.getClass().getCreatureStats(actor).isDeathAnimationFinished();
         if (finished && (isLocalActor(actor) || isDedicatedActor(actor)))
             startpoint = 1.f;
+        // Isowind MMO: a one-off event's person this client runs itself, dead where it died for this player
+        if (finished && Main::get().getCellController()->isClientLocalActor(actor))
+            startpoint = 1.f;
         if (isLocalPlayer(actor))
             Main::get().getLocalPlayer()->sendDeath(static_cast<char>(deathState));
         else if (!finished && isLocalActor(actor))
@@ -499,6 +502,9 @@ namespace mwmp::hooks
     {
         if (isLocalActor(actor))
             Main::get().getCellController()->getLocalActor(actor)->creatureStats.mDeathAnimationFinished = true;
+        // Isowind MMO: a one-off event's person this client runs itself died, for this player (the body at rest)
+        if (isMultiplayer() && Main::get().getCellController()->isClientLocalActor(actor))
+            MechanicsHelper::sendClientLocalDeath(actor);
     }
 
     void recordAnimationPlay(const MWWorld::Ptr& actor, std::string_view group, int mode, int count, bool persist)
@@ -1109,6 +1115,9 @@ namespace mwmp::hooks
         CellController* cellController = Main::get().getCellController();
         if (cellController->isSameCell(originalCell, newCell))
             return;
+        // Isowind MMO: a one-off event's person this client runs itself goes where it goes here only
+        if (cellController->isClientLocalActor(actor))
+            return;
 
         BaseActor baseActor;
         baseActor.refNum = actor.getCellRef().getMpRefNum();
@@ -1171,6 +1180,9 @@ namespace mwmp::hooks
     {
         if (!isLoggedIn() || actor.isEmpty() || target.isEmpty() || !actor.isInCell()
             || actor.getCell()->getCell()->isEsm4())
+            return;
+        // Isowind MMO: a one-off event's person this client runs itself has its AI here only
+        if (Main::get().getCellController()->isClientLocalActor(actor))
             return;
         ActorList* actorList = Main::get().getNetworking()->getActorList();
         actorList->reset();

@@ -72,6 +72,7 @@ local function runTests()
     tes3mp.GetTopicChangesSize = function() return #topicChanges end
     tes3mp.GetTopicId = function(pid, i) return topicChanges[i + 1] end
     tes3mp.GetObjectListOrigin = function() return enumerations.packetOrigin.CLIENT_SCRIPT_LOCAL end
+    tes3mp.GetObjectListClientScript = function() return "" end
     WorldInstance.data.isowindParties = nil
     local ENTRY = enumerations.journal.ENTRY
 

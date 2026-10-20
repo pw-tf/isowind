@@ -51,6 +51,7 @@ tes3mp.ReadReceivedObjectList = function() end
 tes3mp.GetObjectListAction = function() return incoming.action end
 tes3mp.GetObjectListContainerSubAction = function() return incoming.subAction or 0 end
 tes3mp.GetObjectListOrigin = function() return incoming.origin or enumerations.packetOrigin.CLIENT_GAMEPLAY end
+tes3mp.GetObjectListClientScript = function() return incoming.script or "" end
 tes3mp.GetObjectListSize = function() return #incoming.objects end
 tes3mp.GetObjectRefNum = function(i) return incoming.objects[i + 1].refNum end
 tes3mp.GetObjectMpNum = function(i) return incoming.objects[i + 1].mpNum end

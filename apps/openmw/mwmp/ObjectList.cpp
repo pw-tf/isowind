@@ -990,6 +990,11 @@ void ObjectList::runConsoleCommands(MWWorld::CellStore* cellStore)
             {
                 LOG_APPEND(TimedLog::LOG_VERBOSE, "-- Running on object %s %i-%i", baseObject.refId.c_str(), baseObject.refNum, baseObject.mpNum);
 
+                // Isowind MMO: not a console command, one of a one-off event's people for this client to run itself
+                if (MechanicsHelper::runClientLocalCommand(
+                        consoleCommand, cellStore, baseObject.refNum, baseObject.mpNum, baseObject.refId))
+                    continue;
+
                 // A cell this client hasn't loaded has its actors as they start anyway
                 if (consoleCommand == "isowind respawn" && cellStore->getState() != MWWorld::CellStore::State_Loaded)
                     continue;
@@ -1004,7 +1009,10 @@ void ObjectList::runConsoleCommands(MWWorld::CellStore* cellStore)
                     // Isowind MMO: not a console command, the server bringing an enemy or NPC back
                     if (consoleCommand == "isowind respawn")
                     {
-                        if (!MechanicsHelper::respawnActor(ptrFound))
+                        // (not one this client runs itself: a one-off event's, each player's own, dead or alive)
+                        if (Main::get().getCellController()->isClientLocalActor(ptrFound))
+                            LOG_APPEND(TimedLog::LOG_INFO, "-- Not respawned here (this client's own)");
+                        else if (!MechanicsHelper::respawnActor(ptrFound))
                             LOG_APPEND(TimedLog::LOG_INFO, "-- Not respawned here (not an actor)");
                         continue;
                     }
