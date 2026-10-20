@@ -40,15 +40,18 @@ namespace mwmp
         mHistory->setNeedKeyFocus(false);
 
         windowState = CHAT_DISABLED;
+        editState = false;
         mCommandLine->setVisible(false);
         delay = 3; // 3 sec.
+        curTime = 0;
     }
 
     void GUIChat::onOpen()
     {
-        // Give keyboard focus to the combo box whenever the console is
-        // turned on
-        setEditState(false);
+        // The input line opens with Enter. Isowind: only closed if it was open, or the keyboard focus would be taken
+        // from a menu's text field whenever a message brings the chat up
+        if (editState)
+            setEditState(false);
 
         if (windowState == CHAT_DISABLED)
             windowState = CHAT_ENABLED;
@@ -56,7 +59,8 @@ namespace mwmp
 
     void GUIChat::onClose()
     {
-        setEditState(false);
+        if (editState)
+            setEditState(false);
     }
 
     bool GUIChat::exit()
@@ -115,9 +119,13 @@ namespace mwmp
 
     void GUIChat::print(const std::string &msg, const std::string &color)
     {
-        if (windowState == CHAT_HIDDENMODE && !isVisible())
+        if (windowState == CHAT_HIDDENMODE)
         {
-            setVisible(true);
+            // Isowind: shown for the whole delay after the latest message (it used to go again the next frame once
+            // it had been shown and hidden once)
+            curTime = 0;
+            if (!isVisible())
+                setVisible(true);
         }
 
         if(msg.size() == 0)
@@ -261,7 +269,7 @@ namespace mwmp
             curTime += dt;
             if (curTime >= delay)
             {
-                setEditState(false);
+                curTime = 0;
                 setVisible(false);
             }
         }

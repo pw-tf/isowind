@@ -74,8 +74,9 @@ server\logs. Keep the same game (co-op or MMO) for a world: an MMO world switche
 what each player looted, so it's all back.
 
 In multiplayer
-Enter          Talk in the chat (with a keyboard; a controller has no button for it for now);
-               F2 hides or shows the chat window.
+Enter          Talk in the chat (with a keyboard; a controller has no button for it for now).
+               The chat shows for a few seconds when a message comes; F2 switches between that,
+               hidden and always shown.
 The world never pauses, not even in menus. Saving and loading are off: the server keeps everything.
 When you die you wake up at the nearest temple.
 
@@ -131,11 +132,13 @@ side by side (the inventory screen, a chest, a shop) the bumpers switch between 
 while the triggers switch the tabs within a window. The right stick pressed in shows an item's info, and in
 the inventory and magic windows Y puts the item or spell on a quick key. In Options the bumpers switch tabs,
 the D-pad steps a pointer through the settings (up / down) and adjusts the one it is on (left / right), and A
-works it. The legend along the bottom of each menu says what the buttons do there. A keyboard appears on the
-screen wherever there is something to type (your name on a server, the chat, a save's name); press Y to bring
-it up if it doesn't. Whether you get these menus or Morrowind's own is decided as the game starts, from
-whether a controller is plugged in (Isowind.exe's launcher and isowind.sh's --controller flag decide too); the
-mouse works in them as well.
+works it. The legend along the bottom of each menu says what the buttons do there. To type something (your
+name, a server's password, a save's, potion's, spell's or class's name, a map note), move onto the box with
+the D-pad - up from the top of the list or the buttons under it - and press X: a keyboard comes up on the
+screen (never by itself). Start or Back puts it away when you are done; in a box of its own (your name, a
+password, a save's name) Start also confirms it. Whether you get these menus or Morrowind's own is decided
+as the game starts, from whether a controller is plugged in (Isowind.exe's launcher and isowind.sh's
+--controller flag decide too); the mouse works in them as well.
 
 The minimap turns so that up on it is up on the screen, and shows other players in multiplayer (as
 does the map). Zoom it with the mouse wheel over it while a menu is open, or in Options > Interface,

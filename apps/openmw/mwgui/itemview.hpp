@@ -36,6 +36,8 @@ namespace MWGui
         void setActiveControllerWindow(bool active);
         int getControllerFocus() { return mControllerFocus; }
         int getItemCount() { return mItemCount; }
+        /// Isowind: D-pad up would leave the top row (it wraps round to the bottom of the column)
+        bool isControllerFocusInTopRow() const { return mItemCount == 0 || mControllerFocus % mRows == 0; }
         void onControllerButton(const unsigned char button);
 
     private:

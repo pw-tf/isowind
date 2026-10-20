@@ -11,7 +11,6 @@
 #include <osgViewer/Viewer>
 
 #include <MyGUI_ClipboardManager.h>
-#include <MyGUI_ComboBox.h>
 #include <MyGUI_EditBox.h>
 #include <MyGUI_FactoryManager.h>
 #include <MyGUI_InputManager.h>
@@ -48,7 +47,6 @@
 
 #include <components/vfs/manager.hpp>
 
-#include <components/widgets/numericeditbox.hpp>
 #include <components/widgets/tags.hpp>
 #include <components/widgets/widgets.hpp>
 
@@ -156,22 +154,6 @@ namespace MWGui
                 default:
                     return nullptr;
             }
-        }
-
-        // Isowind: whether the keyboard on the screen comes up by itself for a widget given the keyboard focus. Only
-        // for a box to type words into: not for a number (the count of items to take or buy is set with the D-pad), a
-        // drop-down list or text that can't be changed. Y still brings it up for those.
-        bool opensOnScreenKeyboard(MyGUI::Widget* widget)
-        {
-            if (LuaUi::WidgetExtension* luaWidget = dynamic_cast<LuaUi::WidgetExtension*>(widget))
-                return luaWidget->isTextInput();
-            MyGUI::EditBox* edit = widget->castType<MyGUI::EditBox>(false);
-            if (!edit || edit->getEditReadOnly() || edit->getEditStatic()
-                || widget->castType<Gui::NumericEditBox>(false))
-                return false;
-            if (MyGUI::ComboBox* comboBox = widget->castType<MyGUI::ComboBox>(false))
-                return !comboBox->getComboModeDrop();
-            return true;
         }
     }
 
@@ -2042,15 +2024,17 @@ namespace MWGui
                 capturesInput = widget->castType<MyGUI::EditBox>(false);
         }
 
-        // Isowind: the keyboard on the screen comes up for a text box when a controller is in use, and goes away
-        // with the focus
-        if (mOnScreenKeyboard)
+        // Isowind: the keyboard on the screen (brought up with X, never by itself) goes away with the focus; the
+        // button legend shows X for it when the controller selection is on a text field
+        if (mOnScreenKeyboard && !capturesInput)
+            mOnScreenKeyboard->close();
+        static bool updatingLegend = false;
+        if (Settings::gui().mControllerMenus && isGuiMode() && !updatingLegend)
         {
-            if (!capturesInput)
-                mOnScreenKeyboard->close();
-            else if (Settings::gui().mControllerMenus && isGuiMode() && mOnScreenKeyboard->getTarget() != widget
-                && MWBase::Environment::get().getInputManager()->joystickLastUsed() && opensOnScreenKeyboard(widget))
-                mOnScreenKeyboard->open();
+            // Not again for a focus change made while the legend is brought up to date
+            updatingLegend = true;
+            updateControllerButtonsOverlay();
+            updatingLegend = false;
         }
 
         // The SDL_IsTextInputActive() check helps to avoid duplicate calls in SDL2.
@@ -2958,9 +2942,9 @@ namespace MWGui
 
         // setButtons will handle setting visibility based on if any buttons are defined.
         ControllerButtons buttons = *topWin->getControllerButtons();
-        // Isowind: Y brings up the keyboard on the screen for a text box being typed into
-        if (buttons.mY.empty() && SDL_IsTextInputActive() && !isOnScreenKeyboardVisible())
-            buttons.mY = "#{OMWEngine:Keyboard}";
+        // Isowind: X brings the keyboard on the screen up for the text field the controller selection is on
+        if (!isOnScreenKeyboardVisible() && topWin->getControllerTextField())
+            buttons.mX = "#{OMWEngine:Keyboard}";
         mControllerButtonsOverlay->setButtons(&buttons);
         if (getMode() == GM_Inventory)
         {

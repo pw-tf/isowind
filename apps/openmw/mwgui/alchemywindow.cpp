@@ -58,6 +58,8 @@ namespace MWGui
         getWidget(mIncreaseButton, "IncreaseButton");
         getWidget(mDecreaseButton, "DecreaseButton");
         getWidget(mNameEdit, "NameEdit");
+        // Isowind: the keyboard on the screen's Done only puts it away here (Create brews)
+        mNameEdit->setUserString("KeyboardDone", "Close");
         getWidget(mItemView, "ItemView");
         getWidget(mFilterValue, "FilterValue");
         getWidget(mFilterType, "FilterType");
@@ -308,7 +310,25 @@ namespace MWGui
         MWBase::Environment::get().getWindowManager()->setKeyFocusWidget(mNameEdit);
 
         if (Settings::gui().mControllerMenus)
+        {
             mItemView->setActiveControllerWindow(true);
+            // Isowind: the selection starts on the ingredients
+            mNameSelected = false;
+            setTextFieldSelected(mNameEdit, false);
+        }
+    }
+
+    MyGUI::Widget* AlchemyWindow::getControllerTextField()
+    {
+        return mNameSelected ? mNameEdit : nullptr;
+    }
+
+    void AlchemyWindow::setNameSelected(bool selected)
+    {
+        mNameSelected = selected;
+        setTextFieldSelected(mNameEdit, selected);
+        mItemView->setActiveControllerWindow(!selected);
+        MWBase::Environment::get().getWindowManager()->updateControllerButtonsOverlay();
     }
 
     void AlchemyWindow::onIngredientSelected(MyGUI::Widget* sender)
@@ -586,6 +606,23 @@ namespace MWGui
             return true;
         }
 
+        // Isowind: D-pad up from the top of the ingredients selects the potion's name, for X to bring the keyboard on
+        // the screen up (ControllerManager), and down goes back; the D-pad and A do nothing else on the name
+        if (mNameSelected)
+        {
+            if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_DOWN)
+                setNameSelected(false);
+            if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_UP || arg.button == SDL_CONTROLLER_BUTTON_DPAD_DOWN
+                || arg.button == SDL_CONTROLLER_BUTTON_DPAD_LEFT || arg.button == SDL_CONTROLLER_BUTTON_DPAD_RIGHT
+                || arg.button == SDL_CONTROLLER_BUTTON_A || arg.button == SDL_CONTROLLER_BUTTON_RIGHTSTICK)
+                return true;
+        }
+        else if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_UP && mItemView->isControllerFocusInTopRow())
+        {
+            setNameSelected(true);
+            return true;
+        }
+
         if (arg.button == SDL_CONTROLLER_BUTTON_B)
         {
             // Remove active ingredients or close the window, starting with right-most slot.
@@ -613,7 +650,9 @@ namespace MWGui
             }
             else
             {
-                // Open the combo box to choose the a filter
+                // Open the combo box to choose the a filter (Isowind: the selection back on the ingredients)
+                if (mNameSelected)
+                    setNameSelected(false);
                 MWBase::Environment::get().getWindowManager()->setKeyFocusWidget(mFilterValue);
                 MWBase::Environment::get().getWindowManager()->injectKeyPress(MyGUI::KeyCode::ArrowDown, 0, false);
             }

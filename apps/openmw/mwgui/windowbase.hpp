@@ -10,12 +10,23 @@ namespace MWWorld
     class Ptr;
 }
 
+namespace MyGUI
+{
+    class TextBox;
+}
+
 namespace MWGui
 {
     class DragAndDrop;
 
     size_t wrap(size_t index, size_t max, int delta);
     void setControllerFocus(const std::vector<MyGUI::Button*>& buttons, size_t index, bool selected);
+
+    /// Isowind: a box to type words into, which X brings the keyboard on the screen up for: not a number (the count
+    /// of items to take or buy is set with the D-pad), a drop-down list or text that can't be changed
+    bool isTextField(MyGUI::Widget* widget);
+    /// Isowind: a text field the controller has moved onto, lit as the controller's selection is elsewhere
+    void setTextFieldSelected(MyGUI::TextBox* field, bool selected);
 
     struct ControllerButtons
     {
@@ -88,6 +99,10 @@ namespace MWGui
         virtual bool onControllerButtonEvent(const SDL_ControllerButtonEvent& arg) { return true; }
         virtual bool onControllerThumbstickEvent(const SDL_ControllerAxisEvent& arg) { return false; }
         virtual void setActiveControllerWindow(bool active);
+        /// Isowind: the text field the controller selection is on, which X brings the keyboard on the screen up for
+        /// (nullptr if none). By default the text field in this window with the keyboard focus; windows whose text
+        /// field keeps the focus while the controller works elsewhere say when it is selected.
+        virtual MyGUI::Widget* getControllerTextField();
 
     protected:
         virtual void onTitleDoubleClicked();

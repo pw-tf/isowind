@@ -284,15 +284,6 @@ namespace MWInput
 
         if (Settings::gui().mControllerMenus)
         {
-            // Isowind: Y brings up the keyboard on the screen for a text box being typed into
-            if (arg.button == SDL_CONTROLLER_BUTTON_Y && SDL_IsTextInputActive()
-                && !winMgr->isOnScreenKeyboardVisible())
-            {
-                winMgr->openOnScreenKeyboard();
-                if (winMgr->isOnScreenKeyboardVisible())
-                    return true;
-            }
-
             // Update cursor state.
             bool treatAsMouse = winMgr->getCursorVisible();
             winMgr->setCursorActive(false);
@@ -319,6 +310,23 @@ namespace MWInput
                 {
                     winMgr->cycleActiveControllerWindow(arg.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
                     return true;
+                }
+
+                // Isowind: X brings the keyboard on the screen up for the text field the selection is on (instead of
+                // what X does in that window); it never comes up by itself
+                if (arg.button == SDL_CONTROLLER_BUTTON_X && !winMgr->isOnScreenKeyboardVisible())
+                {
+                    if (MyGUI::Widget* textField = topWin->getControllerTextField())
+                    {
+                        if (MyGUI::InputManager::getInstance().getKeyFocusWidget() != textField)
+                            winMgr->setKeyFocusWidget(textField);
+                        winMgr->openOnScreenKeyboard();
+                        if (winMgr->isOnScreenKeyboardVisible())
+                        {
+                            winMgr->playSound(ESM::RefId::stringRefId("Menu Click"));
+                            return true;
+                        }
+                    }
                 }
 
                 if (topWin->onControllerButtonEvent(arg))

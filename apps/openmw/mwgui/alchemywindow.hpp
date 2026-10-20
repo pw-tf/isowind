@@ -33,6 +33,8 @@ namespace MWGui
 
         std::string_view getWindowIdForLua() const override { return "Alchemy"; }
 
+        MyGUI::Widget* getControllerTextField() override;
+
     private:
         static const float sCountChangeInitialPause; // in seconds
         static const float sCountChangeInterval; // in seconds
@@ -102,6 +104,11 @@ namespace MWGui
 
         bool onControllerButtonEvent(const SDL_ControllerButtonEvent& arg) override;
         void filterListButtonHandler(const SDL_ControllerButtonEvent& arg);
+
+        // Isowind: the controller selection is on the potion's name (D-pad up from the top of the ingredients), for X
+        // to bring the keyboard on the screen up
+        bool mNameSelected = false;
+        void setNameSelected(bool selected);
     };
 }
 

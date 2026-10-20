@@ -1605,6 +1605,8 @@ namespace MWGui
         getWidget(mCancelButton, "CancelButton");
         getWidget(mDeleteButton, "DeleteButton");
         getWidget(mTextEdit, "TextEdit");
+        // Isowind: the keyboard on the screen's Done only puts it away here (no new line; OK keeps the note)
+        mTextEdit->setUserString("KeyboardDone", "Close");
 
         mCancelButton->eventMouseButtonClick += MyGUI::newDelegate(this, &EditNoteDialog::onCancelButtonClicked);
         mOkButton->eventMouseButtonClick += MyGUI::newDelegate(this, &EditNoteDialog::onOkButtonClicked);
@@ -1646,8 +1648,42 @@ namespace MWGui
         if (Settings::gui().mControllerMenus)
         {
             mControllerFocus = getDeleteButtonShown() ? 1 : 0;
-            mOkButton->setStateSelected(true);
-            mCancelButton->setStateSelected(false);
+            // Isowind: the selection starts on the text
+            mTextSelected = true;
+            setTextFieldSelected(mTextEdit, true);
+            highlightButtons();
+            MWBase::Environment::get().getWindowManager()->updateControllerButtonsOverlay();
+        }
+    }
+
+    MyGUI::Widget* EditNoteDialog::getControllerTextField()
+    {
+        return mTextSelected ? mTextEdit : nullptr;
+    }
+
+    void EditNoteDialog::setTextSelected(bool selected)
+    {
+        if (selected == mTextSelected)
+            return;
+        mTextSelected = selected;
+        setTextFieldSelected(mTextEdit, selected);
+        highlightButtons();
+        MWBase::Environment::get().getWindowManager()->updateControllerButtonsOverlay();
+    }
+
+    void EditNoteDialog::highlightButtons()
+    {
+        const bool lit = !mTextSelected;
+        if (getDeleteButtonShown())
+        {
+            mDeleteButton->setStateSelected(lit && mControllerFocus == 0);
+            mOkButton->setStateSelected(lit && mControllerFocus == 1);
+            mCancelButton->setStateSelected(lit && mControllerFocus == 2);
+        }
+        else
+        {
+            mOkButton->setStateSelected(lit && mControllerFocus == 0);
+            mCancelButton->setStateSelected(lit && mControllerFocus == 1);
         }
     }
 
@@ -1677,6 +1713,22 @@ namespace MWGui
 
     bool EditNoteDialog::onControllerButtonEvent(const SDL_ControllerButtonEvent& arg)
     {
+        // Isowind: D-pad down goes from the text (X brings the keyboard on the screen up for it: ControllerManager) to
+        // the buttons, up back; A on the text is OK
+        if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_UP || arg.button == SDL_CONTROLLER_BUTTON_DPAD_DOWN)
+        {
+            setTextSelected(arg.button == SDL_CONTROLLER_BUTTON_DPAD_UP);
+            return true;
+        }
+        if (mTextSelected)
+        {
+            if (arg.button == SDL_CONTROLLER_BUTTON_A)
+                onOkButtonClicked(mOkButton);
+            else if (arg.button == SDL_CONTROLLER_BUTTON_B)
+                onCancelButtonClicked(mCancelButton);
+            return true;
+        }
+
         if (arg.button == SDL_CONTROLLER_BUTTON_A)
         {
             if (getDeleteButtonShown())

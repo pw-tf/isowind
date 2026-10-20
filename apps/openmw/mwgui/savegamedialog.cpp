@@ -63,6 +63,11 @@ namespace MWGui
         mSaveList->eventKeyButtonPressed += MyGUI::newDelegate(this, &SaveGameDialog::onKeyButtonPressed);
         mSaveNameEdit->eventEditSelectAccept += MyGUI::newDelegate(this, &SaveGameDialog::onEditSelectAccept);
         mSaveNameEdit->eventEditTextChange += MyGUI::newDelegate(this, &SaveGameDialog::onSaveNameChanged);
+        if (Settings::gui().mControllerMenus)
+        {
+            mSaveNameEdit->eventKeySetFocus += MyGUI::newDelegate(this, &SaveGameDialog::onSaveNameFocus);
+            mSaveNameEdit->eventKeyLostFocus += MyGUI::newDelegate(this, &SaveGameDialog::onSaveNameFocusLost);
+        }
 
         // To avoid accidental deletions
         mDeleteButton->setNeedKeyFocus(false);
@@ -527,6 +532,16 @@ namespace MWGui
         mScreenshot->setRenderItemTexture(mScreenshotTexture.get());
     }
 
+    void SaveGameDialog::onSaveNameFocus(MyGUI::Widget* /*sender*/, MyGUI::Widget* /*other*/)
+    {
+        setTextFieldSelected(mSaveNameEdit, true);
+    }
+
+    void SaveGameDialog::onSaveNameFocusLost(MyGUI::Widget* /*sender*/, MyGUI::Widget* /*other*/)
+    {
+        setTextFieldSelected(mSaveNameEdit, false);
+    }
+
     ControllerButtons* SaveGameDialog::getControllerButtons()
     {
         mControllerButtons.mY = mSaving ? "" : "#{OMWEngine:LoadingSelectCharacter}";
@@ -558,8 +573,17 @@ namespace MWGui
         else if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_UP)
         {
             MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
-            winMgr->setKeyFocusWidget(mSaveList);
-            winMgr->injectKeyPress(MyGUI::KeyCode::ArrowUp, 0, false);
+            // Isowind: up from the top of the list, the save's name (for X to bring the keyboard on the screen up)
+            const size_t index = mSaveList->getIndexSelected();
+            if (mSaving
+                && (MyGUI::InputManager::getInstance().getKeyFocusWidget() == mSaveNameEdit || index == 0
+                    || index == MyGUI::ITEM_NONE))
+                winMgr->setKeyFocusWidget(mSaveNameEdit);
+            else
+            {
+                winMgr->setKeyFocusWidget(mSaveList);
+                winMgr->injectKeyPress(MyGUI::KeyCode::ArrowUp, 0, false);
+            }
         }
         else if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_DOWN)
         {
