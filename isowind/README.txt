@@ -104,6 +104,8 @@ Left click        Attack / cast when ready, otherwise use whatever is under the 
                   (doors, people, chests, items).
 Right click       Power attack: your weapon's strongest attack type.
 E                 Use what is under the cursor, or the nearest thing in front of you.
+                  A locked door or chest you have no key to: E (X on a controller) has a go at picking
+                  the lock if you carry a lockpick - the one in your hand, else your best one.
 Space             Jump
 F / R             Ready weapon / ready magic
 Tab               Inventory
