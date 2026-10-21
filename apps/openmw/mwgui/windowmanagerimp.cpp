@@ -2024,15 +2024,17 @@ namespace MWGui
                 capturesInput = widget->castType<MyGUI::EditBox>(false);
         }
 
-        // Isowind: the keyboard on the screen comes up for a text box when a controller is in use, and goes away
-        // with the focus
-        if (mOnScreenKeyboard)
+        // Isowind: the keyboard on the screen (brought up with X, never by itself) goes away with the focus; the
+        // button legend shows X for it when the controller selection is on a text field
+        if (mOnScreenKeyboard && !capturesInput)
+            mOnScreenKeyboard->close();
+        static bool updatingLegend = false;
+        if (Settings::gui().mControllerMenus && isGuiMode() && !updatingLegend)
         {
-            if (!capturesInput)
-                mOnScreenKeyboard->close();
-            else if (Settings::gui().mControllerMenus && isGuiMode() && mOnScreenKeyboard->getTarget() != widget
-                && MWBase::Environment::get().getInputManager()->joystickLastUsed())
-                mOnScreenKeyboard->open();
+            // Not again for a focus change made while the legend is brought up to date
+            updatingLegend = true;
+            updateControllerButtonsOverlay();
+            updatingLegend = false;
         }
 
         // The SDL_IsTextInputActive() check helps to avoid duplicate calls in SDL2.
@@ -2940,9 +2942,9 @@ namespace MWGui
 
         // setButtons will handle setting visibility based on if any buttons are defined.
         ControllerButtons buttons = *topWin->getControllerButtons();
-        // Isowind: Y brings up the keyboard on the screen for a text box being typed into
-        if (buttons.mY.empty() && SDL_IsTextInputActive() && !isOnScreenKeyboardVisible())
-            buttons.mY = "#{OMWEngine:Keyboard}";
+        // Isowind: X brings the keyboard on the screen up for the text field the controller selection is on
+        if (!isOnScreenKeyboardVisible() && topWin->getControllerTextField())
+            buttons.mX = "#{OMWEngine:Keyboard}";
         mControllerButtonsOverlay->setButtons(&buttons);
         if (getMode() == GM_Inventory)
         {

@@ -1,6 +1,8 @@
 # Assemble the Isowind package into <root>\dist\Isowind and zip it as <root>\dist\Isowind.zip, <root> being the folder
 # the repository is in (the bundled mods are there too, in bundled-mods). Run after building OpenMW (openmw,
 # openmw-launcher, openmw-wizard) and Isowind.exe; build.ps1 beside this script does all of that and then this.
+# Packaging again keeps the test characters in dist\Isowind (the server's data) and backs them up in <root>\backups
+# first; the zip is always clean.
 
 $ErrorActionPreference = 'Stop'
 $src = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path   # the repository
@@ -15,6 +17,48 @@ function Mirror($from, $to, [string[]]$extra = @()) {
     # robocopy: exit codes below 8 mean success; a file in use (the game running from dist) fails after two retries
     & robocopy $from $to /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS /NP @extra | Out-Null
     if ($LASTEXITCODE -ge 8) { throw "robocopy $from -> $to failed ($LASTEXITCODE)" }
+}
+
+# Copies only the files $to doesn't have yet (robocopy skips those changed, newer or older there), deleting nothing
+function CopyMissing($from, $to) {
+    & robocopy $from $to /E /XC /XN /XO /R:2 /W:2 /NFL /NDL /NJH /NJS /NP | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw "robocopy $from -> $to failed ($LASTEXITCODE)" }
+}
+
+Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+
+# Backup of what testing made: the server's saved players, cells and world and the host's settings, which the package
+# folder keeps (below), and the single-player saves in Documents\My Games\OpenMW (OpenMW's user data; packaging never
+# touches them). Zipped into <root>\backups\isowind-data-<date>-<time>.zip all the same, the last five kept; not while
+# there is nothing yet but the server's defaults.
+$backups = Join-Path $root 'backups'
+$serverData = Join-Path $dist 'server\CoreScripts\data'
+$backupFrom = [ordered]@{ 'server/CoreScripts/data' = $serverData }   # folder in the zip = folder here
+$documents = [Environment]::GetFolderPath('MyDocuments')
+if ($documents) { $backupFrom['saves'] = Join-Path $documents 'My Games\OpenMW\saves' }
+$backup = @()
+foreach ($name in $backupFrom.Keys) {
+    if (-not (Test-Path $backupFrom[$name])) { continue }
+    $base = (Get-Item $backupFrom[$name] -Force).FullName
+    $backup += @(Get-ChildItem $base -Recurse -File -Force | ForEach-Object {
+        [pscustomobject]@{ File = $_.FullName; Entry = "$name/" + $_.FullName.Substring($base.Length + 1).Replace('\', '/') }
+    })
+}
+$hostSettings = Join-Path $dist 'server\tes3mp-server.cfg'
+if (Test-Path $hostSettings) { $backup += [pscustomobject]@{ File = $hostSettings; Entry = 'server/tes3mp-server.cfg' } }
+$defaults = 'banlist.json', 'requiredDataFiles.json' | ForEach-Object { "server/CoreScripts/data/$_" }
+if ($backup | Where-Object { $_.Entry -notin $defaults -and $_.Entry -notlike '*/.gitkeep' }) {
+    New-Item -ItemType Directory -Force $backups | Out-Null
+    $backupZip = Join-Path $backups ('isowind-data-{0:yyyyMMdd-HHmmss}.zip' -f (Get-Date))
+    $archive = [IO.Compression.ZipFile]::Open($backupZip, 'Create')
+    try {
+        foreach ($file in $backup) {
+            [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $file.File, $file.Entry, 'Optimal') | Out-Null
+        }
+    } finally { $archive.Dispose() }
+    Get-ChildItem $backups -Filter 'isowind-data-*.zip' | Where-Object { $_.Name -match '^isowind-data-\d{8}-\d{6}\.zip$' } |
+        Sort-Object Name -Descending | Select-Object -Skip 5 | Remove-Item -Force
+    "Backup: $backupZip"
 }
 
 # Engine: the build output (OpenMW, its launcher and wizard, libraries, resources) with this project's shaders and
@@ -42,10 +86,15 @@ foreach ($look in 'pixelart', 'normal') {
 }
 
 # Multiplayer server (engine\tes3mp-server.exe, started from here by Isowind.exe's "Host a server"): its settings, and
-# TES3MP's CoreScripts with Isowind's changes, without anyone's saved players or world.
+# TES3MP's CoreScripts with Isowind's changes. What hosting from the package made is the host's and stays, so a rebuild
+# keeps the test characters: the saved players, cells and world in CoreScripts\data (/XD: neither copied nor cleared
+# by /MIR) and tes3mp-server.cfg. The zip leaves them out (below); the logs go.
 $server = Join-Path $dist 'server'
-# (/MIR also clears what testing the package left: saved players, the world; its logs go too)
-Mirror (Join-Path $isowind 'server\CoreScripts') (Join-Path $server 'CoreScripts')
+Mirror (Join-Path $isowind 'server\CoreScripts') (Join-Path $server 'CoreScripts') @('/XD', 'data')
+# Of the repository's data, what the folder doesn't have yet (the empty folders, the ban list), and the plugin list
+# always, as it goes with the bundled mods
+CopyMissing (Join-Path $isowind 'server\CoreScripts\data') $serverData
+Copy-Item (Join-Path $isowind 'server\CoreScripts\data\requiredDataFiles.json') $serverData -Force
 if (Test-Path (Join-Path $server 'logs')) { Remove-Item -Recurse -Force (Join-Path $server 'logs') }
 Copy-Item (Join-Path $isowind 'server\tes3mp-server-default.cfg') $server -Force
 
@@ -101,21 +150,35 @@ The top-down mod (Lua) and shaders are in the mod and pixelart folders as they a
 "@ | Set-Content -Encoding utf8 (Join-Path $source 'README.txt')
 
 # Zip: only what the package is made of, under an Isowind folder (not whatever else ended up in dist\Isowind, such
-# as a copy unzipped there to play).
+# as a copy unzipped there to play, or what playing and hosting from it left: the launcher's last choices in
+# profiles\, the host's tes3mp-server.cfg, crash dumps in server\).
 $zip = Join-Path $root 'dist\Isowind.zip'
 if (Test-Path $zip) { Remove-Item $zip -Force }
-Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+# The server's data from the repository as git has it (the empty folders, the ban list, the plugin list), not the
+# package folder's, which has the players, cells and world of whoever tested it
+$cleanData = @(& git -C $src ls-files -- 'isowind/server/CoreScripts/data')
+if ($LASTEXITCODE -ne 0 -or $cleanData.Count -eq 0) {
+    $repoData = Join-Path $isowind 'server\CoreScripts\data'
+    Write-Warning "git couldn't list the server's data files: the zip takes the .gitkeep files and data\*.json from $repoData"
+    $cleanData = @(Get-ChildItem $repoData -Recurse -File -Force |
+        Where-Object { $_.Name -eq '.gitkeep' -or ($_.DirectoryName -eq $repoData -and $_.Extension -eq '.json') } |
+        ForEach-Object { 'isowind/server/CoreScripts/data/' + $_.FullName.Substring($repoData.Length + 1).Replace('\', '/') })
+}
 $archive = [IO.Compression.ZipFile]::Open($zip, 'Create')
 try {
-    foreach ($item in 'engine', 'licenses', 'mod', 'mods', 'pixelart', 'profiles', 'server', 'source', 'Isowind.exe', 'README.txt') {
+    foreach ($item in 'engine', 'licenses', 'mod', 'mods', 'pixelart', 'profiles\pixelart', 'profiles\normal',
+        'server\CoreScripts', 'server\tes3mp-server-default.cfg', 'source', 'Isowind.exe', 'README.txt') {
         $path = Join-Path $dist $item
         $files = if (Test-Path $path -PathType Container) { Get-ChildItem $path -Recurse -File } else { Get-Item $path }
         foreach ($file in $files) {
             $entry = 'Isowind/' + $file.FullName.Substring($dist.Length + 1).Replace('\', '/')
-            # A host's own choices (Host a server) stay theirs
-            if ($entry -eq 'Isowind/server/tes3mp-server.cfg') { continue }
+            if ($entry -like 'Isowind/server/CoreScripts/data/*') { continue }
             [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $file.FullName, $entry, 'Optimal') | Out-Null
         }
+    }
+    foreach ($file in $cleanData) {
+        $entry = 'Isowind/server/' + $file.Substring('isowind/server/'.Length)
+        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, (Join-Path $src $file), $entry, 'Optimal') | Out-Null
     }
 } finally { $archive.Dispose() }
 "Package: $dist"

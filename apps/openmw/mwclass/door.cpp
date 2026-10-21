@@ -37,6 +37,7 @@
 #include "../mwrender/vismask.hpp"
 
 #include "../mwmechanics/actorutil.hpp"
+#include "../mwmechanics/security.hpp"
 
 #include "classmodel.hpp"
 #include "nameorid.hpp"
@@ -254,6 +255,10 @@ namespace MWClass
         }
         else
         {
+            // Isowind: the player has a go at picking it instead, with a lockpick they carry (in top-down there is no
+            // crosshair to attack the lock under)
+            if (std::unique_ptr<MWWorld::Action> action = MWMechanics::pickLockOnActivation(ptr, actor))
+                return action;
             // locked, and we can't open.
             std::unique_ptr<MWWorld::Action> action = std::make_unique<MWWorld::FailedAction>(std::string_view{}, ptr);
             action->setSound(lockedSound);

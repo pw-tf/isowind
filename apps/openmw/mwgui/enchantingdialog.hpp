@@ -35,6 +35,8 @@ namespace MWGui
 
         std::string_view getWindowIdForLua() const override { return "EnchantingDialog"; }
 
+        MyGUI::Widget* getControllerTextField() override { return getSelectedNameField(); }
+
     protected:
         void onReferenceUnavailable() override;
         void notifyEffectsChanged() override;

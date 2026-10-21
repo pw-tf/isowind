@@ -171,7 +171,6 @@
 	</Control>
 	<Control name="41" autoChangeDirectionOnLimitsAfterStop="false" autoReverseToInitialValue="true" initialValue="0" stepSize="MAX" stepsPerSeconds="MAX">
 		<KeyBinder key="58" direction="INCREASE" />
-		<JoystickButtonBinder button="13" direction="INCREASE" deviceId="1" />
 		<Channel number="41" direction="DIRECT" percentage="1" />
 	</Control>
 	<Control name="42" autoChangeDirectionOnLimitsAfterStop="false" autoReverseToInitialValue="true" initialValue="0" stepSize="MAX" stepsPerSeconds="MAX">

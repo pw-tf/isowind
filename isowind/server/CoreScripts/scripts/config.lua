@@ -49,12 +49,11 @@ config.defaultTimeTable = { year = 427, month = 7, day = 16, hour = 9,
     daysPassed = 1, dayTimeScale = 30, nightTimeScale = 40 }
 
 -- The chat window instructions that show up when players join the server
-config.chatWindowInstructions = color.White .. "Use " .. color.Yellow .. "Y" .. color.White .. " by default to chat or change it" ..
-    " from your client config.\nType in " .. color.Yellow .. "/help" .. color.White .. " to see the commands" ..
+config.chatWindowInstructions = color.White .. "Use " .. color.Yellow .. "Enter" .. color.White .. " to chat." ..
+    "\nType in " .. color.Yellow .. "/help" .. color.White .. " to see the commands" ..
     " available to you.\nType in " .. color.Yellow .. "/invite <pid>" .. color.White .. " to invite a player to become " ..
     "your ally so their followers don't react to your friendly fire.\nUse " .. color.Yellow .. "F2" .. color.White ..
-    " by default to hide the chat window or use the " .. color.Yellow .. "Chat Window Mode" .. color.White .. " button from " ..
-    "your left controller menu if you're in VR.\n"
+    " to switch the chat window between showing when a message comes, hidden and always shown.\n"
 
 -- The startup scripts instructions that show up when the startup scripts have not been run yet
 config.startupScriptsInstructions = color.Red .. "Warning: " .. color.White .. " For some actors and objects to have their correct" ..
@@ -142,6 +141,15 @@ config.synchronizedClientScriptIds = {
     "SothaLever9", "SothaLever10", "SothaLever11", "SothaOilLever", "LocalState",
     -- quest stages and timers
     "helsethScript", "KarrodMovement"
+}
+
+-- Isowind MMO mode: the scripts of the game's one-off events, which happen once for each player, and once for the
+-- players near them together (see custom/isowindMmo.lua; MMO mode adds these to synchronizedClientScriptIds for the
+-- server to keep how far each player's got). Co-op mode leaves them as they are: one world, so each event happens once.
+-- Scripts that go by a quest's journal stages don't belong here: they already go by each player's own journal
+config.isowindEventScriptIds = {
+    -- Tarhiel falling from the sky near Seyda Neen (the script is on his journal, on the ground below)
+    "fallingScript"
 }
 
 -- Whether the instanced spawn should be used instead of the noninstanced one

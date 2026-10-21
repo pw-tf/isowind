@@ -222,6 +222,7 @@ namespace MWGui
         EventHandle_Void eventOkClicked;
 
         ControllerButtons* getControllerButtons() override;
+        MyGUI::Widget* getControllerTextField() override;
 
     private:
         void onCancelButtonClicked(MyGUI::Widget* sender);
@@ -235,6 +236,11 @@ namespace MWGui
 
         bool onControllerButtonEvent(const SDL_ControllerButtonEvent& arg) override;
         size_t mControllerFocus = 0;
+        // Isowind: the controller selection is on the note's text (the buttons below it with D-pad down), for X to
+        // bring the keyboard on the screen up
+        bool mTextSelected = false;
+        void setTextSelected(bool selected);
+        void highlightButtons();
     };
 
     class MapWindow : public MWGui::WindowPinnableBase, public LocalMapBase, public NoDrop

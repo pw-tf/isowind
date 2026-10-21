@@ -1,6 +1,8 @@
 #ifndef OPENMW_CELLCONTROLLER_HPP
 #define OPENMW_CELLCONTROLLER_HPP
 
+#include <set>
+
 #include "Cell.hpp"
 #include "ActorList.hpp"
 #include "LocalActor.hpp"
@@ -57,6 +59,13 @@ namespace mwmp
         virtual DedicatedActor *getDedicatedActor(MWWorld::Ptr ptr);
         virtual DedicatedActor *getDedicatedActor(int refNum, int mpNum);
 
+        // Isowind MMO: actors this client runs itself whoever has authority over their cell, sending nothing about
+        // them and ignoring what others send (a one-off event's people, each player's own: "isowind local" from the
+        // server, see MechanicsHelper::runClientLocalCommand). They stay so for the session.
+        void setClientLocalActor(int refNum, int mpNum);
+        bool isClientLocalActor(const MWWorld::Ptr& ptr);
+        bool isClientLocalActor(int refNum, int mpNum);
+
         std::string generateMapIndex(int refNumindex, int mpNum);
         std::string generateMapIndex(MWWorld::Ptr ptr);
         std::string generateMapIndex(mwmp::BaseActor baseActor);
@@ -81,6 +90,7 @@ namespace mwmp
         static std::map<std::string, std::string> localActorsToCells;
         static std::map<std::string, std::string> dedicatedActorsToCells;
         static std::map<std::string, unsigned int> queuedDeathStates;
+        static std::set<std::string> clientLocalActors;
     };
 }
 

@@ -56,7 +56,9 @@ Hosting a server
      (containers, corpses, plants, items lying around) and their own quests, and enemies and NPCs
      come back after they die, players there or not: weak ones after 1.5 minutes, normal ones 5,
      tough ones 15, bosses 20 ("Enemy respawns" speeds that up or slows it down). Plants and ore
-     you harvested grow back for you after 10 minutes; chests don't refill.
+     you harvested grow back for you after 10 minutes; chests don't refill. Locks and traps are
+     yours too: a door or chest you picked or unlocked stays locked for others, and a trap you
+     disarmed or set off is still there for them.
      Quests that count kills (like the Fighters Guild's rats) count the kills you made yourself,
      or your party made; someone else killing them first doesn't take them from you, they come back.
    - PvP (whether players can hurt each other), difficulty and how fast the time of day goes.
@@ -74,20 +76,21 @@ server\logs. Keep the same game (co-op or MMO) for a world: an MMO world switche
 what each player looted, so it's all back.
 
 In multiplayer
-Enter          Talk in the chat (D-pad left on a controller, which brings up a keyboard on the screen);
-               F2 hides or shows the chat window.
+Enter          Talk in the chat (with a keyboard; a controller has no button for it for now).
+               The chat shows for a few seconds when a message comes; F2 switches between that,
+               hidden and always shown.
 The world never pauses, not even in menus. Saving and loading are off: the server keeps everything.
 When you die you wake up at the nearest temple.
 
 Parties (MMO servers): players in a party share their quests as on a co-op server - journal,
-topics, quest progress, kill credit and what quests change in the world - while each keeps their
-own loot. Type in the chat:
+topics, quest progress, kill credit and what quests change in the world - and the locks and traps
+they open, from when they joined, while each keeps their own loot. Type in the chat:
    /party invite NAME     invite a player (their name, or the number before it in the player list)
    /party accept          join the party you were invited to (or /party decline)
    /party                 who is in your party
    /p MESSAGE             talk to your party
    /party leave           leave it; you keep the quests you have
-In the top-down view your party members have a green ring under them, and a green arrow at the edge of
+In the top-down view your party members have a green ring under them, and an arrow at the edge of
 the screen points to any of them who are nearby but off it (on a co-op server, to every other player).
 
 Looks
@@ -106,6 +109,8 @@ Left click        Attack / cast when ready, otherwise use whatever is under the 
                   (doors, people, chests, items).
 Right click       Power attack: your weapon's strongest attack type.
 E                 Use what is under the cursor, or the nearest thing in front of you.
+                  A locked door or chest you have no key to: E (X on a controller) has a go at picking
+                  the lock if you carry a lockpick - the one in your hand, else your best one.
 Space             Jump
 F / R             Ready weapon / ready magic
 Tab               Inventory
@@ -122,7 +127,7 @@ A                 Jump                            B                 Ready weapon
 X                 Use / talk                      Y                 Ready magic
 Right trigger     Attack / cast                   Left trigger      Power attack
 Bumpers           Previous / next quick key       D-pad up / down   Zoom (hold to keep going)
-D-pad left        Quick keys menu (on a server: the chat)
+D-pad left        (nothing for now)
 D-pad right       Quest log                       Start             Menu
 Back              Inventory (hold: journal)
 Left stick in     Sneak                           Right stick in    Rest
@@ -131,11 +136,13 @@ side by side (the inventory screen, a chest, a shop) the bumpers switch between 
 while the triggers switch the tabs within a window. The right stick pressed in shows an item's info, and in
 the inventory and magic windows Y puts the item or spell on a quick key. In Options the bumpers switch tabs,
 the D-pad steps a pointer through the settings (up / down) and adjusts the one it is on (left / right), and A
-works it. The legend along the bottom of each menu says what the buttons do there. A keyboard appears on the
-screen wherever there is something to type (your name on a server, the chat, a save's name); press Y to bring
-it up if it doesn't. Whether you get these menus or Morrowind's own is decided as the game starts, from
-whether a controller is plugged in (Isowind.exe's launcher and isowind.sh's --controller flag decide too); the
-mouse works in them as well.
+works it. The legend along the bottom of each menu says what the buttons do there. To type something (your
+name, a server's password, a save's, potion's, spell's or class's name, a map note), move onto the box with
+the D-pad - up from the top of the list or the buttons under it - and press X: a keyboard comes up on the
+screen (never by itself). Start or Back puts it away when you are done; in a box of its own (your name, a
+password, a save's name) Start also confirms it. Whether you get these menus or Morrowind's own is decided
+as the game starts, from whether a controller is plugged in (Isowind.exe's launcher and isowind.sh's
+--controller flag decide too); the mouse works in them as well.
 
 The minimap turns so that up on it is up on the screen, and shows other players in multiplayer (as
 does the map). Zoom it with the mouse wheel over it while a menu is open, or in Options > Interface,

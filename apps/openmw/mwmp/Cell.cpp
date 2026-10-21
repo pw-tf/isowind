@@ -480,6 +480,10 @@ void Cell::readCellChange(ActorList& actorList)
 
 void Cell::initializeLocalActor(const MWWorld::Ptr& ptr)
 {
+    // Isowind MMO: one this client runs for itself only (a one-off event's), not for the others
+    if (Main::get().getCellController()->isClientLocalActor(ptr))
+        return;
+
     std::string mapIndex = Main::get().getCellController()->generateMapIndex(ptr);
     LOG_APPEND(TimedLog::LOG_VERBOSE, "- Initializing LocalActor %s in %s", mapIndex.c_str(), getShortDescription().c_str());
 
@@ -546,8 +550,9 @@ void Cell::initializeDedicatedActors(ActorList& actorList)
     {
         std::string mapIndex = Main::get().getCellController()->generateMapIndex(baseActor);
 
-        // If this key doesn't exist, create it
-        if (dedicatedActors.count(mapIndex) == 0)
+        // If this key doesn't exist, create it (Isowind MMO: unless this client runs that actor itself)
+        if (dedicatedActors.count(mapIndex) == 0
+            && !Main::get().getCellController()->isClientLocalActor(baseActor.refNum, baseActor.mpNum))
         {
             MWWorld::Ptr ptrFound = store->searchExact(baseActor.refNum, baseActor.mpNum, refId(baseActor.refId), true);
 
@@ -574,9 +579,13 @@ void Cell::uninitializeDedicatedActors(ActorList& actorList)
     for (const auto &baseActor : actorList.baseActors)
     {
         std::string mapIndex = Main::get().getCellController()->generateMapIndex(baseActor);
+        // (none for the actors this client runs itself)
+        auto it = dedicatedActors.find(mapIndex);
+        if (it == dedicatedActors.end())
+            continue;
         Main::get().getCellController()->removeDedicatedActorRecord(mapIndex);
-        delete dedicatedActors.at(mapIndex);
-        dedicatedActors.erase(mapIndex);
+        delete it->second;
+        dedicatedActors.erase(it);
     }
 }
 

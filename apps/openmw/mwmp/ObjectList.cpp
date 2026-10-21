@@ -206,16 +206,9 @@ void ObjectList::editContainers(MWWorld::CellStore* cellStore)
             bool hasActorEquipment = ptrFound.getClass().isActor() && ptrFound.getClass().hasInventoryStore(ptrFound);
 
             // If we are in a container, and it happens to be this container, keep track of that
+            // (Isowind: or one opened with it, shown in its window, see ContainerWindow::setPtr)
             if (MWBase::Environment::get().getWindowManager()->containsMode(MWGui::GM_Container))
-            {
-                CurrentContainer *currentContainer = &mwmp::Main::get().getLocalPlayer()->currentContainer;
-
-                if (currentContainer->refNum == ptrFound.getCellRef().getMpRefNum() &&
-                    currentContainer->mpNum == ptrFound.getCellRef().getMpNum())
-                {
-                    isCurrentContainer = true;
-                }
-            }
+                isCurrentContainer = hooks::isCurrentContainer(ptrFound);
 
             MWWorld::ContainerStore& containerStore = ptrFound.getClass().getContainerStore(ptrFound);
 
@@ -336,15 +329,20 @@ void ObjectList::editContainers(MWWorld::CellStore* cellStore)
             // If this container was open for us, update its view
             if (isCurrentContainer)
             {
-                if (isLocalTakeAll)
+                // (Isowind: not a Take All from one container's tab, of several opened together: that stays open)
+                if (isLocalTakeAll
+                    && !MWBase::Environment::get().getWindowManager()->getContainerWindow()->keepsOpenAfterTakeAll())
                 {
                     MWBase::Environment::get().getWindowManager()->removeGuiMode(MWGui::GM_Container);
                     MWBase::Environment::get().getWindowManager()->playSound(takeAllSound);
                 }
                 else
                 {
+                    if (isLocalTakeAll)
+                        MWBase::Environment::get().getWindowManager()->playSound(takeAllSound);
+                    // (Isowind: the window stays on the container it was opened on, which may not be this one)
                     MWGui::ContainerWindow* containerWindow = MWBase::Environment::get().getWindowManager()->getContainerWindow();
-                    containerWindow->setPtr(ptrFound);
+                    containerWindow->onContainerChanged(ptrFound);
                 }
             }
         }
@@ -588,16 +586,15 @@ void ObjectList::deleteObjects(MWWorld::CellStore* cellStore)
                                ptrFound.getCellRef().getMpRefNum(), ptrFound.getCellRef().getMpNum());
 
             // If we are in a container, and it happens to be this object, exit it
-            if (MWBase::Environment::get().getWindowManager()->containsMode(MWGui::GM_Container))
+            // (Isowind: not for one opened with it, shown in its window: that shows the others, see
+            // ContainerWindow::onFrame)
+            const CurrentContainer& currentContainer = mwmp::Main::get().getLocalPlayer()->currentContainer;
+            if (MWBase::Environment::get().getWindowManager()->containsMode(MWGui::GM_Container)
+                && currentContainer.refNum == ptrFound.getCellRef().getMpRefNum()
+                && currentContainer.mpNum == ptrFound.getCellRef().getMpNum())
             {
-                CurrentContainer *currentContainer = &mwmp::Main::get().getLocalPlayer()->currentContainer;
-
-                if (currentContainer->refNum == ptrFound.getCellRef().getMpRefNum() &&
-                    currentContainer->mpNum == ptrFound.getCellRef().getMpNum())
-                {
-                    MWBase::Environment::get().getWindowManager()->removeGuiMode(MWGui::GM_Container);
-                    MWBase::Environment::get().getWindowManager()->setDragDrop(false);
-                }
+                MWBase::Environment::get().getWindowManager()->removeGuiMode(MWGui::GM_Container);
+                MWBase::Environment::get().getWindowManager()->setDragDrop(false);
             }
 
             // Is this a dying actor being deleted before its death animation has finished? If so,
@@ -642,7 +639,9 @@ void ObjectList::lockObjects(MWWorld::CellStore* cellStore)
 
             if (baseObject.lockLevel > 0)
                 ptrFound.getCellRef().lock(baseObject.lockLevel);
-            else
+            // Isowind: only if locked, since unlock() turns the lock level around: the same unlock can come twice
+            // (an MMO server replays each player's locks whenever they load the cell, isowindLocks.lua)
+            else if (ptrFound.getCellRef().isLocked())
                 ptrFound.getCellRef().unlock();
         }
     }
@@ -656,7 +655,8 @@ void ObjectList::triggerTrapObjects(MWWorld::CellStore* cellStore)
 
         MWWorld::Ptr ptrFound = cellStore->searchExact(baseObject.refNum, baseObject.mpNum, mwmp::refId(baseObject.refId));
 
-        if (!ptrFound.isEmpty())
+        // Isowind: one whose trap is already gone has nothing to spring or disarm (an MMO server's replay at cell load)
+        if (!ptrFound.isEmpty() && !ptrFound.getCellRef().getTrap().empty())
         {
             LOG_APPEND(TimedLog::LOG_VERBOSE, "-- Found %s %i-%i", mwmp::idString(ptrFound.getCellRef().getRefId()).c_str(),
                 ptrFound.getCellRef().getMpRefNum(), ptrFound.getCellRef().getMpNum());
@@ -990,6 +990,11 @@ void ObjectList::runConsoleCommands(MWWorld::CellStore* cellStore)
             {
                 LOG_APPEND(TimedLog::LOG_VERBOSE, "-- Running on object %s %i-%i", baseObject.refId.c_str(), baseObject.refNum, baseObject.mpNum);
 
+                // Isowind MMO: not a console command, one of a one-off event's people for this client to run itself
+                if (MechanicsHelper::runClientLocalCommand(
+                        consoleCommand, cellStore, baseObject.refNum, baseObject.mpNum, baseObject.refId))
+                    continue;
+
                 // A cell this client hasn't loaded has its actors as they start anyway
                 if (consoleCommand == "isowind respawn" && cellStore->getState() != MWWorld::CellStore::State_Loaded)
                     continue;
@@ -1004,7 +1009,10 @@ void ObjectList::runConsoleCommands(MWWorld::CellStore* cellStore)
                     // Isowind MMO: not a console command, the server bringing an enemy or NPC back
                     if (consoleCommand == "isowind respawn")
                     {
-                        if (!MechanicsHelper::respawnActor(ptrFound))
+                        // (not one this client runs itself: a one-off event's, each player's own, dead or alive)
+                        if (Main::get().getCellController()->isClientLocalActor(ptrFound))
+                            LOG_APPEND(TimedLog::LOG_INFO, "-- Not respawned here (this client's own)");
+                        else if (!MechanicsHelper::respawnActor(ptrFound))
                             LOG_APPEND(TimedLog::LOG_INFO, "-- Not respawned here (not an actor)");
                         continue;
                     }

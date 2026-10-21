@@ -51,6 +51,7 @@ tes3mp.ReadReceivedObjectList = function() end
 tes3mp.GetObjectListAction = function() return incoming.action end
 tes3mp.GetObjectListContainerSubAction = function() return incoming.subAction or 0 end
 tes3mp.GetObjectListOrigin = function() return incoming.origin or enumerations.packetOrigin.CLIENT_GAMEPLAY end
+tes3mp.GetObjectListClientScript = function() return incoming.script or "" end
 tes3mp.GetObjectListSize = function() return #incoming.objects end
 tes3mp.GetObjectRefNum = function(i) return incoming.objects[i + 1].refNum end
 tes3mp.GetObjectMpNum = function(i) return incoming.objects[i + 1].mpNum end
@@ -136,7 +137,9 @@ local function runTests()
     check("quest disable skips the shared save", status.validDefaultHandler == false)
     check("quest disable kept for the player", cell.data.isowindStates["4444-0"].players.alpha == false)
     check("quest disable not shared", cell.data.objectData["4444-0"] == nil or cell.data.objectData["4444-0"].state == nil)
-    check("quest disable not sent to others", lastSent("SendObjectState") == nil)
+    local stateSent = lastSent("SendObjectState")
+    check("quest disable sent back to the player only", stateSent ~= nil and stateSent.args[1] == false and
+        #sent == 1)
 
     -- The player's hands enabling or disabling things (none do) and the console stay as they were
     receive({ objects = {}, origin = enumerations.packetOrigin.CLIENT_CONSOLE })
@@ -165,6 +168,13 @@ local function runTests()
         { pid, CELL, { ["999-0"] = { refId = "mudcrab", killer = { pid = pid } } } })
     local due = WorldInstance.data.isowindRespawns[CELL]["999-0"]
     check("mudcrab due in about 90 seconds", due ~= nil and math.abs(due - os.time() - 90) <= 2)
+
+    -- Someone a quest script brought in (Tarhiel falling near Seyda Neen) stays dead
+    cell.data.isowindStates["994-0"] = { refId = "agronian guy", players = { alpha = true } }
+    cell.data.objectData["994-0"] = { refId = "agronian guy", stats = { healthBase = 5 } }
+    customEventHooks.triggerHandlers("OnActorDeath", customEventHooks.makeEventStatus(true, true),
+        { pid, CELL, { ["994-0"] = { refId = "agronian guy", killer = {} } } })
+    check("quest appearance does not come back", WorldInstance.data.isowindRespawns[CELL]["994-0"] == nil)
 
     cell.data.objectData["998-0"] = { refId = "dagoth gares", stats = { healthBase = 300 } }
     cell.data.objectData["997-0"] = { refId = "ordinator", stats = { healthBase = 250 } }

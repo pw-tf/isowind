@@ -1,17 +1,22 @@
 #include "windowbase.hpp"
 
 #include <MyGUI_Button.h>
+#include <MyGUI_ComboBox.h>
+#include <MyGUI_EditBox.h>
 #include <MyGUI_InputManager.h>
 #include <MyGUI_RenderManager.h>
 
 #include "../mwbase/environment.hpp"
 #include "../mwbase/windowmanager.hpp"
 
+#include <components/lua_ui/widget.hpp>
 #include <components/settings/values.hpp>
 #include <components/widgets/imagebutton.hpp>
+#include <components/widgets/numericeditbox.hpp>
 
 #include "draganddrop.hpp"
 #include "exposedwindow.hpp"
+#include "textcolours.hpp"
 
 using namespace MWGui;
 
@@ -54,6 +59,39 @@ void MWGui::setControllerFocus(const std::vector<MyGUI::Button*>& buttons, size_
 {
     if (index < buttons.size())
         buttons[index]->setStateSelected(focused);
+}
+
+bool MWGui::isTextField(MyGUI::Widget* widget)
+{
+    if (!widget)
+        return false;
+    if (LuaUi::WidgetExtension* luaWidget = dynamic_cast<LuaUi::WidgetExtension*>(widget))
+        return luaWidget->isTextInput();
+    MyGUI::EditBox* edit = widget->castType<MyGUI::EditBox>(false);
+    if (!edit || edit->getEditReadOnly() || edit->getEditStatic() || widget->castType<Gui::NumericEditBox>(false))
+        return false;
+    if (MyGUI::ComboBox* comboBox = widget->castType<MyGUI::ComboBox>(false))
+        return !comboBox->getComboModeDrop();
+    return true;
+}
+
+void MWGui::setTextFieldSelected(MyGUI::TextBox* field, bool selected)
+{
+    const TextColours& textColours = MWBase::Environment::get().getWindowManager()->getTextColours();
+    field->setTextColour(selected ? textColours.link : textColours.normal);
+}
+
+MyGUI::Widget* WindowBase::getControllerTextField()
+{
+    MyGUI::Widget* focus = MyGUI::InputManager::getInstance().getKeyFocusWidget();
+    if (!isTextField(focus))
+        return nullptr;
+    for (MyGUI::Widget* widget = focus; widget; widget = widget->getParent())
+    {
+        if (widget == mMainWidget)
+            return focus;
+    }
+    return nullptr;
 }
 
 WindowBase::WindowBase(std::string_view parLayout)

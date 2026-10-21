@@ -110,10 +110,17 @@ void mwmp::GUIController::printChatMessage(std::string &msg)
         mChat->print(msg);
 }
 
-
+// Called as the player comes into the world (Main::updateWorld). Isowind: the chat isn't put on the screen then: it
+// starts as TES3MP's "appearing when needed", up for a few seconds when a message comes and with its input line on
+// Enter (F2 switches to always shown, or hidden)
 void mwmp::GUIController::setChatVisible(bool chatVisible)
 {
-    mChat->setVisible(chatVisible);
+    if (!chatVisible)
+        mChat->setVisible(false);
+    else if (mChat->windowState == GUIChat::CHAT_DISABLED)
+        mChat->windowState = GUIChat::CHAT_HIDDENMODE;
+    else if (mChat->windowState == GUIChat::CHAT_ENABLED)
+        mChat->setVisible(true);
 }
 
 void mwmp::GUIController::showDialogList(const mwmp::BasePlayer::GUIMessageBox &guiMessageBox)
@@ -249,6 +256,8 @@ void mwmp::GUIController::changeChatMode()
     mChat->pressedChatMode();
 }
 
+// No controller button opens the chat for now (D-pad left did); it is opened with the keyboard. Used again, it would
+// have to bring the keyboard on the screen up itself, which no longer comes up by itself.
 bool mwmp::GUIController::openChatWithController()
 {
     MWBase::WindowManager* windowManager = MWBase::Environment::get().getWindowManager();

@@ -47,6 +47,10 @@ namespace MWGui
 
         void onEditSelectAccept(MyGUI::EditBox* sender);
         void onSaveNameChanged(MyGUI::EditBox* sender);
+        // Isowind: the save's name lit while it has the keyboard focus (the controller selection, for X to bring the
+        // keyboard on the screen up; the list below it with D-pad down)
+        void onSaveNameFocus(MyGUI::Widget* sender, MyGUI::Widget* other);
+        void onSaveNameFocusLost(MyGUI::Widget* sender, MyGUI::Widget* other);
         void onConfirmationGiven();
         void onConfirmationCancel();
 

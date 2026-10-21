@@ -34,6 +34,7 @@ parent folder (`<root>`):
         crabnet\                  cloned and built by the script
         bundled-mods\             the third-party mods, fetched by the script
         dist\Isowind\             the package, and dist\Isowind.zip beside it
+        backups\                  test characters and saves, zipped before each packaging (the last five)
 
 Then, in PowerShell, from the repository:
 
@@ -48,6 +49,14 @@ fetches the bundled mods and packages. Later runs are incremental; after pulling
 
 The engine ends up in `MSVC2022_64\Release`, `Isowind.exe` in `MSVC2022_64\launcher`, and the package in
 `<root>\dist\Isowind` with `<root>\dist\Isowind.zip` beside it.
+
+Rebuilding keeps the test characters. The server's players, cells and world (`dist\Isowind\server\CoreScripts\data`)
+and the host's `server\tes3mp-server.cfg` stay in the package folder; single-player saves are in
+`Documents\My Games\OpenMW\saves`, which packaging never touches. `make_package.ps1` still zips both into
+`<root>\backups\isowind-data-<date>-<time>.zip` first, and keeps the last five. The zip takes the server's data from
+git (the empty folders and the default ban and plugin lists), so it never carries anyone's characters. To update a
+copy elsewhere (Bottles, another PC), unzip the new `Isowind.zip` over the old folder rather than deleting the folder:
+the players stay, and only the ban list goes back to empty.
 
 | Switch                  | What it does                                                                                   |
 |-------------------------|------------------------------------------------------------------------------------------------|
@@ -80,11 +89,68 @@ If something goes wrong:
 Building on Linux
 -----------------
 
-`.github/workflows/linux.yml` has the recipe: the Debian/Ubuntu packages from `CI/install_debian_deps.sh`, CrabNet
-at commit `19e6619`, a CMake configure that points `RakNet_INCLUDES` and `RakNet_LIBRARY_RELEASE`/`_DEBUG` at it,
-then `cmake --build`. `isowind/linux/package.sh BUILD_DIR OUT_DIR [BUNDLED_MODS_DIR]` assembles the folder (it
-needs `linuxdeploy` on the PATH). On Arch, build Bullet and TinyXML in-tree (`-DOPENMW_USE_SYSTEM_BULLET=OFF
--DUSE_SYSTEM_TINYXML=OFF`), and CMake 4 wants `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` for CrabNet.
+The same steps as `.github/workflows/linux.yml`, which builds every push on Ubuntu 24.04. Everything that isn't
+source goes in `build-deps/` and `build/` inside the clone (git ignores both).
+
+**1. The libraries and tools.**
+
+* Debian / Ubuntu: `sudo CI/install_debian_deps.sh gcc openmw-deps openmw-deps-dynamic`
+* Arch: `sudo pacman -S --needed base-devel cmake git boost openscenegraph mygui sdl2-compat openal ffmpeg luajit lz4
+  icu sqlite yaml-cpp recastnavigation unshield`
+
+To play you also want Python 3 with Tk for the launcher window (`python3-tk` / `tk`) and Pillow for the pixel art
+look (`python3-pil` / `python-pillow`; without it `isowind.sh` installs it into a private folder of its own). To
+package: [linuxdeploy](https://github.com/linuxdeploy/linuxdeploy/releases) on the PATH (its AppImage; set
+`APPIMAGE_EXTRACT_AND_RUN=1` if FUSE is missing), and the GitHub CLI logged in (`gh auth login`) for the bundled mods.
+
+**2. CrabNet**, the multiplayer's networking, at the commit the Windows build uses:
+
+    git clone https://github.com/TES3MP/CrabNet.git build-deps/crabnet
+    git -C build-deps/crabnet checkout 19e6619
+    sed -i '1i #include <cstdint>' build-deps/crabnet/Source/Utils/_FindFirst.h   # newer compilers want it
+    cmake -S build-deps/crabnet -B build-deps/crabnet/build -DCMAKE_BUILD_TYPE=Release -DCRABNET_ENABLE_DLL=OFF \
+        -DCRABNET_ENABLE_SAMPLES=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+    cmake --build build-deps/crabnet/build -j$(nproc)
+
+**3. The engine** (the game, the server and the importer; not the editor, launcher or tools):
+
+    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_OPENCS=OFF -DBUILD_BSATOOL=OFF -DBUILD_ESMTOOL=OFF -DBUILD_ESSIMPORTER=OFF -DBUILD_NIFTEST=OFF \
+        -DBUILD_NAVMESHTOOL=OFF -DBUILD_BULLETOBJECTTOOL=OFF -DBUILD_LAUNCHER=OFF -DBUILD_WIZARD=OFF \
+        -DRakNet_INCLUDES=$PWD/build-deps/crabnet/include \
+        -DRakNet_LIBRARY_RELEASE=$PWD/build-deps/crabnet/build/lib/libRakNetLibStatic.a \
+        -DRakNet_LIBRARY_DEBUG=$PWD/build-deps/crabnet/build/lib/libRakNetLibStatic.a \
+        <your system's options, below>
+    cmake --build build -j$(nproc)
+
+* Debian / Ubuntu: `-DUSE_SYSTEM_TINYXML=ON -DOPENMW_USE_SYSTEM_RECASTNAVIGATION=ON`
+* Arch: `-DUSE_SYSTEM_TINYXML=OFF -DOPENMW_USE_SYSTEM_BULLET=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5`. Arch has no
+  TinyXML package, its Bullet is built for single precision where OpenMW wants double (so OpenMW builds its own),
+  and CMake 4 wants the policy minimum for the older projects OpenMW pulls in.
+
+`build/openmw` and `build/tes3mp-server` are the game and the server.
+
+**4. The package**, laid out like the Windows one with `isowind.sh` in place of `Isowind.exe`:
+
+    gh release download bundled-mods -p bundled-mods.zip -D build-deps
+    unzip -q build-deps/bundled-mods.zip -d build-deps/bundled-mods
+    isowind/linux/package.sh build build-deps/Isowind build-deps/bundled-mods
+
+**5. Play:** `build-deps/Isowind/isowind.sh` (or `isowind.sh gui` for the launcher window; the other commands are in
+"Running with a controller" below). The first time it looks for Morrowind in Steam's usual places; otherwise run it
+as `MORROWIND=/path/to/Morrowind build-deps/Isowind/isowind.sh`, the folder with `Data Files` and `Morrowind.ini`.
+
+After changes, `cmake --build build -j$(nproc)` and `package.sh` again. Packaging into the same folder again keeps its
+server data and `server/tes3mp-server.cfg`, as on Windows, after backing them and `~/.local/share/openmw/saves` up
+into `~/.local/share/isowind/backups` (the last five); a release goes into a new folder, as the CI's does.
+`package.sh` refuses a folder that has files in it and isn't a package. While working on the code, a package's
+`engine/usr/bin/openmw` and `tes3mp-server` can be links to the ones in `build/`, so that a rebuild needs no
+packaging; the server's `CoreScripts` are a copy, though, and must be refreshed after server script changes.
+
+**Playing with others** takes the same engine source. The version players are matched on is a hash of the
+engine's folders (`apps`, `components`, `files`, `extern`, `cmake`, `CMakeLists.txt`) as committed, taken each time
+the build runs, so build again after committing or pulling engine changes, even when the code on disk was already
+built. Isowind's mod and server scripts don't count.
 
 Running with a controller
 -------------------------

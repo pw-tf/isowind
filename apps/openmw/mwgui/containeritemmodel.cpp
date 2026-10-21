@@ -64,6 +64,54 @@ namespace MWGui
         mItemSources.emplace_back(source, store.resolveTemporarily());
     }
 
+    ContainerItemModel::ContainerItemModel(const std::vector<MWWorld::Ptr>& itemSources)
+        : mTrading(false)
+    {
+        assert(!itemSources.empty());
+        // Each keeps its own resolution, so each is saved as changed only if it was
+        mItemSources.reserve(itemSources.size());
+        for (const MWWorld::Ptr& source : itemSources)
+        {
+            MWWorld::ContainerStore& store = source.getClass().getContainerStore(source);
+            mItemSources.emplace_back(source, store.resolveTemporarily());
+        }
+    }
+
+    std::vector<ContainerItemModel::SourceItem> ContainerItemModel::getSourceItems(const MWWorld::Ptr& item, int count)
+    {
+        std::vector<SourceItem> result;
+        for (size_t i = 0; i < mItemSources.size(); ++i)
+        {
+            if (!isShown(i))
+                continue;
+            auto& source = mItemSources[i];
+            MWWorld::ContainerStore& store = source.first.getClass().getContainerStore(source.first);
+            for (MWWorld::ContainerStoreIterator it = store.begin(); it != store.end() && count > 0; ++it)
+            {
+                if (!stacks(*it, item))
+                    continue;
+                const int fromHere = std::min(count, it->getCellRef().getCount());
+                if (fromHere <= 0)
+                    continue;
+                result.push_back({ source.first, *it, fromHere });
+                count -= fromHere;
+            }
+            if (count <= 0)
+                break;
+        }
+        return result;
+    }
+
+    void ContainerItemModel::setShownSource(int index)
+    {
+        mShownSource = index >= 0 && static_cast<size_t>(index) < mItemSources.size() ? index : -1;
+    }
+
+    const MWWorld::Ptr& ContainerItemModel::getDropTarget() const
+    {
+        return mItemSources[mShownSource < 0 ? 0 : mShownSource].first;
+    }
+
     bool ContainerItemModel::allowedToUseItems() const
     {
         if (mItemSources.empty())
@@ -74,6 +122,16 @@ namespace MWGui
 
         // Check if the player is allowed to use items from opened container
         MWBase::MechanicsManager* mm = MWBase::Environment::get().getMechanicsManager();
+        // Isowind: containers opened together (not a merchant's): only if allowed in all of them shown
+        if (!mTrading)
+        {
+            for (size_t i = 0; i < mItemSources.size(); ++i)
+            {
+                if (isShown(i) && !mm->isAllowedToUse(ptr, mItemSources[i].first, victim))
+                    return false;
+            }
+            return true;
+        }
         return mm->isAllowedToUse(ptr, mItemSources[0].first, victim);
     }
 
@@ -105,7 +163,8 @@ namespace MWGui
 
     MWWorld::Ptr ContainerItemModel::addItem(const ItemStack& item, size_t count, bool allowAutoEquip)
     {
-        auto& source = mItemSources[0];
+        // (Isowind: the container shown, of several)
+        auto& source = mItemSources[mShownSource < 0 ? 0 : mShownSource];
         MWWorld::ContainerStore& store = source.first.getClass().getContainerStore(source.first);
         if (item.mBase.getContainerStore() == &store)
             throw std::runtime_error("Item to add needs to be from a different container!");
@@ -121,7 +180,8 @@ namespace MWGui
 
     MWWorld::Ptr ContainerItemModel::copyItem(const ItemStack& item, size_t count, bool allowAutoEquip)
     {
-        auto& source = mItemSources[0];
+        // (Isowind: the container shown, of several)
+        auto& source = mItemSources[mShownSource < 0 ? 0 : mShownSource];
         MWWorld::ContainerStore& store = source.first.getClass().getContainerStore(source.first);
         if (item.mBase.getContainerStore() == &store)
             throw std::runtime_error("Item to copy needs to be from a different container!");
@@ -140,8 +200,12 @@ namespace MWGui
     {
         int toRemove = static_cast<int>(count);
 
-        for (auto& source : mItemSources)
+        for (size_t i = 0; i < mItemSources.size(); ++i)
         {
+            // (Isowind: only from the container shown, of several)
+            if (!isShown(i))
+                continue;
+            auto& source = mItemSources[i];
             MWWorld::ContainerStore& store = source.first.getClass().getContainerStore(source.first);
 
             for (MWWorld::ContainerStoreIterator it = store.begin(); it != store.end(); ++it)
@@ -151,6 +215,9 @@ namespace MWGui
                     int quantity = it->mRef->mRef.getCount(false);
                     // Isowind multiplayer: the server removes it, for everyone, unless this is the container open
                     // here (whose items the server already agreed to hand over, see ContainerWindow)
+                    // (Containers opened with it count as open too: they're only taken from here by a drag
+                    // that starts once the server agreed, see ObjectList::editContainers. Any other way of
+                    // taking from them in multiplayer would need to go through the server first.)
                     if (mwmp::hooks::isMultiplayer() && source.first.isInCell()
                         && !mwmp::hooks::isCurrentContainer(source.first))
                     {
@@ -194,8 +261,12 @@ namespace MWGui
     void ContainerItemModel::update()
     {
         mItems.clear();
-        for (auto& source : mItemSources)
+        for (size_t i = 0; i < mItemSources.size(); ++i)
         {
+            // (Isowind: only the container shown, of several)
+            if (!isShown(i))
+                continue;
+            auto& source = mItemSources[i];
             MWWorld::ContainerStore& store = source.first.getClass().getContainerStore(source.first);
 
             for (MWWorld::ContainerStoreIterator it = store.begin(); it != store.end(); ++it)
@@ -250,7 +321,7 @@ namespace MWGui
         if (mItemSources.empty())
             return false;
 
-        MWWorld::Ptr target = mItemSources[0].first;
+        MWWorld::Ptr target = getDropTarget();
 
         if (target.getType() != ESM::Container::sRecordId)
             return true;
@@ -295,6 +366,24 @@ namespace MWGui
             return true;
 
         MWWorld::Ptr player = MWMechanics::getPlayer();
+
+        // Isowind: from containers opened together, taking from each is judged by whose it is
+        if (!mTrading && mItemSources.size() > 1)
+        {
+            std::vector<SourceItem> sources = getSourceItems(item, count);
+            for (auto it = sources.begin(); it != sources.end();)
+            {
+                // (one crime per container, however many stacks of it there)
+                int taken = 0;
+                auto next = it;
+                for (; next != sources.end() && next->mContainer == it->mContainer; ++next)
+                    taken += next->mCount;
+                MWBase::Environment::get().getMechanicsManager()->itemTaken(player, it->mItem, it->mContainer, taken);
+                it = next;
+            }
+            return true;
+        }
+
         MWBase::Environment::get().getMechanicsManager()->itemTaken(player, item, target, count);
 
         return true;

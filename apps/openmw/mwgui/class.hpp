@@ -301,6 +301,8 @@ namespace MWGui
 
         void setNextButtonShow(bool shown);
 
+        MyGUI::Widget* getControllerTextField() override;
+
         // Events
         typedef MyGUI::delegates::MultiDelegate<> EventHandle_Void;
 
@@ -354,6 +356,9 @@ namespace MWGui
 
         bool onControllerButtonEvent(const SDL_ControllerButtonEvent& arg) override;
         size_t mControllerFocus = 2;
+        // Isowind: the controller selection is on the class's name (D-pad up from the buttons), for X to bring the
+        // keyboard on the screen up
+        bool mNameSelected = false;
     };
 }
 #endif

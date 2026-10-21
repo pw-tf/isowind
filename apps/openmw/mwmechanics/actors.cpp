@@ -1563,7 +1563,10 @@ namespace MWMechanics
                     = isMultiplayer && mwmp::Main::get().getCellController()->isLocalActor(actor.getPtr());
                 const bool isDedicatedActor
                     = isMultiplayer && mwmp::Main::get().getCellController()->isDedicatedActor(actor.getPtr());
-                const bool actorAiActive = aiActive || isLocalActor;
+                // Isowind MMO: and the ones this client runs for itself only (a one-off event's)
+                const bool isClientLocalActor
+                    = isMultiplayer && mwmp::Main::get().getCellController()->isClientLocalActor(actor.getPtr());
+                const bool actorAiActive = aiActive || isLocalActor || isClientLocalActor;
 
                 const float distSqr = (playerPos - actor.getPtr().getRefData().getPosition().asVec3()).length2();
                 // AI processing is only done within given distance to the player (except for the actors this

@@ -2,6 +2,7 @@
 #include "../mwworld/class.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "ActorList.hpp"
+#include "CellController.hpp"
 #include "Main.hpp"
 #include "Networking.hpp"
 #include "LocalPlayer.hpp"
@@ -262,6 +263,10 @@ void ActorList::sendActorsInCell(MWWorld::CellStore* cellStore)
 
         // If this Ptr is lacking a unique index, ignore it
         if (ptr.getCellRef().getMpRefNum() == 0 && ptr.getCellRef().getMpNum() == 0)
+            return true;
+
+        // Isowind MMO: nor one this client runs for itself only (a one-off event's)
+        if (Main::get().getCellController()->isClientLocalActor(ptr))
             return true;
 
         BaseActor actor;

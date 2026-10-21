@@ -15,13 +15,17 @@ namespace MyGUI
 
 namespace MWGui
 {
-    /// Isowind: a keyboard on the screen, for typing with a controller (the multiplayer chat, a character's or
-    /// server's name, a save's name, a spell's). It comes up over the text box that has the keyboard focus and types
-    /// into it as a real keyboard would, so the text box and its window notice nothing.
+    /// Isowind: a keyboard on the screen, for typing with a controller (a character's name, a server's password, a
+    /// save's name, a spell's). X brings it up over the text field the controller selection is on (ControllerManager,
+    /// WindowBase::getControllerTextField); it never comes up by itself. It types into the field as a real keyboard
+    /// would, so the field and its window notice nothing.
     ///   D-pad / left stick  pick a key          A         type it
     ///   B                   backspace           X         space
     ///   Y                   shift               L1 / R1   move the text cursor
     ///   Start               done (Enter)        Back      put the keyboard away
+    /// Done only puts the keyboard away, without Enter, for a field with the user string KeyboardDone = Close (one
+    /// reached by selection in a window whose own buttons brew, buy or confirm: alchemy, spellmaking, enchanting,
+    /// class creation, map notes); elsewhere Enter confirms the dialog (a name, a password, a save).
     class OnScreenKeyboard : public WindowBase, public MyGUI::IUnlinkWidget
     {
     public:
