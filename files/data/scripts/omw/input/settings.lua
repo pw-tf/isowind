@@ -131,10 +131,21 @@ I.Settings.registerRenderer('inputBinding', function(id, set, arg)
     local binding = bindingSection:get(id)
     local label = bindingLabel(recording and recording.id == id, binding)
 
+    -- Isowind: the binding is in a box, as the other settings' buttons (Reset, Yes / No) are, to show where to click
     local recorder = {
-        template = I.MWUI.templates.textNormal,
-        props = {
-            text = label,
+        template = I.MWUI.templates.box,
+        content = ui.content {
+            {
+                template = I.MWUI.templates.padding,
+                content = ui.content {
+                    {
+                        template = I.MWUI.templates.textNormal,
+                        props = {
+                            text = label,
+                        },
+                    },
+                },
+            },
         },
         events = {
             mouseClick = async:callback(function()
@@ -157,6 +168,7 @@ I.Settings.registerRenderer('inputBinding', function(id, set, arg)
         type = ui.TYPE.Flex,
         props = {
             horizontal = true,
+            arrange = ui.ALIGNMENT.Center,
         },
         content = ui.content {
             name,
