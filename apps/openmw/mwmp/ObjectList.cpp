@@ -1202,6 +1202,9 @@ void ObjectList::addObjectPlace(const MWWorld::Ptr& ptr, bool droppedByPlayer)
     cell = ptr.getCell()->getCell()->getEsm3();
 
     mwmp::BaseObject baseObject = getBaseObjectFromPtr(ptr);
+    // The server gives a placed object an mpNum of its own; don't keep the refNum of the game-file reference a
+    // dropped item was picked up from
+    baseObject.refNum = 0;
     baseObject.charge = ptr.getCellRef().getCharge();
     baseObject.enchantmentCharge = ptr.getCellRef().getEnchantmentCharge();
     baseObject.soul = idString(ptr.getCellRef().getSoul());
