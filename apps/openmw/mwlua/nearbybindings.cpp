@@ -203,6 +203,11 @@ namespace MWLua
         api["players"] = LObjectList{ objectLists->getPlayers() };
         // Isowind multiplayer: whether an actor is another player (to the engine they are ordinary NPCs)
         api["isOtherPlayer"] = [](const LObject& object) { return mwmp::hooks::isDedicatedPlayer(object.ptr()); };
+        // ...whether another player is allied with this one (in MMO mode, in their party), and whether the server is MMO
+        api["isAlly"] = [](const LObject& object) {
+            return mwmp::hooks::isAlliedPlayer(MWBase::Environment::get().getWorld()->getPlayerPtr(), object.ptr());
+        };
+        api["isMmo"] = []() { return mwmp::hooks::isMmoMode(); };
 
         api["NAVIGATOR_FLAGS"]
             = LuaUtil::makeStrictReadOnly(LuaUtil::tableFromPairs<std::string_view, DetourNavigator::Flag>(lua,
