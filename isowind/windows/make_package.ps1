@@ -86,14 +86,15 @@ else {
     "The changes to OpenMW are in the Isowind repository, https://github.com/pw-tf/isowind, at commit $commit`r`n(the patch against OpenMW's $tag tag couldn't be made when this package was built)" |
         Set-Content -Encoding utf8 (Join-Path $source "isowind-$tag.patch.txt")
 }
-Copy-Item (Join-Path $PSScriptRoot 'Isowind.cs'), (Join-Path $PSScriptRoot 'make_icon.py') $source -Force
+Copy-Item (Join-Path $PSScriptRoot 'Isowind.cs'), (Join-Path $PSScriptRoot 'logo.png'), (Join-Path $PSScriptRoot 'make_icon.py') $source -Force
 Copy-Item (Join-Path $isowind 'tools\make_palettes.py'), (Join-Path $isowind 'tools\retro_textures.py') $source -Force
 @"
 Isowind source
 ==============
 isowind-openmw-0.51.0.patch   Changes to OpenMW: apply to https://gitlab.com/OpenMW/openmw at tag openmw-0.51.0.
                               Includes the multiplayer port of TES3MP (https://github.com/TES3MP/TES3MP, GPL v3).
-Isowind.cs, make_icon.py      The Isowind.exe launcher (C#, .NET Framework 4) and its icon.
+Isowind.cs, logo.png,         The Isowind.exe launcher (C#, .NET Framework 4), its logo and its icon.
+make_icon.py
 make_palettes.py              Builds pixelart\textures\isowind\palettes.dds.
 retro_textures.py             Python version of the texture reduction Isowind.exe does.
 The top-down mod (Lua) and shaders are in the mod and pixelart folders as they are.
