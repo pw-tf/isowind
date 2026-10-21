@@ -72,6 +72,16 @@ local controllerButtonNames = {
     [input.CONTROLLER_BUTTON.DPadRight] = "D-pad Right",
 }
 
+-- Isowind: the controller buttons down at the moment (one of them may have clicked the binding, as A does in the
+-- controller menus)
+local function heldControllerButtons()
+    local held = {}
+    for button in pairs(controllerButtonNames) do
+        if button >= 0 and input.isControllerButtonPressed(button) then held[button] = true end
+    end
+    return held
+end
+
 local function bindingLabel(recording, binding)
     if recording then
         return interfaceL10n('N/A')
@@ -134,6 +144,9 @@ I.Settings.registerRenderer('inputBinding', function(id, set, arg)
                     id = id,
                     arg = arg,
                     refresh = function() set(id) end,
+                    -- Isowind: the press of a button that clicked this reaches the scripts after the click; it isn't
+                    -- the binding
+                    held = heldControllerButtons(),
                 }
                 recording.refresh()
             end),
@@ -185,7 +198,14 @@ return {
             bindButton('mouse', button)
         end,
         onControllerButtonPress = function(id)
+            if recording and recording.held[id] then
+                recording.held[id] = nil
+                return
+            end
             bindButton('controller', id)
+        end,
+        onControllerButtonRelease = function(id)
+            if recording then recording.held[id] = nil end
         end,
     }
 }

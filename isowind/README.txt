@@ -116,7 +116,8 @@ F / R             Ready weapon / ready magic
 Tab               Inventory
 Mouse wheel       Zoom, within the view you are in.
 F7                Switch view: top-down, then Morrowind's third person view, then first person. Change the
-                  key, or add a controller button for it, in Options > Scripts > Isowind.
+                  key, or add a controller button for it, in Options > Scripts > Isowind (with a controller:
+                  the D-pad onto the second Switch view's binding, A, then the button to use).
 1 - 0             Quick keys, shown along the bottom of the screen. To set one, open the inventory (Tab),
                   point at an item, spell or enchanted item and press the number. Right-click a slot for
                   Morrowind's own quick key menu.
@@ -136,13 +137,13 @@ side by side (the inventory screen, a chest, a shop) the bumpers switch between 
 while the triggers switch the tabs within a window. The right stick pressed in shows an item's info, and in
 the inventory and magic windows Y puts the item or spell on a quick key. In Options the bumpers switch tabs,
 the D-pad steps a pointer through the settings (up / down) and adjusts the one it is on (left / right), and A
-works it. The legend along the bottom of each menu says what the buttons do there. To type something (your
-name, a server's password, a save's, potion's, spell's or class's name, a map note), move onto the box with
-the D-pad - up from the top of the list or the buttons under it - and press X: a keyboard comes up on the
-screen (never by itself). Start or Back puts it away when you are done; in a box of its own (your name, a
-password, a save's name) Start also confirms it. Whether you get these menus or Morrowind's own is decided
-as the game starts, from whether a controller is plugged in (Isowind.exe's launcher and isowind.sh's
---controller flag decide too); the mouse works in them as well.
+works it, on the Scripts tab's pages too. The legend along the bottom of each menu says what the buttons do
+there. To type something (your name, a server's password, a save's, potion's, spell's or class's name, a map
+note), move onto the box with the D-pad - up from the top of the list or the buttons under it - and press X:
+a keyboard comes up on the screen (never by itself). Start or Back puts it away when you are done; in a box
+of its own (your name, a password, a save's name) Start also confirms it. Whether you get these menus or
+Morrowind's own is decided as the game starts, from whether a controller is plugged in (Isowind.exe's
+launcher and isowind.sh's --controller flag decide too); the mouse works in them as well.
 
 The minimap turns so that up on it is up on the screen, and shows other players in multiplayer (as
 does the map). Zoom it with the mouse wheel over it while a menu is open, or in Options > Interface,

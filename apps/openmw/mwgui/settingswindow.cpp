@@ -25,6 +25,7 @@
 #include <components/files/configurationmanager.hpp>
 #include <components/l10n/manager.hpp>
 #include <components/lua_ui/scriptsettings.hpp>
+#include <components/lua_ui/widget.hpp>
 #include <components/misc/constants.hpp>
 #include <components/misc/display.hpp>
 #include <components/misc/strings/algorithm.hpp>
@@ -418,6 +419,8 @@ namespace MWGui
 
         mScriptFilter->eventEditTextChange += MyGUI::newDelegate(this, &SettingsWindow::onScriptFilterChange);
         mScriptList->eventListMouseItemActivate += MyGUI::newDelegate(this, &SettingsWindow::onScriptListSelection);
+        // Isowind: the D-pad's left / right (or the arrow keys) on the list opens the page too
+        mScriptList->eventListChangePosition += MyGUI::newDelegate(this, &SettingsWindow::onScriptListSelection);
 
         std::vector<std::string> availableLanguages;
         const VFS::Manager* vfs = MWBase::Environment::get().getResourceSystem()->getVFS();
@@ -1207,6 +1210,13 @@ namespace MWGui
             return false;
         }
 
+        // A widget of a script's settings page that a click works (a binding, a "Yes" / "No", the arrows, Reset)
+        bool isScriptClickable(MyGUI::Widget* widget)
+        {
+            const LuaUi::WidgetExtension* lua = dynamic_cast<LuaUi::WidgetExtension*>(widget);
+            return lua != nullptr && lua->hasCallback("mouseClick");
+        }
+
         void clickAtPointer()
         {
             MyGUI::InputManager& input = MyGUI::InputManager::getInstance();
@@ -1216,8 +1226,8 @@ namespace MWGui
         }
     }
 
-    // The controls of the page: buttons (checkboxes among them), sliders, drop-down lists, lists, text boxes and
-    // inner tab bars (the outer tabs are the bumpers'), top to bottom
+    // The controls of the page: buttons (checkboxes among them), sliders, drop-down lists, lists, text boxes, inner
+    // tab bars (the outer tabs are the bumpers') and what a script's page has to click, top to bottom
     void SettingsWindow::collectControls(MyGUI::Widget* parent, std::vector<MyGUI::Widget*>& controls) const
     {
         MyGUI::EnumeratorWidgetPtr children = parent->getEnumerator();
@@ -1226,7 +1236,10 @@ namespace MWGui
             MyGUI::Widget* widget = children.current();
             if (!widget->getVisible() || !widget->getEnabled())
                 continue;
-            if (MyGUI::TabControl* tabs = widget->castType<MyGUI::TabControl>(false))
+            // Before the text boxes: a script's text is one
+            if (isScriptClickable(widget))
+                controls.push_back(widget);
+            else if (MyGUI::TabControl* tabs = widget->castType<MyGUI::TabControl>(false))
             {
                 if (tabs != mSettingsTab)
                     controls.push_back(tabs);
@@ -1279,17 +1292,19 @@ namespace MWGui
     {
         if (!control)
             return;
-        // A row of the controls list scrolls into view first
-        if (isInside(control, mControlsBox) && control != mControlsBox)
+        // A row of the controls list, or a script's setting, scrolls into view first
+        for (MyGUI::ScrollView* view : { mControlsBox, mScriptView })
         {
-            MyGUI::IntPoint offset = mControlsBox->getViewOffset();
-            const int viewHeight = mControlsBox->getViewCoord().height;
-            const int top = control->getTop() + offset.top;
+            if (!isInside(control, view) || control == view)
+                continue;
+            MyGUI::IntPoint offset = view->getViewOffset();
+            const MyGUI::IntCoord viewCoord = view->getViewCoord();
+            const int top = control->getAbsoluteTop() - view->getAbsoluteTop() - viewCoord.top;
             if (top < 0)
-                offset.top = -control->getTop();
-            else if (top + control->getHeight() > viewHeight)
-                offset.top = viewHeight - control->getTop() - control->getHeight();
-            mControlsBox->setViewOffset(offset);
+                offset.top -= top;
+            else if (top + control->getHeight() > viewCoord.height)
+                offset.top -= top + control->getHeight() - viewCoord.height;
+            view->setViewOffset(offset);
         }
         // The middle of the control; an inner tab bar on the tabs themselves along its top, and a list on the row
         // it has chosen, if that is in view
@@ -1320,10 +1335,12 @@ namespace MWGui
         frameControl(control);
     }
 
-    // Morrowind's gold box frame around the control, drawn beside it in its own parent so it scrolls along
+    // Morrowind's gold box frame around the control, drawn beside it in its own parent so it scrolls along. On a
+    // script's page that is the page's adapter: the script rebuilds its own widgets, which would take the frame along.
     void SettingsWindow::frameControl(MyGUI::Widget* control)
     {
         constexpr int margin = 3;
+        const bool onScriptPage = control && isInside(control, mScriptAdapter);
         if (control != mFramedControl || !control)
         {
             if (mControllerFrame)
@@ -1334,13 +1351,16 @@ namespace MWGui
             mFramedControl = control;
             if (!control || !control->getParent())
                 return;
-            mControllerFrame = control->getParent()->createWidget<MyGUI::Widget>(
-                "MW_Box_Overlay", MyGUI::IntCoord(), MyGUI::Align::Default);
+            MyGUI::Widget* parent = onScriptPage ? mScriptAdapter : control->getParent();
+            mControllerFrame
+                = parent->createWidget<MyGUI::Widget>("MW_Box_Overlay", MyGUI::IntCoord(), MyGUI::Align::Default);
             mControllerFrame->setNeedMouseFocus(false);
         }
         if (mControllerFrame)
         {
             MyGUI::IntCoord coord = control->getCoord();
+            if (onScriptPage)
+                coord = control->getAbsoluteCoord() - mScriptAdapter->getAbsolutePosition();
             mControllerFrame->setCoord(
                 coord.left - margin, coord.top - margin, coord.width + 2 * margin, coord.height + 2 * margin);
         }
@@ -1434,6 +1454,8 @@ namespace MWGui
             list->setIndexSelected(index);
             list->beginToItemAt(index);
             list->eventListChangePosition(list, index);
+            // The pointer goes along to the row, so that A there doesn't click the one it was on
+            pointAt(list);
         }
         else if (MyGUI::TabControl* tabs = control->castType<MyGUI::TabControl>(false))
         {
@@ -1461,9 +1483,9 @@ namespace MWGui
             adjustControl(1);
             return;
         }
-        if (!control || control->castType<MyGUI::ListBox>(false))
+        if (!control || isScriptClickable(control) || control->castType<MyGUI::ListBox>(false))
         {
-            // A row of a list, or something the page doesn't know (a script's own settings): a click there
+            // A row of a list, a script's setting, or something the page doesn't know: a click there
             clickAtPointer();
         }
         else if (MyGUI::EditBox* edit = control->castType<MyGUI::EditBox>(false))

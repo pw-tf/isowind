@@ -51,6 +51,8 @@ namespace LuaUi
 
         void setCallback(const std::string&, const LuaUtil::Callback&);
         void clearCallbacks();
+        // Isowind: whether a script handles this event on this widget (the Options window's controller navigation)
+        bool hasCallback(std::string_view name) const { return mCallbacks.find(name) != mCallbacks.end(); }
 
         void setProperties(const sol::main_object& props);
         void setTemplateProperties(const sol::main_object& props) { mTemplateProperties = props; }
