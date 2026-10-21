@@ -1,8 +1,8 @@
 # Builds Isowind on Windows, the whole way: CrabNet (the multiplayer networking), OpenMW's dependencies, the engine,
 # Isowind.exe, and the package (make_package.ps1). Run it from PowerShell, from anywhere; it works out the folders.
 #
-# Everything is in the repository (isowind\windows: this script, Isowind.cs and make_icon.py for the launcher,
-# make_package.ps1), and the rest goes beside the repository, in the folder it is checked out into (<root>):
+# Everything is in the repository (isowind\windows: this script, Isowind.cs, logo.png and make_icon.py for the
+# launcher, make_package.ps1), and the rest goes beside the repository, in the folder it is checked out into (<root>):
 #   <root>\crabnet\          the multiplayer networking library, cloned and built here
 #   <root>\bundled-mods\     the third-party mods (make_package.ps1 wants them); fetched from this repository's
 #                            "bundled-mods" release (bundled-mods.zip, as the Linux CI does) when the folder is missing
@@ -41,7 +41,7 @@ $ErrorActionPreference = 'Stop'
 $src = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path   # the repository
 $root = Split-Path -Parent $src
 $crabnet = Join-Path $root 'crabnet'
-$launcherSrc = Join-Path $src 'isowind\windows'   # Isowind.cs, make_icon.py, make_package.ps1
+$launcherSrc = Join-Path $src 'isowind\windows'   # Isowind.cs, logo.png, make_icon.py, make_package.ps1
 $buildDir = "MSVC${VsVersion}_64"
 $CrabNetCommit = '19e6619'   # the one every Isowind build uses (see .github\workflows\linux.yml)
 
@@ -165,7 +165,8 @@ if (-not $SkipLauncher) {
             }
             Run $python.Source @('make_icon.py', $icon) $launcherSrc
         }
-        Run $csc @('/nologo', '/target:winexe', "/out:$launcherOut\Isowind.exe", "/win32icon:$icon", 'Isowind.cs') $launcherSrc
+        Run $csc @('/nologo', '/target:winexe', "/out:$launcherOut\Isowind.exe", "/win32icon:$icon", '/resource:logo.png',
+            'Isowind.cs') $launcherSrc
         Write-Host "Launcher: $launcherOut\Isowind.exe"
     }
 }

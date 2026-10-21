@@ -93,31 +93,38 @@ class LauncherForm : Form
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(460, 558);
+        ClientSize = new Size(460, 580);
         BackColor = Back;
         ForeColor = Sand;
         Font = new Font("Segoe UI", 10f);
         try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
-        var title = new Label
+        // The logo (logo.png, embedded by the compiler's /resource), or the name in text if the exe was built without it
+        Control title;
+        var logo = typeof(LauncherForm).Assembly.GetManifestResourceStream("logo.png");
+        if (logo != null)
         {
-            Text = "ISOWIND",
-            Font = new Font("Georgia", 30f, FontStyle.Bold),
-            ForeColor = Gold,
-            AutoSize = false,
-            TextAlign = ContentAlignment.MiddleCenter,
-            Bounds = new Rectangle(0, 18, 460, 54),
-        };
-        var subtitle = new Label
+            title = new PictureBox
+            {
+                Image = Image.FromStream(logo),
+                SizeMode = PictureBoxSizeMode.CenterImage,
+                Bounds = new Rectangle(0, 18, 460, 100),
+            };
+        }
+        else
         {
-            Text = "Morrowind, seen from above",
-            ForeColor = Dim,
-            AutoSize = false,
-            TextAlign = ContentAlignment.MiddleCenter,
-            Bounds = new Rectangle(0, 72, 460, 22),
-        };
+            title = new Label
+            {
+                Text = "ISOWIND",
+                Font = new Font("Georgia", 30f, FontStyle.Bold),
+                ForeColor = Gold,
+                AutoSize = false,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Bounds = new Rectangle(0, 18, 460, 100),
+            };
+        }
 
-        var look = new Panel { BackColor = Panel, Bounds = new Rectangle(30, 110, 400, 146) };
+        var look = new Panel { BackColor = Panel, Bounds = new Rectangle(30, 132, 400, 146) };
         var lookTitle = new Label { Text = "Look", ForeColor = Gold, Bounds = new Rectangle(14, 8, 300, 22) };
         pixelArt = new RadioButton
         {
@@ -148,11 +155,11 @@ class LauncherForm : Form
         };
         look.Controls.AddRange(new Control[] { lookTitle, pixelArt, normal, controller, hint });
 
-        play = MakeButton("Play", new Rectangle(30, 272, 400, 52), 16f);
+        play = MakeButton("Play", new Rectangle(30, 294, 400, 52), 16f);
         play.Click += delegate { Launch(null); };
 
         // Multiplayer: join a server by its address, or host one on this computer
-        var multiplayer = new Panel { BackColor = Panel, Bounds = new Rectangle(30, 336, 400, 122) };
+        var multiplayer = new Panel { BackColor = Panel, Bounds = new Rectangle(30, 358, 400, 122) };
         var multiplayerTitle = new Label { Text = "Multiplayer", ForeColor = Gold, Bounds = new Rectangle(14, 8, 300, 22) };
         var addressLabel = new Label
         {
@@ -190,15 +197,15 @@ class LauncherForm : Form
         };
 
         openmwLauncher = MakeButton("OpenMW Launcher  (Morrowind, mods, options)",
-            new Rectangle(30, 470, 300, 34), 9f);
+            new Rectangle(30, 492, 300, 34), 9f);
         openmwLauncher.Click += delegate { StartOpenMWLauncher(); };
-        var licenses = MakeButton("Licenses", new Rectangle(340, 470, 90, 34), 9.5f);
+        var licenses = MakeButton("Licenses", new Rectangle(340, 492, 90, 34), 9.5f);
         licenses.Click += delegate { ShowLicenses(); };
 
-        progress = new ProgressBar { Bounds = new Rectangle(30, 512, 400, 12), Visible = false };
-        status = new Label { ForeColor = Dim, Bounds = new Rectangle(30, 528, 400, 22), Font = new Font("Segoe UI", 9f) };
+        progress = new ProgressBar { Bounds = new Rectangle(30, 534, 400, 12), Visible = false };
+        status = new Label { ForeColor = Dim, Bounds = new Rectangle(30, 550, 400, 22), Font = new Font("Segoe UI", 9f) };
 
-        Controls.AddRange(new Control[] { title, subtitle, look, play, multiplayer, openmwLauncher, licenses, progress,
+        Controls.AddRange(new Control[] { title, look, play, multiplayer, openmwLauncher, licenses, progress,
             status });
 
         try

@@ -73,7 +73,8 @@ The pieces, if you need one on its own:
 * `make_package.ps1` assembles `<root>\dist\Isowind` from `MSVC2022_64\Release`, the mod, the bundled mods, the
   pixel art, profiles, server, licenses, `README.txt` and the GPL source patch against OpenMW's `openmw-0.51.0`
   tag (fetched if the clone lacks it), then zips it. It finds the repository from its own location.
-* `make_icon.py` draws the icon; `Isowind.cs` compiles with .NET Framework 4's `csc.exe`, which comes with Windows.
+* `make_icon.py` draws the icon; `Isowind.cs` compiles with .NET Framework 4's `csc.exe`, which comes with Windows,
+  with `logo.png` (the launcher's logo) embedded as a resource.
 
 If something goes wrong:
 
