@@ -10,6 +10,18 @@ uniform_vec4 uSelectionColor {
     description = "Ring colour (rgb) and strength (a).";
 }
 
+uniform_vec4 uParty {
+    size = 8;
+    static = false;
+    description = "Party members' feet (xyz) and ring radius (w, 0 = none), as uSelection.";
+}
+
+uniform_vec4 uArrows {
+    size = 8;
+    static = false;
+    description = "Arrows at the screen's edge to players off it: position (xy, 0 to 1 from the bottom left) and the way they point (zw, a unit vector; 0 = none).";
+}
+
 fragment ring {
     // Selection ring for the Isowind top-down mode (scripts/isowind/topdown.lua sets the uniforms): a ring
     // painted onto the ground around the hovered creature's feet. It is placed using each pixel's world position from
@@ -17,23 +29,73 @@ fragment ring {
 
     omw_In vec2 omw_TexCoord;
 
+    // Party members' rings and the arrows to players off the screen (scripts/isowind/topdown.lua, updateParty) are
+    // drawn here too, under the selection ring.
+
     const float WIDTH = 10.0;         // ring thickness, world units
     const float GROUND_RANGE = 40.0;  // how far above or below the feet the ground may be
+    const vec3 PARTY_COLOR = vec3(0.2, 0.9, 0.3);
+    // The arrows: wide, flat triangles in the HUD's muted colours
+    const float ARROW_LENGTH = 18.0;  // pixels at 1080 lines
+    const float ARROW_WIDTH = 40.0;
+    const float ARROW_OUTLINE = 2.5;
+    const vec3 ARROW_COLOR = vec3(0.47, 0.5, 0.27);
+    const vec3 ARROW_OUTLINE_COLOR = vec3(0.16, 0.11, 0.06);
+
+    // How much of a ring around a creature's feet (xyz, radius w) the ground at this pixel shows
+    float ringAmount(vec3 world, vec4 ring)
+    {
+        float dist = length(world.xy - ring.xy);
+        float line = 1.0 - smoothstep(WIDTH * 0.5, WIDTH, abs(dist - ring.w));
+        float ground = 1.0 - smoothstep(GROUND_RANGE * 0.5, GROUND_RANGE, abs(world.z - ring.z));
+        // A faint fill inside the ring helps it read on busy ground.
+        float fill = (1.0 - smoothstep(ring.w - WIDTH, ring.w, dist)) * 0.18;
+        return max(line, fill) * ground;
+    }
+
+    // Distance in pixels outside a triangle pointing along +x, its tip at x = tip and its base at x = tip - size
+    float triangleDistance(float along, float side, float tip, float size, float halfWidth)
+    {
+        float slope = halfWidth / size;
+        return max(tip - size - along, (side - slope * (tip - along)) / sqrt(1.0 + slope * slope));
+    }
+
+    // Distance in pixels outside an arrow (a triangle, its middle at the arrow's position; negative inside)
+    float arrowDistance(vec2 pixel, vec4 arrow, float scale)
+    {
+        vec2 offset = pixel - arrow.xy * omw.resolution;
+        float along = dot(offset, arrow.zw);
+        float side = abs(dot(offset, vec2(-arrow.w, arrow.z)));
+        float size = ARROW_LENGTH * scale;
+        return triangleDistance(along, side, size * 0.5, size, ARROW_WIDTH * 0.5 * scale);
+    }
 
     void main()
     {
         vec4 scene = omw_GetLastShader(omw_TexCoord);
+        vec3 world = omw_GetWorldPosFromUV(omw_TexCoord);
+
+        for (int i = 0; i < 8; ++i)
+        {
+            if (uParty[i].w > 0.0)
+                scene.rgb = mix(scene.rgb, PARTY_COLOR, ringAmount(world, uParty[i]) * 0.85);
+        }
 
         if (uSelection.w > 0.0)
+            scene.rgb = mix(scene.rgb, uSelectionColor.rgb, ringAmount(world, uSelection) * uSelectionColor.a);
+
+        vec2 pixel = omw_TexCoord * omw.resolution;
+        float scale = omw.resolution.y / 1080.0;
+        for (int i = 0; i < 8; ++i)
         {
-            vec3 world = omw_GetWorldPosFromUV(omw_TexCoord);
-            float dist = length(world.xy - uSelection.xy);
-            float ring = 1.0 - smoothstep(WIDTH * 0.5, WIDTH, abs(dist - uSelection.w));
-            float ground = 1.0 - smoothstep(GROUND_RANGE * 0.5, GROUND_RANGE, abs(world.z - uSelection.z));
-            // A faint fill inside the ring helps it read on busy ground.
-            float fill = (1.0 - smoothstep(uSelection.w - WIDTH, uSelection.w, dist)) * 0.18;
-            float amount = max(ring, fill) * ground * uSelectionColor.a;
-            scene.rgb = mix(scene.rgb, uSelectionColor.rgb, amount);
+            if (dot(uArrows[i].zw, uArrows[i].zw) > 0.0)
+            {
+                float dist = arrowDistance(pixel, uArrows[i], scale);
+                float outline = 1.0 - smoothstep(-0.5, 0.5, dist - ARROW_OUTLINE * scale);
+                float fill = 1.0 - smoothstep(-0.5, 0.5, dist);
+                scene.rgb = mix(scene.rgb, ARROW_OUTLINE_COLOR, outline * 0.9);
+                scene.rgb = mix(scene.rgb, ARROW_COLOR, fill);
+            }
         }
 
         omw_FragColor = scene;
@@ -41,7 +103,7 @@ fragment ring {
 }
 
 technique {
-    description = "Selection ring under the creature under the cursor (Isowind top-down mode).";
+    description = "Selection ring under the creature under the cursor, party rings and arrows to players off the screen (Isowind top-down mode).";
     version = "1.0";
     author = "Isowind";
     passes = ring;

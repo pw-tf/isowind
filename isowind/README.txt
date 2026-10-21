@@ -87,6 +87,8 @@ own loot. Type in the chat:
    /party                 who is in your party
    /p MESSAGE             talk to your party
    /party leave           leave it; you keep the quests you have
+In the top-down view your party members have a green ring under them, and a green arrow at the edge of
+the screen points to any of them who are nearby but off it (on a co-op server, to every other player).
 
 Looks
 -----
@@ -107,9 +109,9 @@ E                 Use what is under the cursor, or the nearest thing in front of
 Space             Jump
 F / R             Ready weapon / ready magic
 Tab               Inventory
-Mouse wheel       Zoom. All the way out is the top-down view; zoom in and it becomes Morrowind's third person
-                  view, all the way in first person.
-F7                Hop between the top-down view and the normal one.
+Mouse wheel       Zoom, within the view you are in.
+F7                Switch view: top-down, then Morrowind's third person view, then first person. Change the
+                  key, or add a controller button for it, in Options > Scripts > Isowind.
 1 - 0             Quick keys, shown along the bottom of the screen. To set one, open the inventory (Tab),
                   point at an item, spell or enchanted item and press the number. Right-click a slot for
                   Morrowind's own quick key menu.
