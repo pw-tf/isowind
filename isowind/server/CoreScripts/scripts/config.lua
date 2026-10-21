@@ -143,13 +143,29 @@ config.synchronizedClientScriptIds = {
     "helsethScript", "KarrodMovement"
 }
 
--- Isowind MMO mode: the scripts of the game's one-off events, which happen once for each player, and once for the
--- players near them together (see custom/isowindMmo.lua; MMO mode adds these to synchronizedClientScriptIds for the
--- server to keep how far each player's got). Co-op mode leaves them as they are: one world, so each event happens once.
--- Scripts that go by a quest's journal stages don't belong here: they already go by each player's own journal
+-- Isowind MMO mode: the scripts of the game's one-off events (local scripts on objects), which happen once for each
+-- player (see custom/isowindMmo.lua; MMO mode adds these to synchronizedClientScriptIds for the server to keep how far
+-- each player's got). Co-op mode leaves them as they are: one world, so each event happens once. Two kinds of entry:
+-- * "scriptId": a shared event, one that changes the world (enables, disables or deletes things). It also happens for
+--   the players near the one it happens to who haven't had it, and counts as had for them too.
+-- * { "scriptId", own = true }: an own event, only sounds, voices or messages, which other players' games can't be
+--   shown. Each player has it once, on their own, whoever is near.
+-- Scripts that change the player (journal, items, topics, globals...), spawn things, bring in someone hostile, or follow
+-- quest or world state all the time don't belong here
 config.isowindEventScriptIds = {
     -- Tarhiel falling from the sky near Seyda Neen (the script is on his journal, on the ground below)
-    "fallingScript"
+    "fallingScript",
+    -- Dagoth Ur's voice taunting you as you step on the plates through his citadel with Wraithguard (one per plate)
+    { "DagothTaunt_1", own = true }, { "DagothTaunt_2", own = true }, { "DagothTaunt_3", own = true },
+    { "DagothTaunt_4", own = true }, { "DagothTaunt_5", own = true }, { "DagothTaunt_6", own = true },
+    { "DagothTaunt_7", own = true },
+    -- Tribunal: the stench warning as you near the plague's source in Gedna Relvel's tomb, Old Mournhold
+    { "PlagueWarning", own = true },
+    -- Bloodmoon: the sound at each Skaal ritual's stone as that ritual (beasts, earth, sun, trees, water, wind) is done
+    { "stoneeffect1Script", own = true }, { "stoneeffect2Script", own = true }, { "stoneeffect3Script", own = true },
+    { "stoneeffect4Script", own = true }, { "stoneeffect5Script", own = true }, { "stoneeffect6Script", own = true },
+    -- Bloodmoon: the ice wall cracking in the Halls of Penumbra during the Ritual of the Sun
+    { "icewallcrackScript", own = true }
 }
 
 -- Whether the instanced spawn should be used instead of the noninstanced one

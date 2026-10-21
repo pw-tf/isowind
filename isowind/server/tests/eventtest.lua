@@ -328,6 +328,98 @@ local function runTests()
     for _, key in ipairs({ "isowindEvents", "isowindEventLocals", "isowindEventDeaths", "isowindStates" }) do
         cell.data[key] = nil
     end
+
+    -- Own events: Dagoth Ur's first taunt in his citadel (a voice only). Alpha steps on the plate with Beta beside them
+    -- in the same cell: it's Alpha's alone; Beta has their own when they step on it
+    local CITADEL = "Dagoth Ur, Outer Facility"
+    local PLATE = "500001-0"
+    local sync = config.synchronizedClientScriptIds
+    check("own events' scripts report their variables too", tableHelper.containsValue(sync, "DagothTaunt_1") and
+        tableHelper.containsValue(sync, "DagothTaunt_7") and tableHelper.containsValue(sync, "stoneeffect1Script") and
+        tableHelper.containsValue(sync, "fallingScript"))
+    logicHandler.LoadCell(CITADEL)
+    local citadel = LoadedCells[CITADEL]
+    citadel.data.isowindEventLocals = nil
+    citadel.data.isowindStates = nil
+    places[0] = { cell = CITADEL, exterior = false, x = 100, y = 100 }
+    places[1] = { cell = CITADEL, exterior = false, x = 150, y = 100 }
+    places[2] = { cell = CITADEL, exterior = false, x = 200, y = 100 }
+    WorldInstance.data.isowindEventsHad.dagothtaunt_1 = nil
+    citadel.visitors = { 0, 1 }
+    local function taunt(pid, value)
+        receive(LOCAL, "DagothTaunt_1")
+        return validate("OnClientScriptLocal", { pid, CITADEL, { [PLATE] = { refId = "in_dagoth_taunt1",
+            uniqueIndex = PLATE, variables = { [SHORT] = { [0] = value } } } }, {} })
+    end
+    sent = {}
+    status = taunt(0, 1)
+    local tauntRecord = citadel.data.isowindEventLocals ~= nil and citadel.data.isowindEventLocals[PLATE] or nil
+    check("own event: done kept for Alpha", status.validDefaultHandler == false and tauntRecord ~= nil and
+        tauntRecord.players.alpha["0:0"] == 1)
+    check("own event: Beta beside them isn't given it", tauntRecord ~= nil and tauntRecord.players.beta == nil)
+    check("own event: nothing sent to anyone", #sent == 0)
+    check("own event: no one marked as having had it", WorldInstance.data.isowindEventsHad.dagothtaunt_1 == nil)
+    sent = {}
+    taunt(1, 1)
+    check("own event: Beta's own taunt is Beta's", tauntRecord.players.beta ~= nil and
+        tauntRecord.players.beta["0:0"] == 1 and #sent == 0)
+
+    -- An own event's enable or disable (none of the listed ones has any) is the player's alone, and comes back to them
+    sent = {}
+    receive(LOCAL, "PlagueWarning")
+    validate("OnObjectState", { 0, CITADEL, { ["500002-0"] = { refId = "x_thing", uniqueIndex = "500002-0",
+        state = false } }, {} })
+    check("own event state: Alpha's alone", citadel.data.isowindStates["500002-0"].players.alpha == false and
+        citadel.data.isowindStates["500002-0"].players.beta == nil)
+    check("own event state: back to Alpha only", #sentTo("SendObjectState", 0) == 1 and
+        #sentTo("SendObjectState", 1) == 0)
+
+    -- Alpha logs in again: the taunt is still done, and a re-fire on loading is answered with it
+    sent = {}
+    citadel.visitors = { 0 }
+    customEventHooks.triggerHandlers("OnCellLoad", customEventHooks.makeEventStatus(true, true), { 0, CITADEL })
+    local tauntReplay = sentTo("SendClientScriptLocal", 0)[1]
+    check("own event: cell load replays done to Alpha", tauntReplay ~= nil and
+        localValue(tauntReplay, "500001", 0) == 1)
+    sent = {}
+    taunt(0, 2)
+    local tauntAnswer = sentTo("SendClientScriptLocal", 0)[1]
+    check("own event: a re-fire is answered with Alpha's", tauntAnswer ~= nil and
+        localValue(tauntAnswer, "500001", 0) == 1 and tauntRecord.players.alpha["0:0"] == 1)
+
+    -- Gamma has it for the first time just after loading the cell: later changes in that load are kept, not re-fires
+    customEventHooks.triggerHandlers("OnCellLoad", customEventHooks.makeEventStatus(true, true), { 2, CITADEL })
+    sent = {}
+    taunt(2, 1)
+    taunt(2, 2)
+    check("own event: Gamma's first time and what follows are kept", tauntRecord.players.gamma ~= nil and
+        tauntRecord.players.gamma["0:0"] == 2 and #sent == 0)
+
+    -- A ritual stone's sound, placed twice: each placement is the player's own once, Beta near them gets nothing
+    places[0] = { cell = "-20, 19", exterior = true, x = -160000, y = 160000 }
+    places[1] = { cell = "-20, 19", exterior = true, x = -160100, y = 160000 }
+    local STONES = { { cell = "-20, 19", uniqueIndex = "600001-0" }, { cell = "-20, 24", uniqueIndex = "600002-0" } }
+    sent = {}
+    for _, stone in ipairs(STONES) do
+        logicHandler.LoadCell(stone.cell)
+        LoadedCells[stone.cell].data.isowindEventLocals = nil
+        receive(LOCAL, "stoneeffect1Script")
+        validate("OnClientScriptLocal", { 0, stone.cell, { [stone.uniqueIndex] = { refId = "active_BM_stonesound1",
+            uniqueIndex = stone.uniqueIndex, variables = { [SHORT] = { [0] = 1 } } } }, {} })
+    end
+    local stone1 = LoadedCells["-20, 19"].data.isowindEventLocals["600001-0"]
+    local stone2 = LoadedCells["-20, 24"].data.isowindEventLocals["600002-0"]
+    check("own event: both placements are Alpha's", stone1.players.alpha["0:0"] == 1 and
+        stone2.players.alpha["0:0"] == 1)
+    check("own event: Beta near Alpha gets neither", stone1.players.beta == nil and stone2.players.beta == nil and
+        #sent == 0)
+    for _, stone in ipairs(STONES) do
+        LoadedCells[stone.cell].data.isowindEventLocals = nil
+        LoadedCells[stone.cell]:QuicksaveToDrive()
+    end
+    citadel.data.isowindEventLocals = nil
+    citadel.data.isowindStates = nil
+    citadel:QuicksaveToDrive()
     log("done, " .. failures .. " failed")
 end
 

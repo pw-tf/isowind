@@ -12,22 +12,32 @@
 --   the host's respawn speed. Ones from the game's files are reset on each client ("isowind respawn", a console
 --   command packet the game handles itself); leveled-list ones are spawned again where they first appeared. Someone a
 --   quest script brought into the world (Tarhiel falling from the sky) is a one-off and stays dead.
--- * The game's one-off events (the scripts in config.isowindEventScriptIds: Tarhiel falling from the sky near Seyda
---   Neen) happen once for each player. What an event's script does to the world (enabling, disabling or deleting) and
---   how far it has got (its short and long local variables, isowindEventLocals) are each player's own. Players near the
---   one whose event it is (EVENT_BUBBLE_UNITS outdoors, the same cell indoors) who haven't had it see it with them, and
---   it counts as had for them too; the others get their own when they come by. The people an event script brings in or
---   takes away are run by each player's game itself ("isowind local"), not by whoever's game runs the cell, so each
---   player's game has its own of them: their deaths (isowindEventDeaths, which the player's game reports) are each
---   player's own, as their loot already is. The party doesn't share events: they're for whoever is there.
+-- * The game's one-off events (the scripts in config.isowindEventScriptIds) happen once for each player. What an event's
+--   script does to the world (enabling, disabling or deleting) and how far it has got (its short and long local
+--   variables, isowindEventLocals) are each player's own, kept per object and replayed when their game loads the cell.
+--   There are two kinds:
+--   - Shared events (a plain script id: Tarhiel falling from the sky near Seyda Neen) change the world. Players near the
+--     one whose event it is (EVENT_BUBBLE_UNITS outdoors, the same cell indoors) who haven't had it see it with them,
+--     and it counts as had for them too; the others get their own when they come by.
+--   - Own events ({ "scriptId", own = true }: Dagoth Ur's taunts) are only sounds, voices or messages, which other
+--     players' games can't be shown: each player has them once, on their own, whoever is near; nothing of them goes to
+--     anyone else.
+--   The people an event script brings in or takes away are run by each player's game itself ("isowind local"), not by
+--   whoever's game runs the cell, so each player's game has its own of them: their deaths (isowindEventDeaths, which the
+--   player's game reports) are each player's own, as their loot already is. The party doesn't share events: they're
+--   for whoever is there.
 
 if not IsowindHost.IsMmo() then
     return
 end
 
--- The server keeps how far each player's one-off events have got: their games send their scripts' local variables
-for _, scriptId in ipairs(config.isowindEventScriptIds or {}) do
-    tableHelper.insertValueIfMissing(config.synchronizedClientScriptIds, scriptId)
+-- The server keeps how far each player's one-off events have got: their games send their scripts' local variables.
+-- (An entry of config.isowindEventScriptIds is a script id, or { scriptId, own = true } for an own event.)
+for _, entry in ipairs(config.isowindEventScriptIds or {}) do
+    local scriptId = type(entry) == "table" and entry[1] or entry
+    if type(scriptId) == "string" then
+        tableHelper.insertValueIfMissing(config.synchronizedClientScriptIds, scriptId)
+    end
 end
 
 config.shareJournal = false
@@ -271,20 +281,24 @@ local cellLoadedAt = {}
 -- The event people each player's game was told to run itself, this session: { name = { cellDescription = { uniqueIndex
 -- = true } } }
 local runsOwnCopy = {}
+-- Under which load of the cell (cellLoadedAt) each player's own events last wrote each object's data, this session:
+-- { name = { cellDescription = { uniqueIndex = load time } } }
+local ownWrittenAt = {}
 
--- The event a packet from a script is about (its script, in lower case), or nil
+-- The event a packet from a script is about (its script, in lower case) and whether it's an own event, or nil
 local function eventScriptOf(packetOrigin)
     if packetOrigin ~= enumerations.packetOrigin.CLIENT_SCRIPT_LOCAL and
         packetOrigin ~= enumerations.packetOrigin.CLIENT_SCRIPT_GLOBAL then
-        return nil
+        return nil, false
     end
     local script = string.lower(tes3mp.GetObjectListClientScript() or "")
-    for _, scriptId in ipairs(config.isowindEventScriptIds or {}) do
-        if string.lower(scriptId) == script then
-            return script
+    for _, entry in ipairs(config.isowindEventScriptIds or {}) do
+        local scriptId = type(entry) == "table" and entry[1] or entry
+        if type(scriptId) == "string" and string.lower(scriptId) == script then
+            return script, type(entry) == "table" and entry.own == true
         end
     end
-    return nil
+    return nil, false
 end
 
 local function getEventsHad()
@@ -334,6 +348,24 @@ end
 local function isRefire(name, cellDescription)
     local loadedAt = cellLoadedAt[name] ~= nil and cellLoadedAt[name][cellDescription] or nil
     return loadedAt ~= nil and os.time() - loadedAt <= EVENT_REFIRE_SECONDS
+end
+
+local function markOwnWritten(name, cellDescription, uniqueIndex)
+    local loadedAt = cellLoadedAt[name] ~= nil and cellLoadedAt[name][cellDescription] or 0
+    ownWrittenAt[name] = ownWrittenAt[name] or {}
+    ownWrittenAt[name][cellDescription] = ownWrittenAt[name][cellDescription] or {}
+    ownWrittenAt[name][cellDescription][uniqueIndex] = loadedAt
+end
+
+-- An own event's change from a player's game that comes from its script starting over on loading the cell: kept for
+-- the player from before (kept isn't nil), and nothing of it written since that load
+local function isOwnRefire(name, cellDescription, uniqueIndex, kept)
+    if kept == nil or not isRefire(name, cellDescription) then
+        return false
+    end
+    local written = ownWrittenAt[name] ~= nil and ownWrittenAt[name][cellDescription] ~= nil and
+        ownWrittenAt[name][cellDescription][uniqueIndex] or nil
+    return written ~= cellLoadedAt[name][cellDescription]
 end
 
 -- An event script's short and long local variables from a ClientScriptLocal packet, as { "type:index" = value } (keys
@@ -595,10 +627,29 @@ local function eventRunOf(pid, event)
 end
 
 -- An event script enabling or disabling the game's own people or things: for the player, and the others in their run
--- if it's theirs
-local function onEventStates(pid, cell, mine, event)
+-- if it's theirs (an own event's: the player's alone)
+local function onEventStates(pid, cell, mine, event, own)
     local name = playerKey(pid)
     registerEventObjects(cell, mine, event)
+
+    if own then
+        local answer = {}
+        for uniqueIndex, object in pairs(mine) do
+            local kept = getOwnState(cell, uniqueIndex, name)
+            if isOwnRefire(name, cell.description, uniqueIndex, kept) then
+                -- Their game's script starting over on loading the cell: it gets back what the player has
+                answer[uniqueIndex] = { refId = object.refId, state = kept }
+            else
+                setOwnState(cell, uniqueIndex, object.refId, name, object.state)
+                markOwnWritten(name, cell.description, uniqueIndex)
+                answer[uniqueIndex] = object
+            end
+        end
+        -- (the player's own game waits for the server to make the change)
+        sendStates(pid, cell.description, answer)
+        return
+    end
+
     local run, isStarter = eventRunOf(pid, event)
 
     if run == nil and isRefire(name, cell.description) then
@@ -636,8 +687,11 @@ local function onEventStates(pid, cell, mine, event)
     end
 end
 
--- Whose an event script's deletion is: the run's if it's the player's run, else the player's own
-local function eventDeleters(pid, cell, mine, event)
+-- Whose an event script's deletion is: the run's if it's the player's run, else (and for an own event) the player's
+local function eventDeleters(pid, cell, mine, event, own)
+    if own then
+        return { playerKey(pid) }
+    end
     local run, isStarter = eventRunOf(pid, event)
     if not isStarter then
         return { playerKey(pid) }
@@ -680,7 +734,8 @@ end
 
 -- How far an event's script has got for a player (its short and long variables; ClientScriptLocal packets, which the
 -- game sends for the scripts in config.synchronizedClientScriptIds): theirs, and their run's others' if the run is
--- theirs. Their own game already has it (it sets the variable before it tells the server), so it isn't sent back.
+-- theirs (an own event's: the player's alone). Their own game already has it (it sets the variable before it tells
+-- the server), so it isn't sent back.
 local function onClientScriptLocal(eventStatus, pid, cellDescription, objects)
     if eventStatus.validDefaultHandler == false then
         return
@@ -689,7 +744,7 @@ local function onClientScriptLocal(eventStatus, pid, cellDescription, objects)
     if packetOrigin == enumerations.packetOrigin.CLIENT_GAMEPLAY then
         return onEventDeath(pid, cellDescription, objects)
     end
-    local event = eventScriptOf(packetOrigin)
+    local event, own = eventScriptOf(packetOrigin)
     if event == nil then
         return
     end
@@ -711,14 +766,33 @@ local function onClientScriptLocal(eventStatus, pid, cellDescription, objects)
     end
 
     local name = playerKey(pid)
+    if own then
+        local answer = {}
+        for uniqueIndex, change in pairs(changes) do
+            local kept = getOwnLocals(cell, uniqueIndex, name)
+            if isOwnRefire(name, cellDescription, uniqueIndex, kept) then
+                -- Their game's script starting over on loading the cell: it gets back how far the player had got
+                answer[uniqueIndex] = { refId = change.refId, vars = kept }
+            else
+                setOwnLocals(cell, uniqueIndex, change.refId, name, change.vars)
+                markOwnWritten(name, cellDescription, uniqueIndex)
+            end
+        end
+        if next(answer) ~= nil then
+            sendLocals(pid, cellDescription, answer)
+        end
+        cell:QuicksaveToDrive()
+        return customEventHooks.makeEventStatus(false, true)
+    end
+
     local run, isStarter = eventRunOf(pid, event)
     if run == nil and isRefire(name, cellDescription) then
         -- Their game's script starting over on loading the cell: it gets back how far the player had got
         local answer = {}
         for uniqueIndex, change in pairs(changes) do
-            local own = getOwnLocals(cell, uniqueIndex, name)
-            if own ~= nil then
-                answer[uniqueIndex] = { refId = change.refId, vars = own }
+            local kept = getOwnLocals(cell, uniqueIndex, name)
+            if kept ~= nil then
+                answer[uniqueIndex] = { refId = change.refId, vars = kept }
             else
                 setOwnLocals(cell, uniqueIndex, change.refId, name, change.vars)
             end
@@ -785,10 +859,13 @@ local function onObjectDelete(eventStatus, pid, cellDescription, objects)
     end
 
     -- A quest's deletion is the whole party's, an event's its run's; a pickup only the player's
-    local event = fromScript and eventScriptOf(packetOrigin) or nil
+    local event, ownEvent = nil, false
+    if fromScript then
+        event, ownEvent = eventScriptOf(packetOrigin)
+    end
     local names
     if event ~= nil then
-        names = eventDeleters(pid, cell, mine, event)
+        names = eventDeleters(pid, cell, mine, event, ownEvent)
     else
         names = fromScript and questSharers(pid) or { playerKey(pid) }
     end
@@ -845,9 +922,9 @@ local function onObjectState(eventStatus, pid, cellDescription, objects)
         return
     end
 
-    local event = eventScriptOf(packetOrigin)
+    local event, ownEvent = eventScriptOf(packetOrigin)
     if event ~= nil then
-        onEventStates(pid, cell, mine, event)
+        onEventStates(pid, cell, mine, event, ownEvent)
     else
         local names = questSharers(pid)
         cell.data.isowindStates = cell.data.isowindStates or {}
