@@ -32,6 +32,7 @@ namespace MWGui
         void onResChange(int, int) override;
 
         bool onControllerButtonEvent(const SDL_ControllerButtonEvent& arg) override;
+        bool stepTab(int delta) override;
 
     protected:
         MyGUI::TabControl* mSettingsTab;

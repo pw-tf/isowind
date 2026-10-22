@@ -29,8 +29,10 @@
 -- there the ring and label stay on what X uses (friendly people, doors, containers and their locks), but the aim
 -- never locks onto those. A lockpick or probe never locks on, and looks for doors and containers first.
 -- The menus are the engine's controller menus ('controller menus' in the profile's settings.cfg): D-pad and A / B,
--- the triggers switch pages, Y puts an item or spell on a quick key, and X on a text field (moved onto with the
--- D-pad) brings up a keyboard on the screen to type with; it never comes up by itself.
+-- the bumpers switch the inventory screen's pages and the triggers the tabs inside a window, Y puts an item or spell
+-- on a quick key, and X on a text field (moved onto with the D-pad) brings up a keyboard on the screen to type with;
+-- it never comes up by itself. The inventory screen's map, inventory, magic and stats are pages, one at a time under a
+-- tab bar, with the mouse and keyboard too: Q / E turn its pages (and Options' tabs), Z / C the tabs inside a window.
 --
 -- The zoom distance says the view: TOPDOWN_FROM or farther is this top-down view; in closer, Morrowind's third person
 -- view at that distance; closer than FIRST_PERSON_BELOW, first person. Zooming stays within the view's range and the

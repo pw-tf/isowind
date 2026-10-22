@@ -114,6 +114,12 @@ E                 Use what is under the cursor, or the nearest thing in front of
 Space             Jump
 F / R             Ready weapon / ready magic
 Tab               Inventory
+Q / E             In the menus: the previous / next page of the inventory screen (Map, Inventory,
+                  Magic, Stats), or tab in Options. Click a page's tab along the top, or what it
+                  stands for on the HUD (the bars, the weapon, the spell, the minimap), to go to it.
+Z / C             In the menus: the previous / next tab inside a window - the kinds of item in the
+                  inventory or a shop, a chest's containers opened together, the local or world map.
+                  With a chest or shop open, the window under the pointer.
 Mouse wheel       Zoom, within the view you are in.
 F7                Switch view: top-down, then Morrowind's third person view, then first person. Change the
                   key, or add a controller button for it, in Options > Scripts > Isowind (with a controller:
@@ -132,10 +138,11 @@ D-pad left        (nothing for now)
 D-pad right       Quest log                       Start             Menu
 Back              Inventory (hold: journal)
 Left stick in     Sneak                           Right stick in    Rest
-Menus are made for the controller: the D-pad and A choose, B goes back, and where several windows are open
-side by side (the inventory screen, a chest, a shop) the bumpers switch between them, the one in use lit,
-while the triggers switch the tabs within a window. The right stick pressed in shows an item's info, and in
-the inventory and magic windows Y puts the item or spell on a quick key. In Options the bumpers switch tabs,
+Menus are made for the controller: the D-pad and A choose, B goes back, the bumpers switch the inventory
+screen's pages (Map, Inventory, Magic, Stats; one at a time, as with the mouse and keyboard) and, where two
+windows are open side by side (a chest, a shop), between them, the one in use lit, while the triggers switch
+the tabs within a window. The right stick pressed in shows an item's info, and in the inventory and magic
+windows Y puts the item or spell on a quick key. In Options the bumpers switch tabs,
 the D-pad steps a pointer through the settings (up / down) and adjusts the one it is on (left / right), and A
 works it, on the Scripts tab's pages too. The legend along the bottom of each menu says what the buttons do
 there. To type something (your name, a server's password, a save's, potion's, spell's or class's name, a map

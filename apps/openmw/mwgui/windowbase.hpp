@@ -103,6 +103,12 @@ namespace MWGui
         /// (nullptr if none). By default the text field in this window with the keyboard focus; windows whose text
         /// field keeps the focus while the controller works elsewhere say when it is selected.
         virtual MyGUI::Widget* getControllerTextField();
+        /// Isowind: on the inventory screen its windows are pages, one on the screen at a time under a tab bar (for
+        /// the mouse and keyboard as for a controller): this one laid out as the page shown, or out of sight
+        virtual void setInventoryPage(bool shown) {}
+        /// Isowind: the keyboard's keys for the tabs inside a window (Z / C, as a controller's triggers) step through
+        /// this window's tabs; false if it has none
+        virtual bool stepTab(int delta) { return false; }
 
     protected:
         virtual void onTitleDoubleClicked();

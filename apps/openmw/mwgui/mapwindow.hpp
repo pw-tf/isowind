@@ -290,7 +290,8 @@ namespace MWGui
 
     protected:
         bool onControllerButtonEvent(const SDL_ControllerButtonEvent& arg) override;
-        void setActiveControllerWindow(bool active) override;
+        void setInventoryPage(bool shown) override;
+        bool stepTab(int delta) override;
 
     private:
         void onDragStart(MyGUI::Widget* sender, int left, int top, MyGUI::MouseButton id);

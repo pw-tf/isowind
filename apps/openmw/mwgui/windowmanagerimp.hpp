@@ -394,6 +394,9 @@ namespace MWGui
         bool injectKeyPress(MyGUI::KeyCode key, unsigned int text, bool repeat = false) override;
         /// Isowind: 1 to 0 pressed over an item or spell in the inventory menus puts it on that quick key
         bool assignHoveredToQuickKey(MyGUI::KeyCode key);
+        /// Isowind: Q / E turn the pages (the inventory screen's, Options' tabs) and Z / C the tabs inside a window,
+        /// as a controller's bumpers and triggers do
+        bool injectTabKey(MyGUI::KeyCode key);
         bool injectKeyRelease(MyGUI::KeyCode key) override;
 
         const std::string& getVersionDescription() const override;
@@ -413,6 +416,7 @@ namespace MWGui
         void setControllerTooltipEnabled(bool enabled) override;
         void restoreControllerTooltips() override;
         void updateControllerButtonsOverlay() override;
+        void placeInventoryPage(MyGUI::Widget* window, int width, int height, bool shown) override;
         bool isOnScreenKeyboardVisible() const override;
         void openOnScreenKeyboard() override;
 
@@ -541,6 +545,11 @@ namespace MWGui
         bool mControllerTooltipEnabled = false;
 
         void reapplyActiveControllerWindow();
+        /// Whether the top mode's windows go by an active one: in controller mode, and (Isowind) on the inventory
+        /// screen, whose pages are its windows
+        bool hasActiveControllerWindow() const;
+        void layoutInventoryPages();
+        void updateInventoryTabs();
 
         std::unique_ptr<SDLUtil::SDLCursorManager> mCursorManager;
 

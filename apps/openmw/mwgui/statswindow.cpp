@@ -81,9 +81,11 @@ namespace MWGui
         MyGUI::Window* t = mMainWidget->castType<MyGUI::Window>();
         t->eventWindowChangeCoord += MyGUI::newDelegate(this, &StatsWindow::onWindowResize);
 
+        // Isowind: the inventory screen's windows are pages, and only the map can be pinned
+        setPinButtonVisible(false);
+
         if (Settings::gui().mControllerMenus)
         {
-            setPinButtonVisible(false);
             mControllerButtons.mLStick = "#{Interface:Mouse}";
             mControllerButtons.mRStick = "#{Interface:ScrollDown}";
             mControllerButtons.mB = "#{Interface:Back}";
@@ -723,7 +725,9 @@ namespace MWGui
 
     void StatsWindow::onTitleDoubleClicked()
     {
-        if (Settings::gui().mControllerMenus)
+        // (Isowind: on the inventory screen the window is a page)
+        if (Settings::gui().mControllerMenus
+            || MWBase::Environment::get().getWindowManager()->getMode() == MWGui::GM_Inventory)
             return;
         else if (MyGUI::InputManager::getInstance().isShiftPressed())
         {
@@ -743,18 +747,14 @@ namespace MWGui
         return true;
     }
 
-    void StatsWindow::setActiveControllerWindow(bool active)
+    void StatsWindow::setInventoryPage(bool shown)
     {
-        MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
-        if (winMgr->getMode() == MWGui::GM_Inventory)
-        {
-            // Isowind: the windows keep Morrowind's layout (the active one is lit, see WindowBase)
-            MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();
+        // Fill the screen, or limit to a certain size on large screens. Size chosen to
+        // show all stats.
+        MWBase::Environment::get().getWindowManager()->placeInventoryPage(
+            mMainWidget, getIdealWidth(), getIdealHeight(), shown);
 
-            if (active)
-                onWindowResize(window);
-        }
-
-        WindowBase::setActiveControllerWindow(active);
+        if (shown)
+            onWindowResize(mMainWidget->castType<MyGUI::Window>());
     }
 }

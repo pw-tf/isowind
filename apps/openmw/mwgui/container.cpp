@@ -622,8 +622,7 @@ namespace MWGui
             && (arg.button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER || arg.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER))
         {
             // Isowind: the tabs (the triggers, where the bumpers switch windows: they come here as the bumpers)
-            selectTab(wrap(mTab, mTabButtons.size(), arg.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER ? 1 : -1));
-            MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
+            stepTab(arg.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER ? 1 : -1);
         }
         else if (arg.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
         {
@@ -901,6 +900,15 @@ namespace MWGui
     void ContainerWindow::onNextTabClicked(MyGUI::Widget* /*sender*/)
     {
         selectTab(wrap(mTab, mTabButtons.size(), 1));
+    }
+
+    bool ContainerWindow::stepTab(int delta)
+    {
+        if (mTabButtons.empty())
+            return false;
+        selectTab(wrap(mTab, mTabButtons.size(), delta));
+        MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
+        return true;
     }
 
     void ContainerWindow::onTabWheel(MyGUI::Widget* /*sender*/, int rel)

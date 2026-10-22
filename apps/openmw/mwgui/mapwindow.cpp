@@ -1137,7 +1137,8 @@ namespace MWGui
         MWGui::GuiMode mode = MWBase::Environment::get().getWindowManager()->getMode();
         mButton->setVisible(visible && mode != MWGui::GM_None);
 
-        if (Settings::gui().mControllerMenus && mode == MWGui::GM_None && pinned() && visible)
+        // (Isowind: for the mouse and keyboard too, as the inventory screen's windows are pages for them as well)
+        if (mode == MWGui::GM_None && pinned() && visible)
         {
             // Restore the window to pinned size.
             MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();
@@ -1387,7 +1388,9 @@ namespace MWGui
 
     void MapWindow::onTitleDoubleClicked()
     {
-        if (Settings::gui().mControllerMenus)
+        // (Isowind: on the inventory screen the window is a page)
+        if (Settings::gui().mControllerMenus
+            || MWBase::Environment::get().getWindowManager()->getMode() == MWGui::GM_Inventory)
             return;
         else if (MyGUI::InputManager::getInstance().isShiftPressed())
             MWBase::Environment::get().getWindowManager()->toggleMaximized(this);
@@ -1585,15 +1588,22 @@ namespace MWGui
         }
     }
 
-    void MapWindow::setActiveControllerWindow(bool active)
+    void MapWindow::setInventoryPage(bool shown)
     {
-        MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
-        if (winMgr->getMode() == MWGui::GM_Inventory)
-        {
-            // Isowind: the windows keep Morrowind's layout (the active one is lit, see WindowBase)
-        }
+        // Fill the screen, or limit to a certain size on large screens. Size chosen to
+        // show the entire local map without scrolling.
+        MyGUI::IntSize canvasSize = mLocalMap->getCanvasSize();
+        MyGUI::IntSize borderSize = mMainWidget->getSize() - mMainWidget->getClientWidget()->getSize();
+        MWBase::Environment::get().getWindowManager()->placeInventoryPage(
+            mMainWidget, canvasSize.width + borderSize.width, canvasSize.height + borderSize.height, shown);
+    }
 
-        WindowBase::setActiveControllerWindow(active);
+    bool MapWindow::stepTab(int /*delta*/)
+    {
+        // Isowind: the local map and the world map, as the two tabs
+        onWorldButtonClicked(mButton);
+        MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
+        return true;
     }
 
     // -------------------------------------------------------------------

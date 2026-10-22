@@ -1143,6 +1143,13 @@ namespace MWGui
         mControlsBox->setViewOffset(MyGUI::IntPoint(0, 0));
     }
 
+    bool SettingsWindow::stepTab(int delta)
+    {
+        mSettingsTab->setIndexSelected(wrap(mSettingsTab->getIndexSelected(), mSettingsTab->getItemCount(), delta));
+        MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
+        return true;
+    }
+
     bool SettingsWindow::onControllerButtonEvent(const SDL_ControllerButtonEvent& arg)
     {
         if (arg.button == SDL_CONTROLLER_BUTTON_B)
@@ -1150,21 +1157,9 @@ namespace MWGui
             onOkButtonClicked(mOkButton);
             return true;
         }
-        else if (arg.button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER)
+        else if (arg.button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER || arg.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
         {
-            size_t index = mSettingsTab->getIndexSelected();
-            index = wrap(index, mSettingsTab->getItemCount(), -1);
-            mSettingsTab->setIndexSelected(index);
-            MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
-            pointAtFirstControl();
-            return true;
-        }
-        else if (arg.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
-        {
-            size_t index = mSettingsTab->getIndexSelected();
-            index = wrap(index, mSettingsTab->getItemCount(), 1);
-            mSettingsTab->setIndexSelected(index);
-            MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
+            stepTab(arg.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER ? 1 : -1);
             pointAtFirstControl();
             return true;
         }

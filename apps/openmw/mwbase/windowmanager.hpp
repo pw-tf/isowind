@@ -431,6 +431,9 @@ namespace MWBase
         /// Restore tooltip visibility if user has them enabled but they were hidden by mouse movement
         virtual void restoreControllerTooltips() = 0;
         virtual void updateControllerButtonsOverlay() = 0;
+        /// Isowind: places one of the inventory screen's pages (MWGui::WindowBase::setInventoryPage), of up to this
+        /// size, under the tab bar; or out of sight if not shown
+        virtual void placeInventoryPage(MyGUI::Widget* window, int width, int height, bool shown) = 0;
         /// Isowind: the keyboard on the screen, for typing with a controller
         virtual bool isOnScreenKeyboardVisible() const = 0;
         /// Isowind: brings it up for the text box that has the keyboard focus

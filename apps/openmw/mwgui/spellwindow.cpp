@@ -63,9 +63,11 @@ namespace MWGui
         int filterWidth = mSpellView->getSize().width - deleteButton->getSize().width - 3;
         mFilterEdit->setSize(filterWidth, mFilterEdit->getSize().height);
 
+        // Isowind: the inventory screen's windows are pages, and only the map can be pinned
+        setPinButtonVisible(false);
+
         if (Settings::gui().mControllerMenus)
         {
-            setPinButtonVisible(false);
             mControllerButtons.mA = "#{Interface:Select}";
             mControllerButtons.mB = "#{Interface:Back}";
             mControllerButtons.mY = "#{sQuickMenuTitle}";
@@ -82,7 +84,9 @@ namespace MWGui
 
     void SpellWindow::onTitleDoubleClicked()
     {
-        if (Settings::gui().mControllerMenus)
+        // (Isowind: on the inventory screen the window is a page)
+        if (Settings::gui().mControllerMenus
+            || MWBase::Environment::get().getWindowManager()->getMode() == MWGui::GM_Inventory)
             return;
         else if (MyGUI::InputManager::getInstance().isShiftPressed())
             MWBase::Environment::get().getWindowManager()->toggleMaximized(this);
@@ -338,16 +342,18 @@ namespace MWGui
     {
         MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
         if (winMgr->getMode() == MWGui::GM_Inventory)
-        {
-            // Isowind: the windows keep Morrowind's layout (the active one is lit, see WindowBase)
-            MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();
-
-            MWBase::Environment::get().getWindowManager()->setControllerTooltipVisible(
-                active && Settings::gui().mControllerTooltips);
-        }
+            winMgr->setControllerTooltipVisible(active && Settings::gui().mControllerTooltips);
 
         mSpellView->setActiveControllerWindow(active);
 
         WindowBase::setActiveControllerWindow(active);
+    }
+
+    void SpellWindow::setInventoryPage(bool shown)
+    {
+        // Fill the screen, or limit to a certain size on large screens. Size chosen to
+        // match the size of the stats window.
+        MWBase::Environment::get().getWindowManager()->placeInventoryPage(
+            mMainWidget, StatsWindow::getIdealWidth(), StatsWindow::getIdealHeight(), shown);
     }
 }

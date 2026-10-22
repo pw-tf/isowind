@@ -137,6 +137,8 @@ namespace MWGui
         mFilterAll->setStateSelected(true);
 
         setGuiMode(mGuiMode);
+        // Isowind: the inventory screen's windows are pages, and only the map can be pinned
+        setPinButtonVisible(false);
 
         if (Settings::gui().mControllerMenus)
         {
@@ -234,13 +236,12 @@ namespace MWGui
 
     void InventoryWindow::setGuiMode(GuiMode mode)
     {
-        if (Settings::gui().mControllerMenus && mGuiMode == mode && isVisible())
+        // (Isowind: nor on the inventory screen, where the window is a page)
+        if ((Settings::gui().mControllerMenus || mode == GM_Inventory) && mGuiMode == mode && isVisible())
             return;
 
         mGuiMode = mode;
         const WindowSettingValues settings = getModeSettings(mGuiMode);
-        setPinButtonVisible(
-            mode != GM_Container && mode != GM_Companion && mode != GM_Barter && !Settings::gui().mControllerMenus);
 
         const WindowRectSettingValues& rect = settings.mIsMaximized ? settings.mMaximized : settings.mRegular;
 
@@ -601,7 +602,8 @@ namespace MWGui
 
     void InventoryWindow::onTitleDoubleClicked()
     {
-        if (Settings::gui().mControllerMenus && mGuiMode == GM_Inventory)
+        // Isowind: on the inventory screen the window is a page
+        if (mGuiMode == GM_Inventory)
             return;
         else if (MyGUI::InputManager::getInstance().isShiftPressed())
             toggleMaximized();
@@ -1063,33 +1065,9 @@ namespace MWGui
             }
         }
         else if (arg.button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER)
-        {
-            if (mFilterAll->getStateSelected())
-                onFilterChanged(mFilterMisc);
-            else if (mFilterWeapon->getStateSelected())
-                onFilterChanged(mFilterAll);
-            else if (mFilterApparel->getStateSelected())
-                onFilterChanged(mFilterWeapon);
-            else if (mFilterMagic->getStateSelected())
-                onFilterChanged(mFilterApparel);
-            else if (mFilterMisc->getStateSelected())
-                onFilterChanged(mFilterMagic);
-            MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
-        }
+            stepTab(-1);
         else if (arg.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
-        {
-            if (mFilterAll->getStateSelected())
-                onFilterChanged(mFilterWeapon);
-            else if (mFilterWeapon->getStateSelected())
-                onFilterChanged(mFilterApparel);
-            else if (mFilterApparel->getStateSelected())
-                onFilterChanged(mFilterMagic);
-            else if (mFilterMagic->getStateSelected())
-                onFilterChanged(mFilterMisc);
-            else if (mFilterMisc->getStateSelected())
-                onFilterChanged(mFilterAll);
-            MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
-        }
+            stepTab(1);
         else
         {
             mItemView->onControllerButton(arg.button);
@@ -1103,16 +1081,6 @@ namespace MWGui
         if (!Settings::gui().mControllerMenus)
             return;
 
-        MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
-        if (winMgr->getMode() == MWGui::GM_Inventory)
-        {
-            // Isowind: the windows keep Morrowind's layout (the active one is lit, see WindowBase)
-            MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();
-
-            adjustPanes();
-            updatePreviewSize();
-        }
-
         // Show L1 and R1 buttons next to tabs
         MyGUI::Widget* image;
         getWidget(image, "BtnL1Image");
@@ -1123,5 +1091,29 @@ namespace MWGui
 
         mItemView->setActiveControllerWindow(active);
         WindowBase::setActiveControllerWindow(active);
+    }
+
+    void InventoryWindow::setInventoryPage(bool shown)
+    {
+        // Fill the screen, or limit to a certain size on large screens. Size chosen to
+        // match the size of the stats window.
+        MyGUI::IntSize viewSize = MyGUI::RenderManager::getInstance().getViewSize();
+        MWBase::Environment::get().getWindowManager()->placeInventoryPage(
+            mMainWidget, std::min(viewSize.width, 1600), StatsWindow::getIdealHeight(), shown);
+
+        adjustPanes();
+        updatePreviewSize();
+    }
+
+    bool InventoryWindow::stepTab(int delta)
+    {
+        const std::vector<MyGUI::Button*> filters
+            = { mFilterAll, mFilterWeapon, mFilterApparel, mFilterMagic, mFilterMisc };
+        size_t selected = 0;
+        while (selected < filters.size() - 1 && !filters[selected]->getStateSelected())
+            ++selected;
+        onFilterChanged(filters[wrap(selected, filters.size(), delta)]);
+        MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
+        return true;
     }
 }
