@@ -1,15 +1,6 @@
 Isowind
 =======
 
-Morrowind as a top-down / isometric game, with an optional pixel art look and cooperative multiplayer:
-[OpenMW](https://openmw.org) 0.51 with TES3MP's multiplayer, a camera mod and menus made for a controller.
-This repository is OpenMW's source with Isowind's changes; OpenMW's own README follows further down.
-
-* `isowind/` - the mod (`mod/`), the pixel art look, the profiles, the server files and the player's `README.txt`
-* `isowind/windows/` - the Windows build script, `Isowind.exe`'s source and the packaging script
-* `isowind/linux/` - `isowind.sh`, the launcher window and the Linux packaging script
-* `.github/workflows/linux.yml` - the Linux build, which is the reference recipe
-
 Building on Windows
 -------------------
 
@@ -136,9 +127,11 @@ package: [linuxdeploy](https://github.com/linuxdeploy/linuxdeploy/releases) on t
     unzip -q build-deps/bundled-mods.zip -d build-deps/bundled-mods
     isowind/linux/package.sh build build-deps/Isowind build-deps/bundled-mods
 
-**5. Play:** `build-deps/Isowind/isowind.sh` (or `isowind.sh gui` for the launcher window; the other commands are in
-"Running with a controller" below). The first time it looks for Morrowind in Steam's usual places; otherwise run it
-as `MORROWIND=/path/to/Morrowind build-deps/Isowind/isowind.sh`, the folder with `Data Files` and `Morrowind.ini`.
+**5. Play:** `build-deps/Isowind/isowind.sh` (or `isowind.sh gui` for the launcher window; `isowind.sh normal`,
+`isowind.sh join ADDRESS` and `isowind.sh host` are the others, and `--controller` or `--no-controller` among the
+arguments says whether the menus are made for a controller). The first time it looks for Morrowind in Steam's usual
+places; otherwise run it as `MORROWIND=/path/to/Morrowind build-deps/Isowind/isowind.sh`, the folder with
+`Data Files` and `Morrowind.ini`.
 
 After changes, `cmake --build build -j$(nproc)` and `package.sh` again. Packaging into the same folder again keeps its
 server data and `server/tes3mp-server.cfg`, as on Windows, after backing them and `~/.local/share/openmw/saves` up
@@ -152,133 +145,87 @@ engine's folders (`apps`, `components`, `files`, `extern`, `cmake`, `CMakeLists.
 the build runs, so build again after committing or pulling engine changes, even when the code on disk was already
 built. Isowind's mod and server scripts don't count.
 
-Running with a controller
--------------------------
+Controls
+--------
 
-The menus made for a controller are the `controller menus` setting in the look's `settings.cfg`
-(`profiles\pixelart`, `profiles\normal`); the launchers set it, the game itself never does.
+The defaults; Options > Controls rebinds them (and Options > Scripts > Isowind the view switch).
 
-* Windows: `Isowind.exe` has a **Controller** tick box, ticked when a controller is connected as it opens.
-* Linux: `isowind.sh gui` is the same window. The commands (`isowind.sh`, `isowind.sh normal`, `isowind.sh join
-  ADDRESS`, `isowind.sh host`) go by what is plugged in, and `--controller` or `--no-controller` anywhere among the
-  arguments overrides that. A controller that comes with a stream, as Moonlight's does, isn't there to be seen,
-  so a streamed entry wants the flag:
+**Keyboard and mouse, in the game**
 
-      ./isowind.sh pixelart --controller
-      ./isowind.sh join 203.0.113.7:25565 --controller
+| Key                | What it does                                                                                    |
+|--------------------|-------------------------------------------------------------------------------------------------|
+| W A S D            | Move (W is always up the screen). Running is the default                                        |
+| Shift              | Walk, while held                                                                                |
+| Caps Lock          | Always run on or off                                                                            |
+| Mouse              | Move the cursor. With a weapon or spell ready you aim at it while your legs run the way you move |
+| Left click         | Attack / cast when ready, otherwise use what is under the cursor (doors, people, chests, items) |
+| Right click        | Power attack: your weapon's strongest attack type                                               |
+| E                  | Use what is under the cursor, or the nearest thing in front of you. A locked door or chest you have no key to: a go at picking it, with a lockpick carried |
+| Space              | Jump. In water, hold it to swim up                                                              |
+| Ctrl               | Sneak. In water, hold it to dive                                                                |
+| F / R              | Ready weapon / ready magic                                                                      |
+| [ / ]              | Previous / next weapon                                                                          |
+| - / =              | Previous / next spell                                                                           |
+| 1 - 0              | Quick keys, shown along the bottom of the screen                                                |
+| F1                 | Morrowind's quick key menu                                                                      |
+| Mouse wheel        | Zoom, within the view you are in                                                                |
+| F7                 | Switch view: top-down, then third person, then first person                                     |
+| Tab                | Inventory                                                                                       |
+| J                  | Journal                                                                                         |
+| T                  | Rest                                                                                            |
+| Esc                | Menu                                                                                            |
+| F5 / F9            | Quick save / quick load                                                                         |
+| F11 / F12          | Hide the HUD / screenshot                                                                       |
+| `` ` ``            | Console (the key left of 1)                                                                     |
 
-The in-game controller layout is in `isowind/README.txt`.
+**Keyboard and mouse, in the menus**
 
+| Key                | What it does                                                                                    |
+|--------------------|-------------------------------------------------------------------------------------------------|
+| Q / E              | Previous / next page of the inventory screen (Map, Inventory, Magic, Stats), or tab in Options  |
+| Z / C              | Previous / next tab inside a window: the kinds of item in the inventory or a shop, a chest's containers opened together, the local or world map. With a chest or shop open, the window under the pointer |
+| Click a tab        | That page. The HUD's bars, weapon, spell and minimap go to theirs too                           |
+| 1 - 0              | Over an item, spell or enchanted item: puts it on that quick key                                |
+| Drag onto a slot   | An item dragged onto a quick key slot along the bottom goes on that key                         |
+| Right click a slot | Morrowind's quick key menu for that slot                                                        |
+| Mouse wheel        | Over the minimap: zoom it                                                                       |
+| Tab / Esc          | Close                                                                                           |
 
-OpenMW
-======
+Q / E and Z / C type as usual in a text box.
 
-OpenMW is an open-source open-world RPG game engine that supports playing Morrowind by Bethesda Softworks. You need to own the game for OpenMW to play Morrowind.
+**Controller, in the game** (it takes over as soon as a stick or button is used, the mouse as soon as it moves)
 
-OpenMW also comes with OpenMW-CS, a replacement for Bethesda's Construction Set.
+| Button             | What it does                                                                                    |
+|--------------------|-------------------------------------------------------------------------------------------------|
+| Left stick         | Move                                                                                            |
+| Right stick        | Aim, or point at what X uses                                                                    |
+| A                  | Jump. In water, hold it to swim up                                                              |
+| B                  | Ready weapon                                                                                    |
+| X                  | Use / talk (a lock is picked, as with E)                                                        |
+| Y                  | Ready magic                                                                                     |
+| Right trigger      | Attack / cast                                                                                   |
+| Left trigger       | Power attack                                                                                    |
+| Bumpers            | Previous / next quick key                                                                       |
+| D-pad up / down    | Zoom (hold to keep going)                                                                       |
+| D-pad right        | Quest log                                                                                       |
+| D-pad left         | Nothing for now                                                                                 |
+| Start              | Menu                                                                                            |
+| Back               | Inventory (hold: journal)                                                                       |
+| Left stick in      | Sneak. In water, hold it in to dive                                                             |
+| Right stick in     | Rest                                                                                            |
 
-* Version: 0.51.0
-* License: GPLv3 (see [LICENSE](https://gitlab.com/OpenMW/openmw/-/raw/master/LICENSE) for more information)
-* Website: https://www.openmw.org
-* IRC: #openmw on irc.libera.chat
-* Discord: https://discord.gg/bWuqq2e
+**Controller, in the menus**
 
+| Button             | What it does                                                                                    |
+|--------------------|-------------------------------------------------------------------------------------------------|
+| D-pad, A           | Choose                                                                                          |
+| B                  | Back                                                                                            |
+| Bumpers            | The inventory screen's pages; with a chest or shop open, between its window and yours; Options' tabs |
+| Triggers           | The tabs inside a window                                                                        |
+| Right stick in     | An item's info                                                                                  |
+| Y                  | In the inventory and magic pages: puts the item or spell on a quick key                         |
+| X                  | On a text box (moved onto with the D-pad): a keyboard on the screen. Start or Back puts it away |
 
-Font Licenses:
-* DejaVuLGCSansMono.ttf: custom (see [files/data/fonts/DejaVuFontLicense.txt](https://gitlab.com/OpenMW/openmw/-/raw/master/files/data/fonts/DejaVuFontLicense.txt) for more information)
-* DemonicLetters.ttf: SIL Open Font License (see [files/data/fonts/DemonicLettersFontLicense.txt](https://gitlab.com/OpenMW/openmw/-/raw/master/files/data/fonts/DemonicLettersFontLicense.txt) for more information)
-* MysticCards.ttf: SIL Open Font License (see [files/data/fonts/MysticCardsFontLicense.txt](https://gitlab.com/OpenMW/openmw/-/raw/master/files/data/fonts/MysticCardsFontLicense.txt) for more information)
-
-Current Status
---------------
-
-The main quests in Morrowind, Tribunal and Bloodmoon are all completable. Some issues with side quests are to be expected (but rare). Check the [bug tracker](https://gitlab.com/OpenMW/openmw/-/issues/?milestone_title=openmw-1.0) for a list of issues we need to resolve before the "1.0" release. Even before the "1.0" release, however, OpenMW boasts some new [features](https://wiki.openmw.org/index.php?title=Features), such as improved graphics and user interfaces.
-
-Pre-existing modifications created for the original Morrowind engine can be hit-and-miss. The OpenMW script compiler performs more thorough error-checking than Morrowind does, meaning that a mod created for Morrowind may not necessarily run in OpenMW. Some mods also rely on quirky behaviour or engine bugs in order to work. We are considering such compatibility issues on a case-by-case basis - in some cases adding a workaround to OpenMW may be feasible, in other cases fixing the mod will be the only option. If you know of any mods that work or don't work, feel free to add them to the [Mod status](https://wiki.openmw.org/index.php?title=Mod_status) wiki page.
-
-Getting Started
----------------
-
-* [Official forums](https://forum.openmw.org/)
-* [Installation instructions](https://openmw.readthedocs.io/en/latest/manuals/installation/index.html)
-* [Build from source](https://wiki.openmw.org/index.php?title=Development_Environment_Setup)
-* [Testing the game](https://wiki.openmw.org/index.php?title=Testing)
-* [How to contribute](https://wiki.openmw.org/index.php?title=Contribution_Wanted)
-* [Report a bug](https://gitlab.com/OpenMW/openmw/issues) - read the [guidelines](https://wiki.openmw.org/index.php?title=Bug_Reporting_Guidelines) before submitting your first bug!
-* [Known issues](https://gitlab.com/OpenMW/openmw/issues?label_name%5B%5D=Bug)
-
-The data path
--------------
-
-The data path tells OpenMW where to find your Morrowind files. If you run the launcher, OpenMW should be able to pick up the location of these files on its own, if both Morrowind and OpenMW are installed properly (installing Morrowind under WINE is considered a proper install).
-
-Command line options
---------------------
-
-    Syntax: openmw <options>
-    Allowed options:
-      --config arg                          additional config directories
-      --replace arg                         settings where the values from the
-                                            current source should replace those
-                                            from lower-priority sources instead of
-                                            being appended
-      --user-data arg                       set user data directory (used for
-                                            saves, screenshots, etc)
-      --resources arg (=resources)          set resources directory
-      --help                                print help message
-      --version                             print version information and quit
-      --data arg (=data)                    set data directories (later directories
-                                            have higher priority)
-      --data-local arg                      set local data directory (highest
-                                            priority)
-      --fallback-archive arg (=fallback-archive)
-                                            set fallback BSA archives (later
-                                            archives have higher priority)
-      --start arg                           set initial cell
-      --content arg                         content file(s): esm/esp, or
-                                            omwgame/omwaddon/omwscripts
-      --groundcover arg                     groundcover content file(s): esm/esp,
-                                            or omwgame/omwaddon
-      --no-sound [=arg(=1)] (=0)            disable all sounds
-      --script-all [=arg(=1)] (=0)          compile all scripts (excluding dialogue
-                                            scripts) at startup
-      --script-all-dialogue [=arg(=1)] (=0) compile all dialogue scripts at startup
-      --script-console [=arg(=1)] (=0)      enable console-only script
-                                            functionality
-      --script-run arg                      select a file containing a list of
-                                            console commands that is executed on
-                                            startup
-      --script-warn [=arg(=1)] (=1)         handling of warnings when compiling
-                                            scripts
-                                            0 - ignore warnings
-                                            1 - show warnings but consider script as
-                                            correctly compiled anyway
-                                            2 - treat warnings as errors
-      --load-savegame arg                   load a save game file on game startup
-                                            (specify an absolute filename or a
-                                            filename relative to the current
-                                            working directory)
-      --skip-menu [=arg(=1)] (=0)           skip main menu on game startup
-      --new-game [=arg(=1)] (=0)            run new game sequence (ignored if
-                                            skip-menu=0)
-      --encoding arg (=win1252)             Character encoding used in OpenMW game
-                                            messages:
-
-                                            win1250 - Central and Eastern European
-                                            such as Polish, Czech, Slovak,
-                                            Hungarian, Slovene, Bosnian, Croatian,
-                                            Serbian (Latin script), Romanian and
-                                            Albanian languages
-
-                                            win1251 - Cyrillic alphabet such as
-                                            Russian, Bulgarian, Serbian Cyrillic
-                                            and other languages
-
-                                            win1252 - Western European (Latin)
-                                            alphabet, used by default
-      --fallback arg                        fallback values
-      --no-grab [=arg(=1)] (=0)             Don't grab mouse cursor
-      --export-fonts [=arg(=1)] (=0)        Export Morrowind .fnt fonts to PNG
-                                            image and XML file in current directory
-      --activate-dist arg (=-1)             activation distance override
-      --random-seed arg (=<impl defined>)   seed value for random number generator
+Whether the menus are made for a controller is decided as the game starts: `Isowind.exe`'s **Controller** tick box,
+or on Linux what is plugged in, which `--controller` or `--no-controller` overrides (a controller that comes with a
+stream, as Moonlight's does, wants `--controller`).
