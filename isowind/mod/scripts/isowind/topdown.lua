@@ -8,6 +8,7 @@
 --   right click     power attack with a weapon ready (the weapon's strongest attack type)
 --   E (Activate)    interact with what is under the cursor, or else the nearest thing in reach in front
 --                   (a locked door or chest with no key: a go at picking it, with a lockpick carried)
+--   Space / Ctrl    jump / sneak; in water, held: swim up / dive (as the Jump and Sneak bindings are)
 --   mouse wheel     zoom, within the view (the D-pad on a controller)
 --   F7              switch view: top-down, then Morrowind's third person view, then first person (rebindable, and
 --                   bindable to a controller button, in Options -> Scripts -> Isowind); with an attack held (an
@@ -23,6 +24,7 @@
 --   D-pad left      not assigned
 --   Start           menu                     Back            inventory (hold: journal)
 --   left stick in   sneak                    right stick in  rest
+--   in water, A held swims up and the left stick held in dives (the Jump and Sneak bindings)
 -- There is no cursor then: what the right stick points at (or else what is nearest in front) gets the ring and the
 -- label, and X uses it (as E does: a locked door or chest is picked). With a weapon or spell ready the aim locks
 -- onto the nearest hostile creature in front (X still uses what is nearest, not that creature); with no hostile one
@@ -103,6 +105,7 @@ local STICK_PICK_COS = math.cos(math.rad(30)) -- what the right stick points at,
 local JOURNAL_HOLD = 0.5            -- seconds Back is held to open the journal instead of the inventory
 local DPAD_ZOOM_DELAY = 0.3         -- D-pad up / down held this long zooms continuously...
 local DPAD_ZOOM_RATE = 1.6          -- ...this many times faster (or slower) per second
+local SWIM_PITCH = math.rad(85)     -- the steepest dive or climb in water (straight down would lose the way faced)
 local SIGN_RANGE = 500              -- signs this close to the player show their names
 local SIGN_REFRESH = 0.25           -- how often to look for signs nearby (seconds)
 local SIGN_LABELS = 8               -- at most this many sign names at once (the nearest)
@@ -799,11 +802,33 @@ local function updatePowerAttack()
     end
 end
 
--- Convert the wanted world direction into the character's own forward / sideways movement.
+-- In water, Jump held (Space, A) swims up and Sneak held (Ctrl, the left stick pressed in) dives: 1, -1 or 0.
+local function swimRise()
+    if not Actor.isSwimming(self) then return 0 end
+    local up = input.isActionPressed(input.ACTION.Jump)
+    local down = input.isActionPressed(input.ACTION.Sneak)
+    if up == down then return 0 end
+    return up and 1 or -1
+end
+
+-- Convert the wanted world direction into the character's own forward / sideways movement. The engine swims the way
+-- the character faces, pitch and all, so swimming up or down tilts them and swims them forward (or back, when backing
+-- away), the steeper the less they move across; the facing (updateFacing) otherwise keeps them level.
 local function updateMovement(dx, dy)
     local yaw = self.rotation:getYaw()
-    self.controls.movement = dx * math.sin(yaw) + dy * math.cos(yaw)
-    self.controls.sideMovement = dx * math.cos(yaw) - dy * math.sin(yaw)
+    local forward = dx * math.sin(yaw) + dy * math.cos(yaw)
+    local side = dx * math.cos(yaw) - dy * math.sin(yaw)
+    local rise = swimRise()
+    if rise ~= 0 then
+        local across = math.abs(forward)
+        local pitch = util.clamp(math.atan2(forward >= 0 and -rise or rise, across), -SWIM_PITCH, SWIM_PITCH)
+        forward = (forward >= 0 and 1 or -1) * math.sqrt(across * across + rise * rise)
+        local length = math.sqrt(forward * forward + side * side)
+        if length > 1 then forward, side = forward / length, side / length end
+        self.controls.pitchChange = pitch - self.rotation:getPitch()
+    end
+    self.controls.movement = forward
+    self.controls.sideMovement = side
     self.controls.run = input.getBooleanActionValue('Run') ~= controlSettings:get('alwaysRun')
     self.controls.jump = jumpRequested
     if not controlSettings:get('toggleSneak') then
@@ -818,7 +843,8 @@ input.registerTriggerHandler('Jump', async:callback(function()
 end))
 
 input.registerTriggerHandler('ToggleSneak', async:callback(function()
-    if active and controlsAllowed() and controlSettings:get('toggleSneak') then
+    -- (in water Sneak is held to dive: swimRise)
+    if active and controlsAllowed() and controlSettings:get('toggleSneak') and not Actor.isSwimming(self) then
         self.controls.sneak = not self.controls.sneak
     end
 end))

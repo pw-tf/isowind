@@ -111,7 +111,8 @@ Right click       Power attack: your weapon's strongest attack type.
 E                 Use what is under the cursor, or the nearest thing in front of you.
                   A locked door or chest you have no key to: E (X on a controller) has a go at picking
                   the lock if you carry a lockpick - the one in your hand, else your best one.
-Space             Jump
+Space             Jump. In water, hold it to swim up.
+Ctrl              Sneak. In water, hold it to dive.
 F / R             Ready weapon / ready magic
 Tab               Inventory
 Q / E             In the menus: the previous / next page of the inventory screen (Map, Inventory,
@@ -138,6 +139,7 @@ D-pad left        (nothing for now)
 D-pad right       Quest log                       Start             Menu
 Back              Inventory (hold: journal)
 Left stick in     Sneak                           Right stick in    Rest
+In water, hold A to swim up and hold the left stick in to dive.
 Menus are made for the controller: the D-pad and A choose, B goes back, the bumpers switch the inventory
 screen's pages (Map, Inventory, Magic, Stats; one at a time, as with the mouse and keyboard) and, where two
 windows are open side by side (a chest, a shop), between them, the one in use lit, while the triggers switch
