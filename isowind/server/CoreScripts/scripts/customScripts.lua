@@ -9,3 +9,4 @@
 require("custom/isowindHost")
 require("custom/isowindMmo")
 require("custom/isowindParty")
+require("custom/isowindLocks")

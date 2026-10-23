@@ -716,33 +716,9 @@ namespace MWGui
             dialog->eventOkClicked += MyGUI::newDelegate(this, &TradeWindow::onOfferSubmitted);
         }
         else if (arg.button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER)
-        {
-            if (mFilterAll->getStateSelected())
-                onFilterChanged(mFilterMisc);
-            else if (mFilterWeapon->getStateSelected())
-                onFilterChanged(mFilterAll);
-            else if (mFilterApparel->getStateSelected())
-                onFilterChanged(mFilterWeapon);
-            else if (mFilterMagic->getStateSelected())
-                onFilterChanged(mFilterApparel);
-            else if (mFilterMisc->getStateSelected())
-                onFilterChanged(mFilterMagic);
-            MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
-        }
+            stepTab(-1);
         else if (arg.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
-        {
-            if (mFilterAll->getStateSelected())
-                onFilterChanged(mFilterWeapon);
-            else if (mFilterWeapon->getStateSelected())
-                onFilterChanged(mFilterApparel);
-            else if (mFilterApparel->getStateSelected())
-                onFilterChanged(mFilterMagic);
-            else if (mFilterMagic->getStateSelected())
-                onFilterChanged(mFilterMisc);
-            else if (mFilterMisc->getStateSelected())
-                onFilterChanged(mFilterAll);
-            MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
-        }
+            stepTab(1);
         else if (arg.button == SDL_CONTROLLER_BUTTON_RIGHTSTICK || arg.button == SDL_CONTROLLER_BUTTON_DPAD_UP
             || arg.button == SDL_CONTROLLER_BUTTON_DPAD_DOWN || arg.button == SDL_CONTROLLER_BUTTON_DPAD_LEFT
             || arg.button == SDL_CONTROLLER_BUTTON_DPAD_RIGHT)
@@ -765,6 +741,18 @@ namespace MWGui
 
         mItemView->setActiveControllerWindow(active);
         WindowBase::setActiveControllerWindow(active);
+    }
+
+    bool TradeWindow::stepTab(int delta)
+    {
+        const std::vector<MyGUI::Button*> filters
+            = { mFilterAll, mFilterWeapon, mFilterApparel, mFilterMagic, mFilterMisc };
+        size_t selected = 0;
+        while (selected < filters.size() - 1 && !filters[selected]->getStateSelected())
+            ++selected;
+        onFilterChanged(filters[wrap(selected, filters.size(), delta)]);
+        MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
+        return true;
     }
 
     void TradeWindow::updateItemView()

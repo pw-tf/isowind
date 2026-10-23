@@ -562,6 +562,8 @@ namespace MWGui
 
         setText("LabelT", MWBase::Environment::get().getWindowManager()->getGameSettingString("sName", {}));
         getWidget(mEditName, "EditName");
+        // Isowind: the keyboard on the screen's Done only puts it away here (the buttons go on)
+        mEditName->setUserString("KeyboardDone", "Close");
 
         // Make sure the edit box has focus
         MWBase::Environment::get().getWindowManager()->setKeyFocusWidget(mEditName);
@@ -691,8 +693,32 @@ namespace MWGui
                 MyGUI::UString(MWBase::Environment::get().getWindowManager()->getGameSettingString("sOK", {})));
     }
 
+    MyGUI::Widget* CreateClassDialog::getControllerTextField()
+    {
+        return mNameSelected ? mEditName : nullptr;
+    }
+
     bool CreateClassDialog::onControllerButtonEvent(const SDL_ControllerButtonEvent& arg)
     {
+        // Isowind: D-pad up selects the class's name, for X to bring the keyboard on the screen up
+        // (ControllerManager), and down goes back to the buttons; A and left and right do nothing on the name
+        if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_UP || arg.button == SDL_CONTROLLER_BUTTON_DPAD_DOWN)
+        {
+            const bool select = arg.button == SDL_CONTROLLER_BUTTON_DPAD_UP;
+            if (select != mNameSelected)
+            {
+                mNameSelected = select;
+                setTextFieldSelected(mEditName, select);
+                setControllerFocus(mButtons, mControllerFocus, !select);
+                MWBase::Environment::get().getWindowManager()->updateControllerButtonsOverlay();
+            }
+            return true;
+        }
+        if (mNameSelected
+            && (arg.button == SDL_CONTROLLER_BUTTON_A || arg.button == SDL_CONTROLLER_BUTTON_DPAD_LEFT
+                || arg.button == SDL_CONTROLLER_BUTTON_DPAD_RIGHT))
+            return true;
+
         if (arg.button == SDL_CONTROLLER_BUTTON_A)
         {
             if (mControllerFocus == 0)

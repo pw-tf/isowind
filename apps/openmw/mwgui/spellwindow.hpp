@@ -43,6 +43,7 @@ namespace MWGui
         void onOpen() override;
         bool onControllerButtonEvent(const SDL_ControllerButtonEvent& arg) override;
         void setActiveControllerWindow(bool active) override;
+        void setInventoryPage(bool shown) override;
 
         SpellView* mSpellView;
         std::unique_ptr<SpellIcons> mSpellIcons;

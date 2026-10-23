@@ -25,6 +25,7 @@ std::map<std::string, mwmp::Cell *> CellController::cellsInitialized;
 std::map<std::string, std::string> CellController::localActorsToCells;
 std::map<std::string, std::string> CellController::dedicatedActorsToCells;
 std::map<std::string, unsigned int> CellController::queuedDeathStates;
+std::set<std::string> CellController::clientLocalActors;
 
 mwmp::CellController::CellController()
 {
@@ -378,6 +379,65 @@ DedicatedActor *CellController::getDedicatedActor(int refNum, int mpNum)
     std::string cellIndex = dedicatedActorsToCells.at(actorIndex);
 
     return cellsInitialized.at(cellIndex)->getDedicatedActor(actorIndex);
+}
+
+void CellController::setClientLocalActor(int refNum, int mpNum)
+{
+    std::string actorIndex = generateMapIndex(refNum, mpNum);
+
+    if (!clientLocalActors.insert(actorIndex).second)
+        return;
+
+    LOG_MESSAGE_SIMPLE(
+        TimedLog::LOG_INFO, "Running actor %s here, whoever has authority over its cell", actorIndex.c_str());
+
+    // No longer sent about as a LocalActor, or moved by what another client sends as a DedicatedActor
+    auto localIt = localActorsToCells.find(actorIndex);
+    if (localIt != localActorsToCells.end())
+    {
+        auto cellIt = cellsInitialized.find(localIt->second);
+        if (cellIt != cellsInitialized.end())
+        {
+            auto actorIt = cellIt->second->localActors.find(actorIndex);
+            if (actorIt != cellIt->second->localActors.end())
+            {
+                delete actorIt->second;
+                cellIt->second->localActors.erase(actorIt);
+            }
+        }
+        localActorsToCells.erase(localIt);
+    }
+
+    auto dedicatedIt = dedicatedActorsToCells.find(actorIndex);
+    if (dedicatedIt != dedicatedActorsToCells.end())
+    {
+        auto cellIt = cellsInitialized.find(dedicatedIt->second);
+        if (cellIt != cellsInitialized.end())
+        {
+            auto actorIt = cellIt->second->dedicatedActors.find(actorIndex);
+            if (actorIt != cellIt->second->dedicatedActors.end())
+            {
+                delete actorIt->second;
+                cellIt->second->dedicatedActors.erase(actorIt);
+            }
+        }
+        dedicatedActorsToCells.erase(dedicatedIt);
+    }
+
+    queuedDeathStates.erase(actorIndex);
+}
+
+bool CellController::isClientLocalActor(const MWWorld::Ptr& ptr)
+{
+    if (ptr.isEmpty() || ptr.mRef == nullptr || clientLocalActors.empty())
+        return false;
+
+    return isClientLocalActor(ptr.getCellRef().getMpRefNum(), ptr.getCellRef().getMpNum());
+}
+
+bool CellController::isClientLocalActor(int refNum, int mpNum)
+{
+    return clientLocalActors.count(generateMapIndex(refNum, mpNum)) > 0;
 }
 
 std::string CellController::generateMapIndex(int refNum, int mpNum)

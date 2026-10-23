@@ -37,6 +37,13 @@ namespace MWGui
         constexpr float sRepeatDelay = 0.4f;
         constexpr float sRepeatInterval = 0.1f;
 
+        // Done (Start, or the key) sends Enter to the field, which confirms its dialog; for a field whose window has
+        // buttons of its own to do that (brew, buy, enchant: the user string set on it) it only puts the keyboard away
+        bool doneCloses(const MyGUI::Widget* target)
+        {
+            return target && target->getUserString("KeyboardDone") == "Close";
+        }
+
         // MyGUI reads # in a caption as the start of a colour code
         std::string escapeCaption(const std::string& text)
         {
@@ -297,7 +304,10 @@ namespace MWGui
                 sendKey(MyGUI::KeyCode::Backspace);
                 break;
             case Special::Done:
-                sendKey(MyGUI::KeyCode::Return);
+                if (doneCloses(mTarget))
+                    close();
+                else
+                    sendKey(MyGUI::KeyCode::Return);
                 break;
         }
         MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
@@ -427,7 +437,10 @@ namespace MWGui
                 sendKey(MyGUI::KeyCode::ArrowRight);
                 break;
             case SDL_CONTROLLER_BUTTON_START:
-                sendKey(MyGUI::KeyCode::Return);
+                if (doneCloses(mTarget))
+                    close();
+                else
+                    sendKey(MyGUI::KeyCode::Return);
                 break;
             case SDL_CONTROLLER_BUTTON_BACK:
                 close();

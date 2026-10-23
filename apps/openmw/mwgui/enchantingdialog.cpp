@@ -36,6 +36,9 @@ namespace MWGui
         , EffectEditorBase(EffectEditorBase::Enchanting)
     {
         getWidget(mName, "NameEdit");
+        mControllerNameField = mName;
+        // Isowind: the keyboard on the screen's Done only puts it away here (Buy enchants)
+        mName->setUserString("KeyboardDone", "Close");
         getWidget(mCancelButton, "CancelButton");
         getWidget(mAvailableEffectsList, "AvailableEffects");
         getWidget(mUsedEffectsView, "UsedEffects");

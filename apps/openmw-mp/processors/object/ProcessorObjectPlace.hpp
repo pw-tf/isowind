@@ -20,6 +20,9 @@ namespace mwmp
 
             for (unsigned int i = 0; i < objectList.baseObjectCount; i++)
             {
+                // A placed object is the server's own, known by its mpNum alone; a dropped item can still carry
+                // the refNum of the game-file reference it was picked up from, which clients drop once it has an mpNum
+                objectList.baseObjects.at(i).refNum = 0;
                 objectList.baseObjects.at(i).mpNum = mwmp::Networking::getPtr()->incrementMpNum();
             }
 

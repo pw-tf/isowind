@@ -7,9 +7,12 @@
 --   left click      attack / cast with a weapon or spell ready, otherwise interact with what is under the cursor
 --   right click     power attack with a weapon ready (the weapon's strongest attack type)
 --   E (Activate)    interact with what is under the cursor, or else the nearest thing in reach in front
---   mouse wheel     zoom: all the way out is the top-down view, in a little is Morrowind's third person view,
---                   all the way in first person (the D-pad on a controller)
---   F7              hop between the top-down view and the normal one
+--                   (a locked door or chest with no key: a go at picking it, with a lockpick carried)
+--   Space / Ctrl    jump / sneak; in water, held: swim up / dive (as the Jump and Sneak bindings are)
+--   mouse wheel     zoom, within the view (the D-pad on a controller)
+--   F7              switch view: top-down, then Morrowind's third person view, then first person (rebindable, and
+--                   bindable to a controller button, in Options -> Scripts -> Isowind); with an attack held (an
+--                   arrow drawn) the view still switches, and the attack starts again in the new view
 --
 -- With a controller (it takes over as soon as a stick or button is used, the mouse as soon as it moves):
 --   left stick      move                     right stick     aim / pick what X uses
@@ -17,21 +20,32 @@
 --   X               use / talk               Y               ready magic
 --   right trigger   attack / cast            left trigger    power attack
 --   bumpers         previous / next quick key
---   D-pad up / down zoom (hold to keep zooming), through the three views
---   D-pad left      quick keys menu (on a server: the chat, typed with the keyboard on the screen)
+--   D-pad up / down zoom (hold to keep zooming), within the view; in menus they move through the options
+--   D-pad left      not assigned
 --   Start           menu                     Back            inventory (hold: journal)
 --   left stick in   sneak                    right stick in  rest
+--   in water, A held swims up and the left stick held in dives (the Jump and Sneak bindings)
 -- There is no cursor then: what the right stick points at (or else what is nearest in front) gets the ring and the
--- label, and with a weapon or spell ready the aim locks onto the nearest hostile creature in front.
+-- label, and X uses it (as E does: a locked door or chest is picked). With a weapon or spell ready the aim locks
+-- onto the nearest hostile creature in front (X still uses what is nearest, not that creature); with no hostile one
+-- there the ring and label stay on what X uses (friendly people, doors, containers and their locks), but the aim
+-- never locks onto those. A lockpick or probe never locks on, and looks for doors and containers first.
 -- The menus are the engine's controller menus ('controller menus' in the profile's settings.cfg): D-pad and A / B,
--- the triggers switch pages, Y puts an item or spell on a quick key, and a keyboard on the screen types.
+-- the bumpers switch the inventory screen's pages and the triggers the tabs inside a window, Y puts an item or spell
+-- on a quick key, and X on a text field (moved onto with the D-pad) brings up a keyboard on the screen to type with;
+-- it never comes up by itself. The inventory screen's map, inventory, magic and stats are pages, one at a time under a
+-- tab bar, with the mouse and keyboard too: Q / E turn its pages (and Options' tabs), Z / C the tabs inside a window.
 --
--- The zoom picks the view: zoomed out to TOPDOWN_FROM or farther it is this top-down view; in closer, Morrowind's
--- third person view at that distance; closer than FIRST_PERSON_BELOW, first person. Zooming and the first / third
--- person switch are taken from the built-in camera script for good (claimCamera).
+-- The zoom distance says the view: TOPDOWN_FROM or farther is this top-down view; in closer, Morrowind's third person
+-- view at that distance; closer than FIRST_PERSON_BELOW, first person. Zooming stays within the view's range and the
+-- switch view trigger (F7) moves between them, each keeping its own zoom. Zooming and the first / third person switch
+-- are taken from the built-in camera script for good (claimCamera).
 -- The view is a fixed isometric angle: turned 45 degrees, looking down at the classic isometric 35.26 degrees.
 -- The camera slides in toward the player rather than go underground on slopes, and creatures (and hurt or hostile
--- people) get health bars (healthbars.lua).
+-- people) get health bars (healthbars.lua). In multiplayer, party members (MMO) get a green ring, and other players
+-- off the screen an arrow at its edge pointing their way: party members in MMO mode, everyone in co-op.
+-- Signs can't be read from up here, so within SIGN_RANGE of the player their names show over them: signposts (each
+-- arm), shop and canton signs, and the town banners.
 
 local async = require('openmw.async')
 local camera = require('openmw.camera')
@@ -71,7 +85,7 @@ local FOV = math.rad(30)            -- a narrow view from far away looks close t
 local MIN_DISTANCE, MAX_DISTANCE = 25, 3500 -- zoom range, from first person out to the farthest top-down view
 local TOPDOWN_FROM = 500            -- zoomed out to here or farther the view is top-down...
 local FIRST_PERSON_BELOW = 50       -- ...zoomed in closer than this it is first person; third person in between
-local THIRD_PERSON_DISTANCE = 200   -- where F7 puts the zoom when leaving the top-down view
+local THIRD_PERSON_DISTANCE = 200   -- the third person view's zoom until it is zoomed
 local ZOOM_SPEED = 8                -- how quickly the camera eases to the zoom level (per second)
 local GROUND_CLEARANCE = 60         -- the camera stays at least this far above the ground
 local CLOSEST_DISTANCE = 150        -- how close it may slide in to stay above the ground
@@ -91,12 +105,18 @@ local STICK_PICK_COS = math.cos(math.rad(30)) -- what the right stick points at,
 local JOURNAL_HOLD = 0.5            -- seconds Back is held to open the journal instead of the inventory
 local DPAD_ZOOM_DELAY = 0.3         -- D-pad up / down held this long zooms continuously...
 local DPAD_ZOOM_RATE = 1.6          -- ...this many times faster (or slower) per second
+local SWIM_PITCH = math.rad(85)     -- the steepest dive or climb in water (straight down would lose the way faced)
+local SIGN_RANGE = 500              -- signs this close to the player show their names
+local SIGN_REFRESH = 0.25           -- how often to look for signs nearby (seconds)
+local SIGN_LABELS = 8               -- at most this many sign names at once (the nearest)
+local SIGN_TEXT_SIZE = 16
 --------------------------------------------------------------------------------------------------------------------
 
 local active = false                -- whether the top-down view's overrides are currently applied
 local viewMode = nil                -- 'topdown', 'third' or 'first', from the zoom (wantedView)
 local cameraClaimed = false         -- zoom and the first / third person switch are this script's, once claimed
-local lastTopDownDistance = 1000    -- where F7 brings the zoom back to
+local lastTopDownDistance = 1000    -- the zoom of the views not in, for switching back to them
+local lastThirdDistance = THIRD_PERSON_DISTANCE
 local viewYaw = VIEW_YAW
 local targetDistance = 1000         -- the zoom level asked for with the wheel
 local distance = targetDistance     -- the camera's actual distance (eased, and kept above the ground)
@@ -107,10 +127,13 @@ local aimPoint = nil
 local jumpRequested = false
 local gamepad = false               -- the last input came from a controller
 local stickAim = nil                -- the world direction the right stick points, or nil
-local backPressedAt, journalOpened, dpadHeld = nil, false, 0
+local aimLocked = false             -- hovered is the hostile creature the controller's aim is locked onto
+local backPressedAt, journalOpened = nil, false
+local dpadHeld = 0                  -- how long D-pad up / down has been held; nil while a hold begun in a menu lasts
+local pendingMode = nil             -- the first / third person camera mode asked for, until the camera is in it
 
 -- Defined further down
-local nearestUsable, setRingVisible
+local nearestUsable, setRingVisible, hideSignLabels
 
 local cursorElement, labelElement
 
@@ -160,6 +183,15 @@ local function controlsAllowed()
         and not I.UI.getMode()
 end
 
+-- Whether an attack is being held (an arrow drawn, a swing wound up). Switching to or from first person rebuilds the
+-- character's animations, so the camera holds the switch back while the body is busy (camera.cpp: an attack, a hit,
+-- being knocked down); with an attack held it is made at once instead, and the attack starts again in the new view
+-- as the button is still down.
+local function attackHeld()
+    return Actor.getStance(self) == Actor.STANCE.Weapon and input.getBooleanActionValue('Use')
+        and Actor.canMove(self)
+end
+
 local function apply()
     if active then return end
     active = true
@@ -191,6 +223,7 @@ local function release()
     self.controls.pitchChange = 0
     setUiVisible(false)
     setRingVisible(false)
+    hideSignLabels()
     healthbars.clear()
 end
 
@@ -235,7 +268,7 @@ end
 
 local function updateCamera(dt)
     if camera.getMode() ~= MODE.Static then
-        camera.setMode(MODE.Static)
+        camera.setMode(MODE.Static, attackHeld())
     end
     local cp, sp = math.cos(PITCH), math.sin(PITCH)
     local cy, sy = math.cos(viewYaw), math.sin(viewYaw)
@@ -266,16 +299,21 @@ local function cursorDirection()
     return (view.forward + view.right * x + view.up * y):normalize()
 end
 
--- Normalised screen position of a world position, or nil when it is off screen or behind the camera.
-local function worldToScreen(pos)
+-- Where a world position is in the view: x and y run from -1 to 1 across the screen (y up) and beyond off it, and its
+-- depth in front of the camera (negative behind it).
+local function viewCoordinates(pos)
     local rel = pos - view.position
     local depth = rel:dot(view.forward)
-    if depth < 1 then return nil end
     local screen = ui.screenSize()
     local tanHalf = math.tan(FOV / 2)
-    local x = rel:dot(view.right) / (depth * tanHalf * screen.x / screen.y)
-    local y = rel:dot(view.up) / (depth * tanHalf)
-    if math.abs(x) > 1 or math.abs(y) > 1 then return nil end
+    local d = math.max(math.abs(depth), 1)
+    return rel:dot(view.right) / (d * tanHalf * screen.x / screen.y), rel:dot(view.up) / (d * tanHalf), depth
+end
+
+-- Normalised screen position of a world position, or nil when it is off screen or behind the camera.
+local function worldToScreen(pos)
+    local x, y, depth = viewCoordinates(pos)
+    if depth < 1 or math.abs(x) > 1 or math.abs(y) > 1 then return nil end
     return v2((x + 1) / 2, (1 - y) / 2)
 end
 
@@ -286,12 +324,19 @@ local function updateCursor()
         util.clamp(cursor.y + input.getMouseMoveY() * CURSOR_SPEED / screen.y, 0, 1))
 end
 
+-- Zoom by a factor, within the view: zooming never changes it (first person doesn't zoom)
+local function zoomBy(factor)
+    if targetDistance >= TOPDOWN_FROM then
+        targetDistance = util.clamp(targetDistance * factor, TOPDOWN_FROM, MAX_DISTANCE)
+    elseif targetDistance >= FIRST_PERSON_BELOW then
+        targetDistance = util.clamp(targetDistance * factor, FIRST_PERSON_BELOW, TOPDOWN_FROM - 1)
+    end
+end
+
 local function updateZoom()
     -- Zoom3rdPerson is 10 per wheel notch (scripts/omw/input/actionbindings.lua).
     local notches = input.getNumberActionValue('Zoom3rdPerson') / 10
-    if notches ~= 0 then
-        targetDistance = util.clamp(targetDistance * math.exp(-notches * ZOOM_STEP), MIN_DISTANCE, MAX_DISTANCE)
-    end
+    if notches ~= 0 then zoomBy(math.exp(-notches * ZOOM_STEP)) end
 end
 
 local function segmentDistance(p, a, b)
@@ -350,6 +395,7 @@ local function updatePick()
 
     hovered = nil
     hoveredInRange = false
+    aimLocked = false
     if result.hit then
         aimPoint = result.hitPos
         local object = result.hitObject
@@ -400,6 +446,10 @@ local HOSTILE_FIGHT = 80
 local RANGED_REACH = 4000
 local RING_SCALE = 1.7       -- ring radius relative to the creature's width
 local RING_MIN_RADIUS = 50
+local MARKS = 8              -- party rings and arrows the shader has room for (its uParty and uArrows)
+local ARROW_MARGIN = 40      -- the arrows sit this far in from the screen's edge (pixels at 1080 lines)
+local noMarks = {}
+for i = 1, MARKS do noMarks[i] = util.vector4(0, 0, 0, 0) end
 
 local ringShader = nil
 local ringLoaded = false
@@ -427,6 +477,8 @@ local function hidesRing()
     local shader = getRingShader()
     if shader and shader:isEnabled() then
         shader:setVector4('uSelection', util.vector4(0, 0, 0, 0))
+        shader:setVector4Array('uParty', noMarks)
+        shader:setVector4Array('uArrows', noMarks)
     end
 end
 
@@ -466,6 +518,45 @@ local function updateRing()
     local feet = hovered.position
     shader:setVector4('uSelection', util.vector4(feet.x, feet.y, feet.z, radius))
     shader:setVector4('uSelectionColor', util.vector4(color.x, color.y, color.z, 0.85))
+end
+
+-- Party members (MMO mode) get a green ring like the selection ring, and other players off the screen an arrow at its
+-- edge pointing their way: party members in MMO mode, everyone in co-op. Only players in the cells this game has
+-- loaded: it knows where no one else is.
+local function updateParty()
+    local shader = getRingShader()
+    if not shader then return end
+    local rings, arrows = {}, {}
+    if nearby.isAlly then
+        local mmo = nearby.isMmo()
+        local screen = ui.screenSize()
+        local margin = ARROW_MARGIN * screen.y / 1080
+        local maxX, maxY = 1 - 2 * margin / screen.x, 1 - 2 * margin / screen.y
+        for _, actor in ipairs(nearby.actors) do
+            if nearby.isOtherPlayer(actor) then
+                local ally = nearby.isAlly(actor)
+                local box = actor:getBoundingBox()
+                if mmo and ally and #rings < MARKS then
+                    local feet = actor.position
+                    local radius = math.max(RING_MIN_RADIUS, math.max(box.halfSize.x, box.halfSize.y) * RING_SCALE)
+                    rings[#rings + 1] = util.vector4(feet.x, feet.y, feet.z, radius)
+                end
+                local x, y, depth = viewCoordinates(box.center)
+                if (ally or not mmo) and #arrows < MARKS and (depth < 1 or math.abs(x) > 1 or math.abs(y) > 1) then
+                    -- On the edge, the way they are from the middle of the screen (the player). Behind the camera too:
+                    -- viewCoordinates divides by the depth's size, so x and y keep the way they are from the camera.
+                    local scale = math.min(maxX / math.max(math.abs(x), 1e-4), maxY / math.max(math.abs(y), 1e-4))
+                    local direction = v2(x * screen.x, y * screen.y):normalize()
+                    arrows[#arrows + 1] = util.vector4((x * scale + 1) / 2, (y * scale + 1) / 2, direction.x,
+                        direction.y)
+                end
+            end
+        end
+    end
+    for i = #rings + 1, MARKS do rings[i] = noMarks[i] end
+    for i = #arrows + 1, MARKS do arrows[i] = noMarks[i] end
+    shader:setVector4Array('uParty', rings)
+    shader:setVector4Array('uArrows', arrows)
 end
 
 -- What the game's tooltip says besides the name: where a door leads, and whether it (or a container) is locked or
@@ -519,6 +610,129 @@ local function updateLabel()
     end
     labelElement.layout.props.relativePosition = labelAt
     cursorElement.layout.props.relativePosition = cursor
+end
+
+-- Signs: the activators with a sign for a model (in Morrowind.esm: the signposts' arms, Active_signpost_*, shop signs,
+-- Active_sign_* and Furn_sign_*, and Vivec's canton signs, Ex_V_sign_*), and the town banners (Act_banner_*). Their
+-- record names are what they say.
+local SIGN_MODEL_WORD = 'sign'
+local BANNER_PREFIX = 'act_banner_'
+local signLabels = {}               -- a pool of text elements, made as they are needed
+local nearSigns = {}                -- the signs within SIGN_RANGE, nearest first
+local signRefreshIn = 0
+local isSignRecord = {}             -- record id -> whether it is a sign
+
+local function isSign(object)
+    local id = object.recordId
+    local known = isSignRecord[id]
+    if known == nil then
+        known = false
+        local ok, record = pcall(types.Activator.record, object)
+        if ok and record and record.name and record.name ~= '' then
+            local model = string.lower(record.model or '')
+            known = model:find(SIGN_MODEL_WORD, 1, true) ~= nil or id:sub(1, #BANNER_PREFIX) == BANNER_PREFIX
+        end
+        isSignRecord[id] = known
+    end
+    return known
+end
+
+local function refreshNearSigns()
+    nearSigns = {}
+    local distances = {}
+    for _, object in ipairs(nearby.activators) do
+        local dist = (object.position - self.position):length()
+        if dist <= SIGN_RANGE and object.enabled and isSign(object) then
+            nearSigns[#nearSigns + 1] = object
+            distances[object.id] = dist
+        end
+    end
+    table.sort(nearSigns, function(a, b) return distances[a.id] < distances[b.id] end)
+end
+
+local function signLabel(i)
+    if not signLabels[i] then
+        signLabels[i] = ui.create {
+            layer = OVERLAY,
+            type = ui.TYPE.Text,
+            props = {
+                anchor = v2(0.5, 1),
+                text = '',
+                textSize = SIGN_TEXT_SIZE,
+                textColor = util.color.rgb(0.792, 0.647, 0.376), -- Morrowind's normal text colour
+                textShadow = true,
+                textShadowColor = util.color.rgb(0, 0, 0),
+                visible = false,
+            },
+        }
+    end
+    return signLabels[i]
+end
+
+hideSignLabels = function()
+    signRefreshIn = 0 -- look again when they next show, rather than show the signs found before
+    for _, label in ipairs(signLabels) do
+        if label.layout.props.visible then
+            label.layout.props.visible = false
+            label:update()
+        end
+    end
+end
+
+-- Each name just over the top of its sign. A signpost's arms all stand at the post, but each arm's box lies along
+-- the way it points; names that would still land on one another are moved up out of the way.
+local function updateSignLabels(dt)
+    signRefreshIn = signRefreshIn - dt
+    if signRefreshIn <= 0 then
+        signRefreshIn = SIGN_REFRESH
+        refreshNearSigns()
+    end
+    -- (the layer is only there from the frame after this script made it: ui.layers.insertAfter waits a frame)
+    local layer = ui.layers.indexOf(OVERLAY)
+    if not layer then return end
+    local size = ui.layers[layer].size
+    local lineHeight = SIGN_TEXT_SIZE + 2
+    local shown = {}
+    for _, sign in ipairs(nearSigns) do
+        if #shown >= SIGN_LABELS then break end
+        -- (the one the cursor or the right stick is on already has the label)
+        if sign:isValid() and sign.enabled and sign ~= hovered then
+            local box = sign:getBoundingBox()
+            local at = worldToScreen(box.center + v3(0, 0, box.halfSize.z))
+            local text = objectName(sign)
+            if at and text then
+                shown[#shown + 1] = { text = text, x = at.x * size.x, y = at.y * size.y,
+                    halfWidth = #text * SIGN_TEXT_SIZE * 0.28 }
+            end
+        end
+    end
+    -- Lowest on the screen first, each later one moved up above any it would overlap
+    table.sort(shown, function(a, b) return a.y > b.y end)
+    for i, s in ipairs(shown) do
+        local moved = true
+        while moved do
+            moved = false
+            for j = 1, i - 1 do
+                local p = shown[j]
+                if math.abs(s.x - p.x) < s.halfWidth + p.halfWidth and math.abs(s.y - p.y) < lineHeight then
+                    s.y = p.y - lineHeight
+                    moved = true
+                end
+            end
+        end
+        local label = signLabel(i)
+        label.layout.props.text = s.text
+        label.layout.props.relativePosition = v2(s.x / size.x, s.y / size.y)
+        label.layout.props.visible = true
+        label:update()
+    end
+    for i = #shown + 1, #signLabels do
+        local label = signLabels[i]
+        if label.layout.props.visible then
+            label.layout.props.visible = false
+            label:update()
+        end
+    end
 end
 
 local function turnTowards(targetYaw, dt)
@@ -588,11 +802,33 @@ local function updatePowerAttack()
     end
 end
 
--- Convert the wanted world direction into the character's own forward / sideways movement.
+-- In water, Jump held (Space, A) swims up and Sneak held (Ctrl, the left stick pressed in) dives: 1, -1 or 0.
+local function swimRise()
+    if not Actor.isSwimming(self) then return 0 end
+    local up = input.isActionPressed(input.ACTION.Jump)
+    local down = input.isActionPressed(input.ACTION.Sneak)
+    if up == down then return 0 end
+    return up and 1 or -1
+end
+
+-- Convert the wanted world direction into the character's own forward / sideways movement. The engine swims the way
+-- the character faces, pitch and all, so swimming up or down tilts them and swims them forward (or back, when backing
+-- away), the steeper the less they move across; the facing (updateFacing) otherwise keeps them level.
 local function updateMovement(dx, dy)
     local yaw = self.rotation:getYaw()
-    self.controls.movement = dx * math.sin(yaw) + dy * math.cos(yaw)
-    self.controls.sideMovement = dx * math.cos(yaw) - dy * math.sin(yaw)
+    local forward = dx * math.sin(yaw) + dy * math.cos(yaw)
+    local side = dx * math.cos(yaw) - dy * math.sin(yaw)
+    local rise = swimRise()
+    if rise ~= 0 then
+        local across = math.abs(forward)
+        local pitch = util.clamp(math.atan2(forward >= 0 and -rise or rise, across), -SWIM_PITCH, SWIM_PITCH)
+        forward = (forward >= 0 and 1 or -1) * math.sqrt(across * across + rise * rise)
+        local length = math.sqrt(forward * forward + side * side)
+        if length > 1 then forward, side = forward / length, side / length end
+        self.controls.pitchChange = pitch - self.rotation:getPitch()
+    end
+    self.controls.movement = forward
+    self.controls.sideMovement = side
     self.controls.run = input.getBooleanActionValue('Run') ~= controlSettings:get('alwaysRun')
     self.controls.jump = jumpRequested
     if not controlSettings:get('toggleSneak') then
@@ -607,7 +843,8 @@ input.registerTriggerHandler('Jump', async:callback(function()
 end))
 
 input.registerTriggerHandler('ToggleSneak', async:callback(function()
-    if active and controlsAllowed() and controlSettings:get('toggleSneak') then
+    -- (in water Sneak is held to dive: swimRise)
+    if active and controlsAllowed() and controlSettings:get('toggleSneak') and not Actor.isSwimming(self) then
         self.controls.sneak = not self.controls.sneak
     end
 end))
@@ -661,29 +898,42 @@ local function targetToward(direction, minCos)
     return best
 end
 
+-- A lockpick or probe ready (they are 'weapons' too): it is for locks and traps, not for aiming at anyone.
+local function lockToolReady()
+    if Actor.getStance(self) ~= Actor.STANCE.Weapon then return false end
+    local tool = Actor.getEquipment(self, Actor.EQUIPMENT_SLOT.CarriedRight)
+    return tool ~= nil and (types.Lockpick.objectIsInstance(tool) or types.Probe.objectIsInstance(tool))
+end
+
 -- With a controller: what the ring and label are on, what X uses and where a ready weapon or spell aims.
 local function updateGamepadPick()
     hovered = nil
     hoveredInRange = false
     aimPoint = nil
+    aimLocked = false
     local yaw = self.rotation:getYaw()
     local facing = v3(math.sin(yaw), math.cos(yaw), 0)
+    local lockTool = lockToolReady()
     if Actor.getStance(self) ~= Actor.STANCE.Nothing then
         -- Aim lock: the hostile creature the right stick points at, or else the nearest one in front
-        local target = targetToward(stickAim or facing, stickAim and STICK_PICK_COS or AIM_ASSIST_COS)
+        local target = not lockTool
+            and targetToward(stickAim or facing, stickAim and STICK_PICK_COS or AIM_ASSIST_COS)
         if target then
             hovered = target
+            aimLocked = true
             aimPoint = target:getBoundingBox().center
             local d = target.position - self.position
             hoveredInRange = math.sqrt(d.x * d.x + d.y * d.y) <= core.getGMST('iMaxActivateDist') + ACTIVATE_SLACK
-        elseif stickAim then
+            return
+        end
+        if stickAim then
             aimPoint = self.position + v3(0, 0, 100) + stickAim * 600
         end
-    else
-        -- What X would use: in the right stick's direction if it points somewhere, else ahead
-        hovered = nearestUsable(stickAim)
-        hoveredInRange = hovered ~= nil
     end
+    -- What X would use: in the right stick's direction if it points somewhere, else ahead. With a weapon or spell
+    -- ready and no hostile creature to aim at, the same (the ring and label show, the aim doesn't lock onto it).
+    hovered = lockTool and nearestUsable(stickAim, true) or nearestUsable(stickAim)
+    hoveredInRange = hovered ~= nil
 end
 
 -- Back held opens the journal (a tap opens the inventory, as bound); D-pad up / down held keeps zooming.
@@ -699,15 +949,19 @@ local function updateControllerHolds(dt)
     else
         backPressedAt, journalOpened = nil, false
     end
-    local zoom = (input.isControllerButtonPressed(B.DPadDown) and 1 or 0)
-        - (input.isControllerButtonPressed(B.DPadUp) and 1 or 0)
-    if zoom ~= 0 then
+    -- The D-pad zooms only in the game itself: in menus and dialogue it moves through the options, and a hold begun
+    -- there doesn't zoom once the menu closes, not until it is let go.
+    local up, down = input.isControllerButtonPressed(B.DPadUp), input.isControllerButtonPressed(B.DPadDown)
+    local zoom = (down and 1 or 0) - (up and 1 or 0)
+    if not (up or down) then
+        dpadHeld = 0
+    elseif not controlsAllowed() then
+        dpadHeld = nil
+    elseif dpadHeld and zoom ~= 0 then
         dpadHeld = dpadHeld + dt
         if dpadHeld > DPAD_ZOOM_DELAY then
-            targetDistance = util.clamp(targetDistance * DPAD_ZOOM_RATE ^ (zoom * dt), MIN_DISTANCE, MAX_DISTANCE)
+            zoomBy(DPAD_ZOOM_RATE ^ (zoom * dt))
         end
-    else
-        dpadHeld = 0
     end
 end
 
@@ -727,14 +981,41 @@ local function claimCamera()
     I.Camera.disableModeControl(TAG)
 end
 
+-- First or third person. Asked for every time, even when the camera is already in that mode: that also drops a
+-- switch the other way still held back (attackHeld) from an earlier zoom.
+local function requestMode(mode)
+    pendingMode = mode
+    camera.setMode(mode, attackHeld())
+end
+
+-- A switch held back is asked for again each frame until it has happened, so it still lands if something else (the
+-- built-in standing preview) switches the camera in between; asking again changes nothing else. Third person counts
+-- as reached in any mode but first person and top-down, so the standing preview (its own mode) is left alone.
+local function updatePendingMode()
+    if not pendingMode then return end
+    local mode = camera.getMode()
+    local reached
+    if pendingMode == MODE.FirstPerson then
+        reached = mode == MODE.FirstPerson
+    else
+        reached = mode ~= MODE.FirstPerson and mode ~= MODE.Static
+    end
+    if reached and camera.getQueuedMode() == nil then
+        pendingMode = nil
+    else
+        camera.setMode(pendingMode, attackHeld())
+    end
+end
+
 local function switchView(wanted)
     viewMode = wanted
     if wanted == 'topdown' then
+        pendingMode = nil
         distance = targetDistance
         apply()
     else
         release()
-        camera.setMode(wanted == 'first' and MODE.FirstPerson or MODE.ThirdPerson)
+        requestMode(wanted == 'first' and MODE.FirstPerson or MODE.ThirdPerson)
     end
 end
 
@@ -747,8 +1028,10 @@ local function onFrame(dt)
     local wanted = wantedView()
     if wanted ~= viewMode then switchView(wanted) end
     if wanted ~= 'topdown' then
-        -- Morrowind's own views: the camera script runs them, at the distance zoomed to
-        if wanted == 'third' then camera.setPreferredThirdPersonDistance(targetDistance) end
+        -- Morrowind's own views: the camera script runs them, at the distance zoomed to. While a switch to first
+        -- person is held back the camera stays in close (the built-in script would put it back out).
+        updatePendingMode()
+        camera.setPreferredThirdPersonDistance(math.max(targetDistance, FIRST_PERSON_BELOW))
         return
     end
     apply()
@@ -762,6 +1045,7 @@ local function onFrame(dt)
         if not core.isWorldPaused() or I.UI.getMode() then updateCamera(dt) end
         setUiVisible(false)
         hidesRing()
+        hideSignLabels()
         healthbars.clear()
         return
     end
@@ -774,12 +1058,14 @@ local function onFrame(dt)
     setUiVisible(true)
     setRingVisible(true)
     updateRing()
-    healthbars.update(worldToScreen)
+    updateParty()
+    healthbars.update(worldToScreen, hovered) -- (the one the cursor or the right stick is on already has the label)
     local dx, dy = wantedDirection()
     updateFacing(dt, dx, dy)
     updateMovement(dx, dy)
     updatePowerAttack()
     jumpRequested = false
+    updateSignLabels(dt) -- last: should it fail, the character still moves
 end
 
 local function activate(object)
@@ -797,13 +1083,16 @@ local function activateHovered()
 end
 
 -- The nearest usable thing within reach, favouring what is in front of the player (or in the given direction). With a
--- controller and no direction given, anything in reach will do (it can't be pointed at).
-nearestUsable = function(direction)
+-- controller and no direction given, anything in reach will do (it can't be pointed at). locksOnly: only doors and
+-- containers.
+nearestUsable = function(direction, locksOnly)
     local reach = core.getGMST('iMaxActivateDist') + ACTIVATE_SLACK
     local yaw = self.rotation:getYaw()
     local facing = direction or v3(math.sin(yaw), math.cos(yaw), 0)
     local best, bestScore = nil, math.huge
-    for _, list in ipairs({ nearby.doors, nearby.containers, nearby.items, nearby.actors, nearby.activators }) do
+    local lists = locksOnly and { nearby.doors, nearby.containers }
+        or { nearby.doors, nearby.containers, nearby.items, nearby.actors, nearby.activators }
+    for _, list in ipairs(lists) do
         for _, object in ipairs(list) do
             if object ~= self.object and objectName(object) then
                 local d = object.position - self.position
@@ -840,8 +1129,12 @@ end
 local function onInputAction(action)
     if not (active and action == input.ACTION.Activate and controlsAllowed()) then return end
     if gamepad then
-        -- X: what is nearest in the right stick's direction (or ahead), whatever the aim is locked on
-        local object = nearestUsable(stickAim)
+        -- X: what the label is on (with a lockpick ready, the lock it shows), or else what is nearest in the right
+        -- stick's direction (or ahead); not the hostile creature the aim is locked on
+        local object = hovered
+        if not (object and hoveredInRange and not aimLocked and object:isValid()) then
+            object = nearestUsable(stickAim)
+        end
         if object then activate(object) end
         return
     end
@@ -850,15 +1143,33 @@ local function onInputAction(action)
     if object then activate(object) end
 end
 
-local function onKeyPress(key)
-    if key.code == input.KEY.F7 then
-        if targetDistance >= TOPDOWN_FROM then
-            lastTopDownDistance = targetDistance
-            targetDistance = THIRD_PERSON_DISTANCE
-            ui.showMessage('Normal view')
-        else
-            targetDistance = lastTopDownDistance
-            ui.showMessage('Top-down view')
+-- Switch view (the trigger is registered in settings.lua): top-down, then third person, then first person, each
+-- view back at the zoom it was left at
+input.registerTriggerHandler('IsowindSwitchView', async:callback(function()
+    if not controlsAllowed() then return end
+    local current = wantedView()
+    if current == 'topdown' then
+        lastTopDownDistance = targetDistance
+        targetDistance = lastThirdDistance
+        ui.showMessage('Third person view')
+    elseif current == 'third' then
+        lastThirdDistance = targetDistance
+        targetDistance = MIN_DISTANCE
+        ui.showMessage('First person view')
+    else
+        targetDistance = lastTopDownDistance
+        ui.showMessage('Top-down view')
+    end
+end))
+
+-- F7 switches the view until the player binds it to something else (Options -> Scripts -> Isowind)
+do
+    local bindings = storage.playerSection('OMWInputBindings')
+    if not ownSettings:get('SwitchViewBound') then
+        ownSettings:set('SwitchViewBound', true)
+        if bindings:get('IsowindSwitchView') == nil then
+            bindings:set('IsowindSwitchView',
+                { device = 'keyboard', button = input.KEY.F7, type = 'trigger', key = 'IsowindSwitchView' })
         end
     end
 end
@@ -870,6 +1181,7 @@ local function onFrameSafe(dt)
     local ok, err = pcall(onFrame, dt)
     if not ok then
         pcall(hidesRing)
+        pcall(hideSignLabels)
         pcall(healthbars.clear)
         if err ~= lastFrameError then
             lastFrameError = err
@@ -883,16 +1195,23 @@ return {
         onFrame = onFrameSafe,
         onMouseButtonPress = onMouseButtonPress,
         onInputAction = onInputAction,
-        onKeyPress = onKeyPress,
         onControllerButtonPress = function() gamepad = true end,
-        onTeleported = function() camera.instantTransition() end,
+        onTeleported = function()
+            camera.instantTransition()
+            signRefreshIn = 0 -- the signs found before are in another cell now
+        end,
         onSave = function()
-            return { distance = targetDistance, topDownDistance = lastTopDownDistance }
+            return {
+                distance = targetDistance,
+                topDownDistance = lastTopDownDistance,
+                thirdDistance = lastThirdDistance,
+            }
         end,
         onLoad = function(data)
             if not data then return end
             targetDistance = data.distance or targetDistance
             lastTopDownDistance = data.topDownDistance or lastTopDownDistance
+            lastThirdDistance = data.thirdDistance or lastThirdDistance
             -- A save from before the zoom chose the view, made in the normal view
             if data.enabled == false and targetDistance >= TOPDOWN_FROM then
                 targetDistance = THIRD_PERSON_DISTANCE

@@ -72,6 +72,7 @@ local function runTests()
     tes3mp.GetTopicChangesSize = function() return #topicChanges end
     tes3mp.GetTopicId = function(pid, i) return topicChanges[i + 1] end
     tes3mp.GetObjectListOrigin = function() return enumerations.packetOrigin.CLIENT_SCRIPT_LOCAL end
+    tes3mp.GetObjectListClientScript = function() return "" end
     WorldInstance.data.isowindParties = nil
     local ENTRY = enumerations.journal.ENTRY
 
@@ -132,7 +133,9 @@ local function runTests()
     check("quest disable kept for both members", record.players.alpha == false and record.players.beta == false)
     local toBeta = sentTo("SendObjectState", 1)
     check("Beta's game told now", toBeta ~= nil and toBeta.objects[1] ~= nil and toBeta.objects[1].state == false)
-    check("Alpha's game not told (it did it)", sentTo("SendObjectState", 0) == nil)
+    local toAlpha = sentTo("SendObjectState", 0)
+    check("Alpha's game told too (it waits for the server)", toAlpha ~= nil and toAlpha.objects[1] ~= nil and
+        toAlpha.objects[1].state == false)
 
     -- Kill credit for the ally
     beta.data.kills = nil

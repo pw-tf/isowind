@@ -137,26 +137,6 @@
 
 namespace MWGui
 {
-    namespace
-    {
-        Settings::SettingValue<bool>* findHiddenSetting(GuiWindow window)
-        {
-            switch (window)
-            {
-                case GW_Inventory:
-                    return &Settings::windows().mInventoryHidden;
-                case GW_Map:
-                    return &Settings::windows().mMapHidden;
-                case GW_Magic:
-                    return &Settings::windows().mSpellsHidden;
-                case GW_Stats:
-                    return &Settings::windows().mStatsHidden;
-                default:
-                    return nullptr;
-            }
-        }
-    }
-
     WindowManager::WindowManager(SDL_Window* window, osgViewer::Viewer* viewer, osg::Group* guiRoot,
         Resource::ResourceSystem* resourceSystem, SceneUtil::WorkQueue* workQueue, const std::filesystem::path& logpath,
         bool consoleOnlyScripts, Translation::Storage& translationDataStorage, ToUTF8::FromType encoding,
@@ -701,12 +681,12 @@ namespace MWGui
             mSpellWindow->setVisible(
                 mSpellWindow->pinned() && !isConsoleMode() && !(mForceHidden & GW_Magic) && (mAllowed & GW_Magic));
 
+            if (mInventoryTabsOverlay)
+                mInventoryTabsOverlay->setVisible(false);
             if (Settings::gui().mControllerMenus)
             {
                 if (mControllerButtonsOverlay)
                     mControllerButtonsOverlay->setVisible(false);
-                if (mInventoryTabsOverlay)
-                    mInventoryTabsOverlay->setVisible(false);
                 // Isowind: out of the menus no window is dimmed (the pinned map shows on the HUD)
                 for (WindowBase* window : { static_cast<WindowBase*>(mMap), static_cast<WindowBase*>(mStatsWindow),
                          static_cast<WindowBase*>(mInventoryWindow), static_cast<WindowBase*>(mSpellWindow) })
@@ -743,6 +723,8 @@ namespace MWGui
             mInventoryWindow->setVisible(eff & GW_Inventory);
             mSpellWindow->setVisible(eff & GW_Magic);
             mStatsWindow->setVisible(eff & GW_Stats);
+            // Isowind: they are pages (one opened just now goes below the screen, or is the page shown)
+            layoutInventoryPages();
         }
 
         updateControllerButtonsOverlay();
@@ -966,9 +948,15 @@ namespace MWGui
         return nullptr;
     }
 
+    bool WindowManager::hasActiveControllerWindow() const
+    {
+        // Isowind: the inventory screen's pages go by it for the mouse and keyboard too
+        return !mGuiModes.empty() && (Settings::gui().mControllerMenus || mGuiModes.back() == GM_Inventory);
+    }
+
     void WindowManager::cycleActiveControllerWindow(bool next)
     {
-        if (!Settings::gui().mControllerMenus || mGuiModes.empty())
+        if (!hasActiveControllerWindow())
             return;
 
         GuiMode mode = mGuiModes.back();
@@ -995,10 +983,15 @@ namespace MWGui
 
     void WindowManager::reapplyActiveControllerWindow()
     {
-        if (!Settings::gui().mControllerMenus || mGuiModes.empty())
+        if (!hasActiveControllerWindow())
             return;
 
         const GuiMode mode = mGuiModes.back();
+        if (mode == GM_Inventory)
+            layoutInventoryPages();
+        if (!Settings::gui().mControllerMenus)
+            return;
+
         size_t winCount = mGuiModeStates[mode].mWindows.size();
 
         for (size_t i = 0; i < winCount; i++)
@@ -1013,7 +1006,7 @@ namespace MWGui
 
     void WindowManager::setActiveControllerWindow(GuiMode mode, size_t activeIndex)
     {
-        if (!Settings::gui().mControllerMenus)
+        if (!Settings::gui().mControllerMenus && mode != GM_Inventory)
             return;
 
         size_t winCount = mGuiModeStates[mode].mWindows.size();
@@ -1025,18 +1018,43 @@ namespace MWGui
 
         reapplyActiveControllerWindow();
 
-        MWBase::Environment::get().getInputManager()->setGamepadGuiCursorEnabled(
-            mGuiModeStates[mode].mWindows[activeIndex]->isGamepadCursorAllowed());
+        if (Settings::gui().mControllerMenus)
+            MWBase::Environment::get().getInputManager()->setGamepadGuiCursorEnabled(
+                mGuiModeStates[mode].mWindows[activeIndex]->isGamepadCursorAllowed());
 
         WindowBase* activeWindow = mGuiModeStates[mode].mWindows[activeIndex];
         if (activeWindow->isVisible())
             MyGUI::LayerManager::getInstance().upLayerItem(activeWindow->mMainWidget);
 
         updateControllerButtonsOverlay();
-        setCursorActive(false);
+        // Isowind: the mouse pointer stays for the mouse and keyboard's tab bar (a page clicked or keyed to)
+        if (Settings::gui().mControllerMenus && MWBase::Environment::get().getInputManager()->joystickLastUsed())
+            setCursorActive(false);
 
         if (winCount > 1)
             playSound(ESM::RefId::stringRefId("Menu Size"));
+    }
+
+    void WindowManager::layoutInventoryPages()
+    {
+        const std::vector<WindowBase*>& pages = mGuiModeStates[GM_Inventory].mWindows;
+        for (size_t i = 0; i < pages.size(); ++i)
+            pages[i]->setInventoryPage(i == mActiveControllerWindows[GM_Inventory]);
+    }
+
+    void WindowManager::placeInventoryPage(MyGUI::Widget* window, int width, int height, bool shown)
+    {
+        // Centred between the tab bar and, with a controller, the legend of its buttons along the bottom
+        const MyGUI::IntSize viewSize = MyGUI::RenderManager::getInstance().getViewSize();
+        const int top = mInventoryTabsOverlay->getHeight();
+        int room = viewSize.height - top;
+        if (Settings::gui().mControllerMenus)
+            room -= mControllerButtonsOverlay->getHeight();
+        width = std::min(width, viewSize.width);
+        height = std::min(height, room);
+        // The pages not shown wait below the screen, still open (the tabs go through the open ones)
+        const int y = shown ? top + (room - height) / 2 : viewSize.height + 1;
+        window->setCoord((viewSize.width - width) / 2, y, width, height);
     }
 
     void WindowManager::update(float frameDuration)
@@ -1511,7 +1529,7 @@ namespace MWGui
         updateVisible();
         MWBase::Environment::get().getLuaManager()->uiModeChanged(arg);
 
-        if (Settings::gui().mControllerMenus)
+        if (hasActiveControllerWindow())
         {
             if (mode == GM_Container)
             {
@@ -1523,7 +1541,11 @@ namespace MWGui
                 // Activate first visible window. This needs to be called after updateVisible.
                 if (mActiveControllerWindows[mode] != 0)
                     mActiveControllerWindows[mode] = mActiveControllerWindows[mode] - 1;
+                const size_t from = mActiveControllerWindows[mode];
                 cycleActiveControllerWindow(true);
+                // Isowind: the inventory screen's pages laid out even with no other one open to go on to
+                if (mode == GM_Inventory && mActiveControllerWindows[mode] == from)
+                    setActiveControllerWindow(mode, from);
             }
         }
     }
@@ -1581,17 +1603,14 @@ namespace MWGui
         if (mConsole && mConsole->isVisible())
             mConsole->onOpen();
 
-        if (Settings::gui().mControllerMenus)
+        if (Settings::gui().mControllerMenus && mGuiModes.empty())
         {
-            if (mGuiModes.empty())
-            {
-                setControllerTooltipVisible(false);
-                // When all windows are hidden, reset tooltip visibility to user's preference.
-                mControllerTooltipEnabled = Settings::gui().mControllerTooltips;
-            }
-            else
-                reapplyActiveControllerWindow();
+            setControllerTooltipVisible(false);
+            // When all windows are hidden, reset tooltip visibility to user's preference.
+            mControllerTooltipEnabled = Settings::gui().mControllerTooltips;
         }
+        else
+            reapplyActiveControllerWindow();
     }
 
     void WindowManager::removeGuiMode(GuiMode mode)
@@ -1786,11 +1805,30 @@ namespace MWGui
         if (getMode() != GM_Inventory)
             return;
 
-        if (Settings::SettingValue<bool>* const hidden = findHiddenSetting(wnd))
-            hidden->set(!hidden->get());
-
-        mShown = (GuiWindow)(mShown ^ wnd);
-        updateVisible();
+        // Isowind: the inventory screen's windows are pages, none of them closed: the HUD's map, bars, weapon and
+        // spell each go to theirs
+        WindowBase* page = nullptr;
+        switch (wnd)
+        {
+            case GW_Map:
+                page = mMap;
+                break;
+            case GW_Inventory:
+                page = mInventoryWindow;
+                break;
+            case GW_Magic:
+                page = mSpellWindow;
+                break;
+            case GW_Stats:
+                page = mStatsWindow;
+                break;
+            default:
+                return;
+        }
+        const std::vector<WindowBase*>& pages = mGuiModeStates[GM_Inventory].mWindows;
+        const auto found = std::find(pages.begin(), pages.end(), page);
+        if (found != pages.end() && page->isVisible())
+            setActiveControllerWindow(GM_Inventory, static_cast<size_t>(found - pages.begin()));
     }
 
     void WindowManager::forceHide(GuiWindow wnd)
@@ -2024,15 +2062,17 @@ namespace MWGui
                 capturesInput = widget->castType<MyGUI::EditBox>(false);
         }
 
-        // Isowind: the keyboard on the screen comes up for a text box when a controller is in use, and goes away
-        // with the focus
-        if (mOnScreenKeyboard)
+        // Isowind: the keyboard on the screen (brought up with X, never by itself) goes away with the focus; the
+        // button legend shows X for it when the controller selection is on a text field
+        if (mOnScreenKeyboard && !capturesInput)
+            mOnScreenKeyboard->close();
+        static bool updatingLegend = false;
+        if (Settings::gui().mControllerMenus && isGuiMode() && !updatingLegend)
         {
-            if (!capturesInput)
-                mOnScreenKeyboard->close();
-            else if (Settings::gui().mControllerMenus && isGuiMode() && mOnScreenKeyboard->getTarget() != widget
-                && MWBase::Environment::get().getInputManager()->joystickLastUsed())
-                mOnScreenKeyboard->open();
+            // Not again for a focus change made while the legend is brought up to date
+            updatingLegend = true;
+            updateControllerButtonsOverlay();
+            updatingLegend = false;
         }
 
         // The SDL_IsTextInputActive() check helps to avoid duplicate calls in SDL2.
@@ -2123,6 +2163,13 @@ namespace MWGui
             && (window == mStatsWindow->mMainWidget->castType<MyGUI::Window>()
                 || window == mSpellWindow->mMainWidget->castType<MyGUI::Window>()))
             return;
+        // Isowind: nor the places of the inventory screen's pages (the map keeps where it is pinned)
+        if (getMode() == GM_Inventory)
+        {
+            for (const WindowBase* page : mGuiModeStates[GM_Inventory].mWindows)
+                if (window == page->mMainWidget)
+                    return;
+        }
 
         const auto it = mTrackedWindows.find(window);
         if (it == mTrackedWindows.end())
@@ -2369,31 +2416,12 @@ namespace MWGui
 
     void WindowManager::updatePinnedWindows()
     {
-        if (Settings::gui().mControllerMenus)
-        {
-            // In controller mode, don't hide any menus and only allow pinning the map.
-            mInventoryWindow->setPinned(false);
-            mMap->setPinned(Settings::windows().mMapPin);
-            mSpellWindow->setPinned(false);
-            mStatsWindow->setPinned(false);
-            return;
-        }
-
-        mInventoryWindow->setPinned(Settings::windows().mInventoryPin);
-        if (Settings::windows().mInventoryHidden)
-            mShown = (GuiWindow)(mShown ^ GW_Inventory);
-
+        // Isowind: the inventory screen's windows are pages, for the mouse and keyboard as in controller mode, so
+        // none of them is hidden and only the map can be pinned
+        mInventoryWindow->setPinned(false);
         mMap->setPinned(Settings::windows().mMapPin);
-        if (Settings::windows().mMapHidden)
-            mShown = (GuiWindow)(mShown ^ GW_Map);
-
-        mSpellWindow->setPinned(Settings::windows().mSpellsPin);
-        if (Settings::windows().mSpellsHidden)
-            mShown = (GuiWindow)(mShown ^ GW_Magic);
-
-        mStatsWindow->setPinned(Settings::windows().mStatsPin);
-        if (Settings::windows().mStatsHidden)
-            mShown = (GuiWindow)(mShown ^ GW_Stats);
+        mSpellWindow->setPinned(false);
+        mStatsWindow->setPinned(false);
     }
 
     void WindowManager::pinWindow(GuiWindow window)
@@ -2760,9 +2788,70 @@ namespace MWGui
         return true;
     }
 
+    bool WindowManager::injectTabKey(MyGUI::KeyCode key)
+    {
+        int delta = 0;
+        bool page = false;
+        switch (key.getValue())
+        {
+            case MyGUI::KeyCode::Q:
+            case MyGUI::KeyCode::E:
+                page = true;
+                delta = key == MyGUI::KeyCode::E ? 1 : -1;
+                break;
+            case MyGUI::KeyCode::Z:
+            case MyGUI::KeyCode::C:
+                delta = key == MyGUI::KeyCode::C ? 1 : -1;
+                break;
+            default:
+                return false;
+        }
+        if (isTextField(MyGUI::InputManager::getInstance().getKeyFocusWidget()) || !mCurrentModals.empty()
+            || isConsoleMode())
+            return false;
+
+        // Turning pages, as the controller's bumpers do: Options' tabs, the inventory screen's pages
+        if (page)
+        {
+            if (!isSettingsWindowVisible() && getMode() != GM_Inventory)
+                return false;
+            // (the pointer stays, as the keyboard has it: see setActiveControllerWindow)
+            MWBase::Environment::get().getInputManager()->setJoystickLastUsed(false);
+            if (isSettingsWindowVisible())
+                return mSettingsWindow->stepTab(delta);
+            cycleActiveControllerWindow(delta > 0);
+            return true;
+        }
+
+        // The tabs inside a window, as the controller's triggers do: the window's under the pointer, or else the
+        // first one open with tabs
+        if (mGuiModes.empty() || isSettingsWindowVisible())
+            return false;
+        const std::vector<WindowBase*>& windows = mGuiModeStates[mGuiModes.back()].mWindows;
+        MyGUI::Widget* underPointer = MyGUI::InputManager::getInstance().getMouseFocusWidget();
+        while (underPointer && underPointer->getParent())
+            underPointer = underPointer->getParent();
+        std::vector<WindowBase*> order;
+        for (WindowBase* window : windows)
+            if (window->mMainWidget == underPointer)
+                order.push_back(window);
+        order.insert(order.end(), windows.begin(), windows.end());
+        for (WindowBase* window : order)
+        {
+            // The inventory screen's pages not shown are open too, below the screen
+            if (!window->isVisible() || (getMode() == GM_Inventory && window != getActiveControllerWindow()))
+                continue;
+            if (window->stepTab(delta))
+                return true;
+        }
+        return false;
+    }
+
     bool WindowManager::injectKeyPress(MyGUI::KeyCode key, unsigned int text, bool repeat)
     {
         if (!repeat && assignHoveredToQuickKey(key))
+            return true;
+        if (!repeat && injectTabKey(key))
             return true;
         if (!mKeyboardNavigation->injectKeyPress(key, text, repeat))
         {
@@ -2924,6 +3013,8 @@ namespace MWGui
 
     void WindowManager::updateControllerButtonsOverlay()
     {
+        updateInventoryTabs();
+
         if (!Settings::gui().mControllerMenus || !mControllerButtonsOverlay)
             return;
 
@@ -2934,23 +3025,32 @@ namespace MWGui
         if (!topWin || !topWin->isVisible())
         {
             mControllerButtonsOverlay->setVisible(false);
-            mInventoryTabsOverlay->setVisible(false);
             return;
         }
 
         // setButtons will handle setting visibility based on if any buttons are defined.
         ControllerButtons buttons = *topWin->getControllerButtons();
-        // Isowind: Y brings up the keyboard on the screen for a text box being typed into
-        if (buttons.mY.empty() && SDL_IsTextInputActive() && !isOnScreenKeyboardVisible())
-            buttons.mY = "#{OMWEngine:Keyboard}";
+        // Isowind: X brings the keyboard on the screen up for the text field the controller selection is on
+        if (!isOnScreenKeyboardVisible() && topWin->getControllerTextField())
+            buttons.mX = "#{OMWEngine:Keyboard}";
         mControllerButtonsOverlay->setButtons(&buttons);
-        if (getMode() == GM_Inventory)
-        {
-            mInventoryTabsOverlay->setVisible(true);
-            mInventoryTabsOverlay->setTab(mActiveControllerWindows[GM_Inventory]);
-        }
-        else
-            mInventoryTabsOverlay->setVisible(false);
+    }
+
+    void WindowManager::updateInventoryTabs()
+    {
+        if (!mInventoryTabsOverlay)
+            return;
+
+        // Isowind: the inventory screen's tab bar, for the mouse and keyboard as for a controller, with a tab for each
+        // page open (character creation opens them one by one)
+        const bool shown = !mGuiModes.empty() && mGuiModes.back() == GM_Inventory;
+        mInventoryTabsOverlay->setVisible(shown);
+        if (!shown)
+            return;
+        const std::vector<WindowBase*>& pages = mGuiModeStates[GM_Inventory].mWindows;
+        for (size_t i = 0; i < pages.size(); ++i)
+            mInventoryTabsOverlay->setTabAvailable(i, pages[i]->isVisible());
+        mInventoryTabsOverlay->setTab(mActiveControllerWindows[GM_Inventory]);
     }
 
     bool WindowManager::isOnScreenKeyboardVisible() const

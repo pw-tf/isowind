@@ -595,6 +595,9 @@ namespace MWGui
         mCancelButton->eventMouseButtonClick += MyGUI::newDelegate(this, &SpellCreationDialog::onCancelButtonClicked);
         mBuyButton->eventMouseButtonClick += MyGUI::newDelegate(this, &SpellCreationDialog::onBuyButtonClicked);
         mNameEdit->eventEditSelectAccept += MyGUI::newDelegate(this, &SpellCreationDialog::onAccept);
+        mControllerNameField = mNameEdit;
+        // Isowind: the keyboard on the screen's Done only puts it away here (Buy buys)
+        mNameEdit->setUserString("KeyboardDone", "Close");
 
         setWidgets(mAvailableEffectsList, mUsedEffectsView);
 
@@ -842,6 +845,9 @@ namespace MWGui
             mAvailableFocus = 0;
             mEffectFocus = 0;
             mRightColumn = false;
+            mNameSelected = false;
+            if (mControllerNameField)
+                setTextFieldSelected(mControllerNameField, false);
             if (!mAvailableButtons.empty())
             {
                 MWBase::WindowManager& winMgr = *MWBase::Environment::get().getWindowManager();
@@ -1034,9 +1040,44 @@ namespace MWGui
         mConstantEffect = constant;
     }
 
+    MyGUI::Widget* EffectEditorBase::getSelectedNameField() const
+    {
+        return mNameSelected ? mControllerNameField : nullptr;
+    }
+
+    void EffectEditorBase::setNameSelected(bool selected)
+    {
+        mNameSelected = selected;
+        setTextFieldSelected(mControllerNameField, selected);
+        // The list entry is lit while the name isn't
+        if (mRightColumn && mEffectFocus < mEffectButtons.size())
+            mEffectButtons[mEffectFocus].first->setStateSelected(!selected);
+        else if (!mRightColumn && mAvailableFocus < mAvailableButtons.size())
+            mAvailableButtons[mAvailableFocus]->setStateSelected(!selected);
+        MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
+        winMgr->setControllerTooltipVisible(!selected && !mRightColumn && Settings::gui().mControllerTooltips);
+        winMgr->updateControllerButtonsOverlay();
+    }
+
     bool EffectEditorBase::onControllerButtonEvent(const SDL_ControllerButtonEvent& arg)
     {
         MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
+
+        // Isowind: on the name, D-pad down goes back to the list; the D-pad and A do nothing else there (X brings the
+        // keyboard on the screen up: ControllerManager)
+        if (mNameSelected)
+        {
+            if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_DOWN)
+                setNameSelected(false);
+            return true;
+        }
+        if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_UP && mControllerNameField
+            && (mRightColumn ? mEffectFocus == 0 || mEffectButtons.empty()
+                             : mAvailableFocus == 0 || mAvailableButtons.empty()))
+        {
+            setNameSelected(true);
+            return true;
+        }
 
         if (arg.button == SDL_CONTROLLER_BUTTON_A)
         {

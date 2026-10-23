@@ -19,6 +19,15 @@ namespace MechanicsHelper
     /// Morrowind respawns one, in front of the players there too. Returns whether it was done (not for cells this
     /// game hasn't loaded, where it's as it starts anyway).
     bool respawnActor(const MWWorld::Ptr& ptr);
+    /// Isowind MMO: the server's commands about a one-off event's people, which each player's game runs itself
+    /// (CellController::setClientLocalActor): "isowind local" (the first time this session, the actor starts over as
+    /// the game's files have it, undoing what others' games sent about it) and "isowind local dead <x> <y> <z>" (its
+    /// body, where it died for this player). Things among the objects are left alone. Returns false for other commands.
+    bool runClientLocalCommand(const std::string& command, MWWorld::CellStore* cellStore, unsigned int refNum,
+        unsigned int mpNum, const std::string& refId);
+    /// Isowind MMO: the server hears of the death of one of a one-off event's people that this client runs itself,
+    /// with where the body lies, as that player's (a ClientScriptLocal packet as gameplay, floats 0 to 2 the place)
+    void sendClientLocalDeath(const MWWorld::Ptr& actor);
 
     bool isUsingRangedWeapon(const MWWorld::Ptr& ptr);
 

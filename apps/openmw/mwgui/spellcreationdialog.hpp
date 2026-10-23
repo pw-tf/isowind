@@ -150,6 +150,13 @@ namespace MWGui
 
         virtual bool onControllerButtonEvent(const SDL_ControllerButtonEvent& arg);
 
+        // Isowind: the name of the spell or the enchanted item. D-pad up from the top of either list selects it, for X
+        // to bring the keyboard on the screen up; down goes back to the list.
+        MyGUI::EditBox* mControllerNameField = nullptr;
+        bool mNameSelected = false;
+        void setNameSelected(bool selected);
+        MyGUI::Widget* getSelectedNameField() const;
+
     private:
         Type mType;
 
@@ -173,6 +180,8 @@ namespace MWGui
         void setPtr(const MWWorld::Ptr& actor) override;
 
         std::string_view getWindowIdForLua() const override { return "SpellCreationDialog"; }
+
+        MyGUI::Widget* getControllerTextField() override { return getSelectedNameField(); }
 
     protected:
         void onReferenceUnavailable() override;

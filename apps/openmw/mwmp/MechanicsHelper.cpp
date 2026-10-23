@@ -1,3 +1,6 @@
+#include <locale>
+#include <sstream>
+
 #include <components/openmw-mp/TimedLog.hpp>
 #include <components/openmw-mp/Utils.hpp>
 
@@ -150,6 +153,103 @@ bool MechanicsHelper::respawnActor(const MWWorld::Ptr& ptr)
     if (inScene)
         world->enable(moved);
     return true;
+}
+
+bool MechanicsHelper::runClientLocalCommand(const std::string& command, MWWorld::CellStore* cellStore,
+    unsigned int refNum, unsigned int mpNum, const std::string& refIdString)
+{
+    static const std::string deadPrefix = "isowind local dead ";
+    const bool dead = command.rfind(deadPrefix, 0) == 0;
+    if (command != "isowind local" && !dead)
+        return false;
+
+    CellController* cellController = Main::get().getCellController();
+    const bool wasClientLocal = cellController->isClientLocalActor(refNum, mpNum);
+
+    MWWorld::Ptr ptr;
+    if (cellStore != nullptr && cellStore->getState() == MWWorld::CellStore::State_Loaded)
+        ptr = cellStore->searchExact(refNum, mpNum, refId(refIdString));
+
+    // A thing the event changes, not a person: nothing to run
+    if (!ptr.isEmpty() && !ptr.getClass().isActor())
+        return true;
+
+    cellController->setClientLocalActor(refNum, mpNum);
+
+    // In a cell this client hasn't loaded the actor is as the game's files have it when it loads (the server tells
+    // this client again then)
+    if (ptr.isEmpty())
+        return true;
+
+    if (!dead)
+    {
+        // What the server sent about it before, from whichever game ran it, is undone; after that it's this
+        // client's own for the session
+        if (!wasClientLocal)
+            respawnActor(ptr);
+        return true;
+    }
+
+    // This client's own body of it, as it lies
+    if (wasClientLocal && ptr.getClass().getCreatureStats(ptr).isDead())
+        return true;
+
+    osg::Vec3f position;
+    std::istringstream stream(command.substr(deadPrefix.size()));
+    stream.imbue(std::locale::classic());
+    if (!(stream >> position.x() >> position.y() >> position.z()))
+        return true;
+
+    // Its inventory as the game's files have it, under the player's own loot (which the server sends after this)
+    if (!wasClientLocal)
+    {
+        respawnActor(ptr);
+        ptr = cellStore->searchExact(refNum, mpNum, refId(refIdString));
+        if (ptr.isEmpty())
+            return true;
+    }
+
+    MWBase::World* world = MWBase::Environment::get().getWorld();
+    ptr = world->moveObject(ptr, position);
+    MWMechanics::CreatureStats& stats = ptr.getClass().getCreatureStats(ptr);
+    if (!stats.isDead())
+    {
+        // Dead already, its death not played again (no dying words, no OnDeath for scripts)
+        MWMechanics::DynamicStat<float> health = stats.getHealth();
+        health.setCurrent(0.f);
+        stats.setHealth(health);
+        stats.setDeathAnimationFinished(true);
+    }
+    world->enableActorCollision(ptr, false);
+    return true;
+}
+
+void MechanicsHelper::sendClientLocalDeath(const MWWorld::Ptr& actor)
+{
+    if (!mwmp::hooks::isLoggedIn() || actor.isEmpty() || !actor.isInCell() || actor.getCell()->getCell()->isEsm4())
+        return;
+
+    LOG_MESSAGE_SIMPLE(TimedLog::LOG_INFO, "Sending the death of %s %i-%i, which this client runs itself",
+        idString(actor.getCellRef().getRefId()).c_str(), actor.getCellRef().getMpRefNum(),
+        actor.getCellRef().getMpNum());
+
+    const osg::Vec3f position = actor.getRefData().getPosition().asVec3();
+    ObjectList* objectList = Main::get().getNetworking()->getObjectList();
+    objectList->reset();
+    objectList->packetOrigin = CLIENT_GAMEPLAY;
+    objectList->cell = actor.getCell()->getCell()->getEsm3();
+    BaseObject baseObject = objectList->getBaseObjectFromPtr(actor);
+    for (int i = 0; i < 3; ++i)
+    {
+        ClientVariable place;
+        place.internalIndex = i;
+        place.variableType = VARIABLE_TYPE::FLOAT;
+        place.intValue = 0;
+        place.floatValue = position[i];
+        baseObject.clientLocals.push_back(place);
+    }
+    objectList->addBaseObject(baseObject);
+    objectList->sendClientScriptLocal();
 }
 
 bool MechanicsHelper::isUsingRangedWeapon(const MWWorld::Ptr& ptr)

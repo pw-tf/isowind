@@ -8,6 +8,11 @@ namespace MyGUI
     class Button;
 }
 
+namespace Gui
+{
+    class HBox;
+}
+
 namespace MWGui
 {
     class InventoryTabsOverlay : public WindowBase
@@ -17,9 +22,12 @@ namespace MWGui
 
         int getHeight();
         void setTab(size_t index);
+        /// Isowind: a tab only for a page open (character creation opens them one by one)
+        void setTabAvailable(size_t index, bool available);
 
     private:
         std::vector<MyGUI::Button*> mTabs;
+        Gui::HBox* mTabBox = nullptr;
 
         void onTabClicked(MyGUI::Widget* sender);
     };

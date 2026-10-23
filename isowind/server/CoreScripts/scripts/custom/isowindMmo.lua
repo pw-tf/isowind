@@ -10,10 +10,34 @@
 -- * Enemies and NPCs come back after they die, players there or not, after a time from how
 --   tough they were (WoW-like tiers, from their health): trash 1.5 minutes, normal 5, elite 15, bosses 20, divided by
 --   the host's respawn speed. Ones from the game's files are reset on each client ("isowind respawn", a console
---   command packet the game handles itself); leveled-list ones are spawned again where they first appeared.
+--   command packet the game handles itself); leveled-list ones are spawned again where they first appeared. Someone a
+--   quest script brought into the world (Tarhiel falling from the sky) is a one-off and stays dead.
+-- * The game's one-off events (the scripts in config.isowindEventScriptIds) happen once for each player. What an event's
+--   script does to the world (enabling, disabling or deleting) and how far it has got (its short and long local
+--   variables, isowindEventLocals) are each player's own, kept per object and replayed when their game loads the cell.
+--   There are two kinds:
+--   - Shared events (a plain script id: Tarhiel falling from the sky near Seyda Neen) change the world. Players near the
+--     one whose event it is (EVENT_BUBBLE_UNITS outdoors, the same cell indoors) who haven't had it see it with them,
+--     and it counts as had for them too; the others get their own when they come by.
+--   - Own events ({ "scriptId", own = true }: Dagoth Ur's taunts) are only sounds, voices or messages, which other
+--     players' games can't be shown: each player has them once, on their own, whoever is near; nothing of them goes to
+--     anyone else.
+--   The people an event script brings in or takes away are run by each player's game itself ("isowind local"), not by
+--   whoever's game runs the cell, so each player's game has its own of them: their deaths (isowindEventDeaths, which the
+--   player's game reports) are each player's own, as their loot already is. The party doesn't share events: they're
+--   for whoever is there.
 
 if not IsowindHost.IsMmo() then
     return
+end
+
+-- The server keeps how far each player's one-off events have got: their games send their scripts' local variables.
+-- (An entry of config.isowindEventScriptIds is a script id, or { scriptId, own = true } for an own event.)
+for _, entry in ipairs(config.isowindEventScriptIds or {}) do
+    local scriptId = type(entry) == "table" and entry[1] or entry
+    if type(scriptId) == "string" then
+        tableHelper.insertValueIfMissing(config.synchronizedClientScriptIds, scriptId)
+    end
 end
 
 config.shareJournal = false
@@ -238,6 +262,575 @@ local function isFromScript(packetOrigin)
         packetOrigin == enumerations.packetOrigin.CLIENT_DIALOGUE
 end
 
+-- --- One-off events ----------------------------------------------------------------------------------------------
+
+-- How far apart players outdoors can be to see an event together (a cell is 8192 units across, and the cells around
+-- count too); indoors they have to be in the same cell
+local EVENT_BUBBLE_UNITS = 4096
+-- A run of an event ends this long after the last change made by the script of the player whose run it is
+local EVENT_RUN_SECONDS = 120
+-- What a player's game sends this soon after loading a cell comes from its scripts starting over there, before the
+-- server's replay of how far they got: for an event the player has had, it's answered with what the player has
+local EVENT_REFIRE_SECONDS = 10
+
+-- This session's runs of each event, by its script (lower case) and the player whose run it is: { event, starter,
+-- members = { name = true }, last = time, changes = { cellDescription = { states, deletes, locals } } }
+local eventRuns = {}
+-- When each player's game last loaded each cell, this session
+local cellLoadedAt = {}
+-- The event people each player's game was told to run itself, this session: { name = { cellDescription = { uniqueIndex
+-- = true } } }
+local runsOwnCopy = {}
+-- Under which load of the cell (cellLoadedAt) each player's own events last wrote each object's data, this session:
+-- { name = { cellDescription = { uniqueIndex = load time } } }
+local ownWrittenAt = {}
+
+-- The event a packet from a script is about (its script, in lower case) and whether it's an own event, or nil
+local function eventScriptOf(packetOrigin)
+    if packetOrigin ~= enumerations.packetOrigin.CLIENT_SCRIPT_LOCAL and
+        packetOrigin ~= enumerations.packetOrigin.CLIENT_SCRIPT_GLOBAL then
+        return nil, false
+    end
+    local script = string.lower(tes3mp.GetObjectListClientScript() or "")
+    for _, entry in ipairs(config.isowindEventScriptIds or {}) do
+        local scriptId = type(entry) == "table" and entry[1] or entry
+        if type(scriptId) == "string" and string.lower(scriptId) == script then
+            return script, type(entry) == "table" and entry.own == true
+        end
+    end
+    return nil, false
+end
+
+local function getEventsHad()
+    WorldInstance.data.isowindEventsHad = WorldInstance.data.isowindEventsHad or {}
+    return WorldInstance.data.isowindEventsHad
+end
+
+local function hasHadEvent(event, name)
+    local had = getEventsHad()[event]
+    return had ~= nil and had[name] == true
+end
+
+local function markEventHad(event, name)
+    local eventsHad = getEventsHad()
+    eventsHad[event] = eventsHad[event] or {}
+    eventsHad[event][name] = true
+    WorldInstance:QuicksaveToDrive()
+end
+
+local function isEventObject(cell, uniqueIndex)
+    return cell.data.isowindEvents ~= nil and cell.data.isowindEvents[uniqueIndex] ~= nil
+end
+
+-- Where a player is: their cell, and their place in the world (which outdoors goes across cells)
+local function placeOf(pid)
+    return { cell = tes3mp.GetCell(pid), exterior = tes3mp.IsInExterior(pid), x = tes3mp.GetPosX(pid),
+        y = tes3mp.GetPosY(pid) }
+end
+
+local function inBubble(place, otherPlace)
+    if place.exterior and otherPlace.exterior then
+        local dx, dy = place.x - otherPlace.x, place.y - otherPlace.y
+        return dx * dx + dy * dy <= EVENT_BUBBLE_UNITS * EVENT_BUBBLE_UNITS
+    end
+    return not place.exterior and not otherPlace.exterior and place.cell == otherPlace.cell
+end
+
+local function onlinePidOf(name)
+    for pid, player in pairs(Players) do
+        if player:IsLoggedIn() and playerKey(pid) == name then
+            return pid
+        end
+    end
+    return nil
+end
+
+local function isRefire(name, cellDescription)
+    local loadedAt = cellLoadedAt[name] ~= nil and cellLoadedAt[name][cellDescription] or nil
+    return loadedAt ~= nil and os.time() - loadedAt <= EVENT_REFIRE_SECONDS
+end
+
+local function markOwnWritten(name, cellDescription, uniqueIndex)
+    local loadedAt = cellLoadedAt[name] ~= nil and cellLoadedAt[name][cellDescription] or 0
+    ownWrittenAt[name] = ownWrittenAt[name] or {}
+    ownWrittenAt[name][cellDescription] = ownWrittenAt[name][cellDescription] or {}
+    ownWrittenAt[name][cellDescription][uniqueIndex] = loadedAt
+end
+
+-- An own event's change from a player's game that comes from its script starting over on loading the cell: kept for
+-- the player from before (kept isn't nil), and nothing of it written since that load
+local function isOwnRefire(name, cellDescription, uniqueIndex, kept)
+    if kept == nil or not isRefire(name, cellDescription) then
+        return false
+    end
+    local written = ownWrittenAt[name] ~= nil and ownWrittenAt[name][cellDescription] ~= nil and
+        ownWrittenAt[name][cellDescription][uniqueIndex] or nil
+    return written ~= cellLoadedAt[name][cellDescription]
+end
+
+-- An event script's short and long local variables from a ClientScriptLocal packet, as { "type:index" = value } (keys
+-- that stay as they are in the cell's file); its floats are timers, changing all the time, and are never kept
+local function intLocals(variables)
+    local result = {}
+    for variableType, variableTable in pairs(variables or {}) do
+        local typeNumber = tonumber(variableType)
+        if typeNumber == enumerations.variableType.SHORT or typeNumber == enumerations.variableType.LONG then
+            for internalIndex, value in pairs(variableTable) do
+                result[typeNumber .. ":" .. tonumber(internalIndex)] = value
+            end
+        end
+    end
+    return result
+end
+
+-- Back to the packet's form: { variableType = { internalIndex = value } }
+local function packetLocals(vars)
+    local variables = {}
+    for key, value in pairs(vars) do
+        local variableType, internalIndex = key:match("^(%d+):(%d+)$")
+        if variableType ~= nil then
+            variableType = tonumber(variableType)
+            variables[variableType] = variables[variableType] or {}
+            variables[variableType][tonumber(internalIndex)] = value
+        end
+    end
+    return variables
+end
+
+local function setOwnState(cell, uniqueIndex, refId, name, state)
+    cell.data.isowindStates = cell.data.isowindStates or {}
+    local record = cell.data.isowindStates[uniqueIndex] or { refId = refId, players = {} }
+    record.players[name] = state
+    cell.data.isowindStates[uniqueIndex] = record
+end
+
+local function getOwnState(cell, uniqueIndex, name)
+    local record = cell.data.isowindStates ~= nil and cell.data.isowindStates[uniqueIndex] or nil
+    if record == nil then
+        return nil
+    end
+    return record.players[name]
+end
+
+local function setOwnTaken(cell, uniqueIndex, name)
+    cell.data.isowindTaken = cell.data.isowindTaken or {}
+    cell.data.isowindTaken[uniqueIndex] = cell.data.isowindTaken[uniqueIndex] or {}
+    cell.data.isowindTaken[uniqueIndex][name] = true
+end
+
+local function setOwnLocals(cell, uniqueIndex, refId, name, vars)
+    cell.data.isowindEventLocals = cell.data.isowindEventLocals or {}
+    local record = cell.data.isowindEventLocals[uniqueIndex] or { refId = refId, players = {} }
+    local mine = record.players[name] or {}
+    for key, value in pairs(vars) do
+        mine[key] = value
+    end
+    record.players[name] = mine
+    cell.data.isowindEventLocals[uniqueIndex] = record
+end
+
+local function getOwnLocals(cell, uniqueIndex, name)
+    local record = cell.data.isowindEventLocals ~= nil and cell.data.isowindEventLocals[uniqueIndex] or nil
+    if record == nil then
+        return nil
+    end
+    return record.players[name]
+end
+
+-- To one player's game: { uniqueIndex = { refId, state } }
+local function sendStates(pid, cellDescription, states)
+    tes3mp.ClearObjectList()
+    tes3mp.SetObjectListPid(pid)
+    tes3mp.SetObjectListCell(cellDescription)
+    for uniqueIndex, object in pairs(states) do
+        packetBuilder.AddObjectState(uniqueIndex, object)
+    end
+    tes3mp.SendObjectState(false)
+end
+
+-- { uniqueIndex = { refId } }
+local function sendDeletes(pid, cellDescription, deletes)
+    tes3mp.ClearObjectList()
+    tes3mp.SetObjectListPid(pid)
+    tes3mp.SetObjectListCell(cellDescription)
+    for uniqueIndex, object in pairs(deletes) do
+        packetBuilder.AddObjectDelete(uniqueIndex, object)
+    end
+    tes3mp.SendObjectDelete(false)
+end
+
+-- { uniqueIndex = { refId, vars } }
+local function sendLocals(pid, cellDescription, locals)
+    tes3mp.ClearObjectList()
+    tes3mp.SetObjectListPid(pid)
+    tes3mp.SetObjectListCell(cellDescription)
+    for uniqueIndex, entry in pairs(locals) do
+        packetBuilder.AddClientScriptLocal(uniqueIndex, { refId = entry.refId, variables = packetLocals(entry.vars) })
+    end
+    tes3mp.SendClientScriptLocal(false)
+end
+
+-- A command the game handles itself (mwmp::ObjectList::runConsoleCommands), to one player: { uniqueIndex = refId }
+local function sendCommand(pid, cellDescription, command, objects)
+    tes3mp.ClearObjectList()
+    tes3mp.SetObjectListPid(pid)
+    tes3mp.SetObjectListCell(cellDescription)
+    tes3mp.SetObjectListConsoleCommand(command)
+    for uniqueIndex, refId in pairs(objects) do
+        local refNum, mpNum = splitIndex(uniqueIndex)
+        tes3mp.SetObjectRefNum(refNum)
+        tes3mp.SetObjectMpNum(mpNum)
+        tes3mp.SetObjectRefId(refId)
+        tes3mp.AddObject()
+    end
+    tes3mp.SendConsoleCommand(false, false)
+end
+
+-- Tells a player's game to run some of a cell's event people itself, each as that player has them: dead where they
+-- died for them ("isowind local dead x y z"), or else as the game's files have them ("isowind local"), until the event
+-- changes them. Their game does nothing with the things among them.
+local function sendEventPeople(pid, cell, uniqueIndexes)
+    local name = playerKey(pid)
+    local deaths = cell.data.isowindEventDeaths or {}
+    runsOwnCopy[name] = runsOwnCopy[name] or {}
+    runsOwnCopy[name][cell.description] = runsOwnCopy[name][cell.description] or {}
+    local alive = {}
+    for _, uniqueIndex in ipairs(uniqueIndexes) do
+        local entry = cell.data.isowindEvents[uniqueIndex]
+        local death = deaths[uniqueIndex] ~= nil and deaths[uniqueIndex][name] or nil
+        if death ~= nil then
+            sendCommand(pid, cell.description, string.format("isowind local dead %.2f %.2f %.2f", death.posX,
+                death.posY, death.posZ), { [uniqueIndex] = entry.refId })
+        else
+            alive[uniqueIndex] = entry.refId
+        end
+        runsOwnCopy[name][cell.description][uniqueIndex] = true
+    end
+    if next(alive) ~= nil then
+        sendCommand(pid, cell.description, "isowind local", alive)
+    end
+end
+
+-- What an event script enables or disables becomes one of its cell's event objects; from then on the people among
+-- them are run by each player's game itself, so every game that has the cell loaded is told now (the others when they
+-- load it)
+local function registerEventObjects(cell, objects, event)
+    cell.data.isowindEvents = cell.data.isowindEvents or {}
+    local added = {}
+    for uniqueIndex, object in pairs(objects) do
+        if cell.data.isowindEvents[uniqueIndex] == nil then
+            cell.data.isowindEvents[uniqueIndex] = { refId = object.refId, script = event }
+            table.insert(added, uniqueIndex)
+        end
+    end
+    if #added == 0 then
+        return
+    end
+    for _, visitor in pairs(cell.visitors) do
+        if Players[visitor] ~= nil and Players[visitor]:IsLoggedIn() then
+            sendEventPeople(visitor, cell, added)
+        end
+    end
+end
+
+local function runChanges(run, cellDescription)
+    run.changes[cellDescription] = run.changes[cellDescription] or { states = {}, deletes = {}, locals = {} }
+    return run.changes[cellDescription]
+end
+
+local function memberNames(run)
+    local names = {}
+    for member in pairs(run.members) do
+        table.insert(names, member)
+    end
+    return names
+end
+
+-- A player joining a run gets what it has done so far, kept as theirs
+local function giveRunSoFar(run, pid)
+    local name = playerKey(pid)
+    for cellDescription, changes in pairs(run.changes) do
+        local hasCellLoaded = false
+        withCell(cellDescription, function(cell)
+            for uniqueIndex, object in pairs(changes.states) do
+                setOwnState(cell, uniqueIndex, object.refId, name, object.state)
+            end
+            for uniqueIndex in pairs(changes.deletes) do
+                setOwnTaken(cell, uniqueIndex, name)
+            end
+            for uniqueIndex, entry in pairs(changes.locals) do
+                setOwnLocals(cell, uniqueIndex, entry.refId, name, entry.vars)
+            end
+            hasCellLoaded = tableHelper.containsValue(cell.visitors, pid)
+            cell:QuicksaveToDrive()
+        end)
+        if next(changes.states) ~= nil then
+            sendStates(pid, cellDescription, changes.states)
+        end
+        if next(changes.deletes) ~= nil then
+            sendDeletes(pid, cellDescription, changes.deletes)
+        end
+        -- (the variables only to a game that has the cell loaded; the replay when it loads the cell gives them)
+        if next(changes.locals) ~= nil and hasCellLoaded then
+            sendLocals(pid, cellDescription, changes.locals)
+        end
+    end
+end
+
+-- The players near the one whose run it is, who haven't had the event, join it: it's theirs too from now on
+local function joinNearby(run, starterPid)
+    local here = placeOf(starterPid)
+    for otherPid, player in pairs(Players) do
+        if otherPid ~= starterPid and player:IsLoggedIn() then
+            local other = playerKey(otherPid)
+            if not run.members[other] and not hasHadEvent(run.event, other) and inBubble(here, placeOf(otherPid)) then
+                run.members[other] = true
+                markEventHad(run.event, other)
+                tes3mp.LogMessage(enumerations.log.INFO, "[Isowind] " .. other .. " has the " .. run.event ..
+                    " event with " .. run.starter)
+                giveRunSoFar(run, otherPid)
+            end
+        end
+    end
+end
+
+-- The run a change from a player's event script belongs to, and whether the run is theirs: the one they're in, or a new
+-- one of theirs if they haven't had the event. Nil for a player who has had it and is in none.
+local function eventRunOf(pid, event)
+    local name = playerKey(pid)
+    local now = os.time()
+    eventRuns[event] = eventRuns[event] or {}
+    local runs = eventRuns[event]
+    for starter, run in pairs(runs) do
+        if now - run.last > EVENT_RUN_SECONDS then
+            runs[starter] = nil
+        end
+    end
+    for _, run in pairs(runs) do
+        if run.members[name] then
+            if run.starter == name then
+                run.last = now
+                joinNearby(run, pid)
+            end
+            return run, run.starter == name
+        end
+    end
+    if hasHadEvent(event, name) then
+        return nil, false
+    end
+    local run = { event = event, starter = name, members = { [name] = true }, last = now, changes = {} }
+    runs[name] = run
+    markEventHad(event, name)
+    tes3mp.LogMessage(enumerations.log.INFO, "[Isowind] " .. name .. " has the " .. event .. " event")
+    joinNearby(run, pid)
+    return run, true
+end
+
+-- An event script enabling or disabling the game's own people or things: for the player, and the others in their run
+-- if it's theirs (an own event's: the player's alone)
+local function onEventStates(pid, cell, mine, event, own)
+    local name = playerKey(pid)
+    registerEventObjects(cell, mine, event)
+
+    if own then
+        local answer = {}
+        for uniqueIndex, object in pairs(mine) do
+            local kept = getOwnState(cell, uniqueIndex, name)
+            if isOwnRefire(name, cell.description, uniqueIndex, kept) then
+                -- Their game's script starting over on loading the cell: it gets back what the player has
+                answer[uniqueIndex] = { refId = object.refId, state = kept }
+            else
+                setOwnState(cell, uniqueIndex, object.refId, name, object.state)
+                markOwnWritten(name, cell.description, uniqueIndex)
+                answer[uniqueIndex] = object
+            end
+        end
+        -- (the player's own game waits for the server to make the change)
+        sendStates(pid, cell.description, answer)
+        return
+    end
+
+    local run, isStarter = eventRunOf(pid, event)
+
+    if run == nil and isRefire(name, cell.description) then
+        -- Their game's scripts starting over on loading the cell: it gets back what the player already has
+        local answer = {}
+        for uniqueIndex, object in pairs(mine) do
+            local state = getOwnState(cell, uniqueIndex, name)
+            if state == nil then
+                state = object.state
+                setOwnState(cell, uniqueIndex, object.refId, name, state)
+            end
+            answer[uniqueIndex] = { refId = object.refId, state = state }
+        end
+        sendStates(pid, cell.description, answer)
+        return
+    end
+
+    local names = { name }
+    if isStarter then
+        names = memberNames(run)
+        local changes = runChanges(run, cell.description)
+        for uniqueIndex, object in pairs(mine) do
+            changes.states[uniqueIndex] = { refId = object.refId, state = object.state }
+        end
+    end
+    -- Each of them sees it now (the player's own game waits for the server to make the change)
+    for _, member in ipairs(names) do
+        for uniqueIndex, object in pairs(mine) do
+            setOwnState(cell, uniqueIndex, object.refId, member, object.state)
+        end
+        local memberPid = member == name and pid or onlinePidOf(member)
+        if memberPid ~= nil then
+            sendStates(memberPid, cell.description, mine)
+        end
+    end
+end
+
+-- Whose an event script's deletion is: the run's if it's the player's run, else (and for an own event) the player's
+local function eventDeleters(pid, cell, mine, event, own)
+    if own then
+        return { playerKey(pid) }
+    end
+    local run, isStarter = eventRunOf(pid, event)
+    if not isStarter then
+        return { playerKey(pid) }
+    end
+    local changes = runChanges(run, cell.description)
+    for uniqueIndex, object in pairs(mine) do
+        changes.deletes[uniqueIndex] = { refId = object.refId }
+    end
+    return memberNames(run)
+end
+
+-- A player's game telling of the death of its own copy of an event person, and where the body lies: a ClientScriptLocal
+-- packet as gameplay (no script's), with the place as floats 0 to 2 (mwmp::MechanicsHelper::sendClientLocalDeath; the
+-- server only takes ActorDeath from the game that runs the cell, and a console command would be one of the player's).
+-- Kept as that player's, only for this cell's event people that the server told that player's game to run itself and
+-- that are there for them; anything else in such a packet changes nothing.
+local function onEventDeath(pid, cellDescription, objects)
+    local name = playerKey(pid)
+    local own = runsOwnCopy[name] ~= nil and runsOwnCopy[name][cellDescription] or {}
+    withCell(cellDescription, function(cell)
+        for uniqueIndex, object in pairs(objects) do
+            local place = object.variables ~= nil and object.variables[enumerations.variableType.FLOAT] or {}
+            local x, y, z = tonumber(place[0]), tonumber(place[1]), tonumber(place[2])
+            if x ~= nil and y ~= nil and z ~= nil and isEventObject(cell, uniqueIndex) and own[uniqueIndex] and
+                getOwnState(cell, uniqueIndex, name) == true then
+                cell.data.isowindEventDeaths = cell.data.isowindEventDeaths or {}
+                cell.data.isowindEventDeaths[uniqueIndex] = cell.data.isowindEventDeaths[uniqueIndex] or {}
+                cell.data.isowindEventDeaths[uniqueIndex][name] = { posX = x, posY = y, posZ = z }
+                tes3mp.LogMessage(enumerations.log.INFO, "[Isowind] " .. name .. "'s " .. tostring(object.refId) ..
+                    " " .. uniqueIndex .. " died in " .. cellDescription)
+            else
+                tes3mp.LogMessage(enumerations.log.WARN, "[Isowind] Ignored a death of " .. tostring(object.refId) ..
+                    " " .. uniqueIndex .. " from " .. name .. ": not their game's own event person")
+            end
+        end
+        cell:QuicksaveToDrive()
+    end)
+    return customEventHooks.makeEventStatus(false, false)
+end
+
+-- How far an event's script has got for a player (its short and long variables; ClientScriptLocal packets, which the
+-- game sends for the scripts in config.synchronizedClientScriptIds): theirs, and their run's others' if the run is
+-- theirs (an own event's: the player's alone). Their own game already has it (it sets the variable before it tells
+-- the server), so it isn't sent back.
+local function onClientScriptLocal(eventStatus, pid, cellDescription, objects)
+    if eventStatus.validDefaultHandler == false then
+        return
+    end
+    local packetOrigin = tes3mp.GetObjectListOrigin()
+    if packetOrigin == enumerations.packetOrigin.CLIENT_GAMEPLAY then
+        return onEventDeath(pid, cellDescription, objects)
+    end
+    local event, own = eventScriptOf(packetOrigin)
+    if event == nil then
+        return
+    end
+    local cell = LoadedCells[cellDescription]
+    if cell == nil then
+        return customEventHooks.makeEventStatus(false, true)
+    end
+
+    local changes = {}
+    for uniqueIndex, object in pairs(objects) do
+        local vars = intLocals(object.variables)
+        if next(vars) ~= nil then
+            changes[uniqueIndex] = { refId = object.refId, vars = vars }
+        end
+    end
+    -- Only timers: nothing to keep
+    if next(changes) == nil then
+        return customEventHooks.makeEventStatus(false, true)
+    end
+
+    local name = playerKey(pid)
+    if own then
+        local answer = {}
+        for uniqueIndex, change in pairs(changes) do
+            local kept = getOwnLocals(cell, uniqueIndex, name)
+            if isOwnRefire(name, cellDescription, uniqueIndex, kept) then
+                -- Their game's script starting over on loading the cell: it gets back how far the player had got
+                answer[uniqueIndex] = { refId = change.refId, vars = kept }
+            else
+                setOwnLocals(cell, uniqueIndex, change.refId, name, change.vars)
+                markOwnWritten(name, cellDescription, uniqueIndex)
+            end
+        end
+        if next(answer) ~= nil then
+            sendLocals(pid, cellDescription, answer)
+        end
+        cell:QuicksaveToDrive()
+        return customEventHooks.makeEventStatus(false, true)
+    end
+
+    local run, isStarter = eventRunOf(pid, event)
+    if run == nil and isRefire(name, cellDescription) then
+        -- Their game's script starting over on loading the cell: it gets back how far the player had got
+        local answer = {}
+        for uniqueIndex, change in pairs(changes) do
+            local kept = getOwnLocals(cell, uniqueIndex, name)
+            if kept ~= nil then
+                answer[uniqueIndex] = { refId = change.refId, vars = kept }
+            else
+                setOwnLocals(cell, uniqueIndex, change.refId, name, change.vars)
+            end
+        end
+        if next(answer) ~= nil then
+            sendLocals(pid, cellDescription, answer)
+        end
+        cell:QuicksaveToDrive()
+        return customEventHooks.makeEventStatus(false, true)
+    end
+
+    local names = { name }
+    if isStarter then
+        names = memberNames(run)
+        local runLocals = runChanges(run, cellDescription).locals
+        for uniqueIndex, change in pairs(changes) do
+            local entry = runLocals[uniqueIndex] or { refId = change.refId, vars = {} }
+            for key, value in pairs(change.vars) do
+                entry.vars[key] = value
+            end
+            runLocals[uniqueIndex] = entry
+        end
+    end
+    for _, member in ipairs(names) do
+        for uniqueIndex, change in pairs(changes) do
+            setOwnLocals(cell, uniqueIndex, change.refId, member, change.vars)
+        end
+        -- (to a game that has the cell loaded: in one that hasn't, the script's variables aren't there to set; the
+        -- replay when it loads the cell gives them)
+        local memberPid = member ~= name and onlinePidOf(member) or nil
+        if memberPid ~= nil and tableHelper.containsValue(cell.visitors, memberPid) then
+            sendLocals(memberPid, cellDescription, changes)
+        end
+    end
+    cell:QuicksaveToDrive()
+    return customEventHooks.makeEventStatus(false, true)
+end
+
 local function onObjectDelete(eventStatus, pid, cellDescription, objects)
     local packetOrigin = tes3mp.GetObjectListOrigin()
     local fromScript = isFromScript(packetOrigin)
@@ -265,8 +858,17 @@ local function onObjectDelete(eventStatus, pid, cellDescription, objects)
         return
     end
 
-    -- A quest's deletion is the whole party's; a pickup only the player's
-    local names = fromScript and questSharers(pid) or { playerKey(pid) }
+    -- A quest's deletion is the whole party's, an event's its run's; a pickup only the player's
+    local event, ownEvent = nil, false
+    if fromScript then
+        event, ownEvent = eventScriptOf(packetOrigin)
+    end
+    local names
+    if event ~= nil then
+        names = eventDeleters(pid, cell, mine, event, ownEvent)
+    else
+        names = fromScript and questSharers(pid) or { playerKey(pid) }
+    end
     cell.data.isowindTaken = cell.data.isowindTaken or {}
     for uniqueIndex, object in pairs(mine) do
         cell.data.isowindTaken[uniqueIndex] = cell.data.isowindTaken[uniqueIndex] or {}
@@ -295,9 +897,11 @@ local function onObjectDelete(eventStatus, pid, cellDescription, objects)
     return customEventHooks.makeEventStatus(false, true)
 end
 
--- A quest script enabling or disabling one of the game's own people or things: for that player (and their party) only
+-- A quest script enabling or disabling one of the game's own people or things: for that player (and their party) only;
+-- an event script's, for that player (and the others in their run)
 local function onObjectState(eventStatus, pid, cellDescription, objects)
-    if eventStatus.validDefaultHandler == false or not isFromScript(tes3mp.GetObjectListOrigin()) then
+    local packetOrigin = tes3mp.GetObjectListOrigin()
+    if eventStatus.validDefaultHandler == false or not isFromScript(packetOrigin) then
         return
     end
     local cell = LoadedCells[cellDescription]
@@ -318,24 +922,32 @@ local function onObjectState(eventStatus, pid, cellDescription, objects)
         return
     end
 
-    local names = questSharers(pid)
-    cell.data.isowindStates = cell.data.isowindStates or {}
-    for uniqueIndex, object in pairs(mine) do
-        local record = cell.data.isowindStates[uniqueIndex] or { refId = object.refId, players = {} }
-        for _, name in ipairs(names) do
-            record.players[name] = object.state
-        end
-        cell.data.isowindStates[uniqueIndex] = record
-    end
-    -- The party's others who are on see it now (the player's own game already made the change)
-    for _, recipient in ipairs(otherOnlinePids(pid, names)) do
-        tes3mp.ClearObjectList()
-        tes3mp.SetObjectListPid(recipient)
-        tes3mp.SetObjectListCell(cellDescription)
+    local event, ownEvent = eventScriptOf(packetOrigin)
+    if event ~= nil then
+        onEventStates(pid, cell, mine, event, ownEvent)
+    else
+        local names = questSharers(pid)
+        cell.data.isowindStates = cell.data.isowindStates or {}
         for uniqueIndex, object in pairs(mine) do
-            packetBuilder.AddObjectState(uniqueIndex, object)
+            local record = cell.data.isowindStates[uniqueIndex] or { refId = object.refId, players = {} }
+            for _, name in ipairs(names) do
+                record.players[name] = object.state
+            end
+            cell.data.isowindStates[uniqueIndex] = record
         end
-        tes3mp.SendObjectState(false)
+        -- The player and the party's others who are on see it now (the player's own game waits for the server to
+        -- make the change, mwmp::hooks::requestScriptObjectState)
+        local recipients = otherOnlinePids(pid, names)
+        table.insert(recipients, pid)
+        for _, recipient in ipairs(recipients) do
+            tes3mp.ClearObjectList()
+            tes3mp.SetObjectListPid(recipient)
+            tes3mp.SetObjectListCell(cellDescription)
+            for uniqueIndex, object in pairs(mine) do
+                packetBuilder.AddObjectState(uniqueIndex, object)
+            end
+            tes3mp.SendObjectState(false)
+        end
     end
 
     -- The rest as the default handler does
@@ -378,6 +990,15 @@ local function onCellLoad(eventStatus, pid, cellDescription)
         return
     end
     local name = playerKey(pid)
+
+    -- Their game's scripts start over there now, before the replay of how far its events got (isRefire)
+    cellLoadedAt[name] = cellLoadedAt[name] or {}
+    cellLoadedAt[name][cellDescription] = os.time()
+
+    -- The cell's event people, run by their game itself, before what the player's events did to them
+    if cell.data.isowindEvents ~= nil then
+        sendEventPeople(pid, cell, tableHelper.getArrayFromIndexes(cell.data.isowindEvents))
+    end
 
     if cell.data.isowindTaken ~= nil then
         tes3mp.ClearObjectList()
@@ -456,6 +1077,19 @@ local function onCellLoad(eventStatus, pid, cellDescription)
     if grown ~= nil then
         sendRegrown(pid, cellDescription, grown)
         regrown[name][cellDescription] = nil
+    end
+
+    -- How far the player's events there have got (their game's scripts start from nothing at each login)
+    if cell.data.isowindEventLocals ~= nil then
+        local locals = {}
+        for uniqueIndex, record in pairs(cell.data.isowindEventLocals) do
+            if record.players[name] ~= nil then
+                locals[uniqueIndex] = { refId = record.refId, vars = record.players[name] }
+            end
+        end
+        if next(locals) ~= nil then
+            sendLocals(pid, cellDescription, locals)
+        end
     end
 
     seenCells[name] = seenCells[name] or {}
@@ -564,6 +1198,21 @@ local function onObjectSpawn(eventStatus, pid, cellDescription, objects)
     end
 end
 
+-- Someone a quest script brought into the world (enabled) for a player, like Tarhiel falling from the sky near Seyda
+-- Neen: a one-off, so their death stays and they don't come back to fall again
+local function isQuestAppearance(cell, uniqueIndex)
+    local record = cell.data.isowindStates ~= nil and cell.data.isowindStates[uniqueIndex] or nil
+    if record == nil then
+        return false
+    end
+    for _, state in pairs(record.players) do
+        if state == true then
+            return true
+        end
+    end
+    return false
+end
+
 local function onActorDeath(eventStatus, pid, cellDescription, actors)
     local cell = LoadedCells[cellDescription]
     if cell == nil then
@@ -576,7 +1225,8 @@ local function onActorDeath(eventStatus, pid, cellDescription, actors)
         local _, mpNum = splitIndex(uniqueIndex)
         local isSummon = objectData ~= nil and objectData.summon ~= nil
         local spawnPoints = cell.data.isowindSpawnPoints or {}
-        if not isSummon and (mpNum == 0 or spawnPoints[uniqueIndex] ~= nil) then
+        if not isSummon and not isQuestAppearance(cell, uniqueIndex) and not isEventObject(cell, uniqueIndex) and
+            (mpNum == 0 or spawnPoints[uniqueIndex] ~= nil) then
             local minutes = respawnMinutes(actor.refId or (objectData and objectData.refId), objectData)
             respawns[cellDescription] = respawns[cellDescription] or {}
             respawns[cellDescription][uniqueIndex] = now + math.floor(minutes * 60 / IsowindHost.respawnSpeed)
@@ -598,7 +1248,8 @@ local function respawnInCell(cellDescription, uniqueIndexes)
             -- disabled stays that way for them (it's in isowindStates, which a respawn keeps)
             local disabled = objectData ~= nil and objectData.state == false
             local _, mpNum = splitIndex(uniqueIndex)
-            if not moved and not disabled then
+            -- A one-off event's people are each player's game's own, dead or alive
+            if not moved and not disabled and not isEventObject(cell, uniqueIndex) then
                 if cell.data.isowindLoot ~= nil then
                     cell.data.isowindLoot[uniqueIndex] = nil
                 end
@@ -692,6 +1343,7 @@ customEventHooks.registerHandler("OnServerPostInit", function(eventStatus)
     customEventHooks.registerValidator("OnContainer", onContainer)
     customEventHooks.registerValidator("OnObjectDelete", onObjectDelete)
     customEventHooks.registerValidator("OnObjectState", onObjectState)
+    customEventHooks.registerValidator("OnClientScriptLocal", onClientScriptLocal)
     customEventHooks.registerHandler("OnCellLoad", onCellLoad)
     customEventHooks.registerHandler("OnObjectSpawn", onObjectSpawn)
     customEventHooks.registerHandler("OnActorDeath", onActorDeath)
@@ -700,6 +1352,8 @@ customEventHooks.registerHandler("OnServerPostInit", function(eventStatus)
         if Players[pid] ~= nil then
             seenCells[playerKey(pid)] = nil
             regrown[playerKey(pid)] = nil
+            cellLoadedAt[playerKey(pid)] = nil
+            runsOwnCopy[playerKey(pid)] = nil
         end
     end)
     respawnTimer = tes3mp.CreateTimer("IsowindMmoRespawnTimer", time.seconds(CHECK_SECONDS))

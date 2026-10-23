@@ -4,6 +4,9 @@
 #include <MyGUI_ImageBox.h>
 #include <MyGUI_Window.h>
 
+#include <components/settings/values.hpp>
+#include <components/widgets/box.hpp>
+
 #include "../mwbase/environment.hpp"
 #include "../mwbase/inputmanager.hpp"
 #include "../mwbase/windowmanager.hpp"
@@ -23,6 +26,8 @@ namespace MWGui
             mTabs.push_back(tab);
         }
 
+        getWidget(mTabBox, "TabBox");
+
         MyGUI::ImageBox* image;
         // Isowind: the bumpers switch between these windows
         getWidget(image, "BtnL2Image");
@@ -32,6 +37,23 @@ namespace MWGui
         getWidget(image, "BtnR2Image");
         image->setImageTexture(MWBase::Environment::get().getInputManager()->getControllerButtonIcon(
             SDL_CONTROLLER_BUTTON_RIGHTSHOULDER));
+
+        // Isowind: and the keyboard's Q and E, which are shown without a controller (the bar is for the mouse and
+        // keyboard too)
+        if (!Settings::gui().mControllerMenus)
+        {
+            const auto show = [this](std::string_view id, bool shown) {
+                MyGUI::Widget* widget;
+                getWidget(widget, id);
+                widget->setVisible(shown);
+                widget->setUserString("Hidden", shown ? "false" : "true");
+            };
+            show("BtnL2Image", false);
+            show("BtnR2Image", false);
+            show("KeyPrevText", true);
+            show("KeyNextText", true);
+            mTabBox->notifyChildrenSizeChanged();
+        }
     }
 
     int InventoryTabsOverlay::getHeight()
@@ -60,5 +82,14 @@ namespace MWGui
     {
         for (size_t i = 0; i < mTabs.size(); ++i)
             mTabs[i]->setStateSelected(i == index);
+    }
+
+    void InventoryTabsOverlay::setTabAvailable(size_t index, bool available)
+    {
+        if (index >= mTabs.size() || mTabs[index]->getVisible() == available)
+            return;
+        mTabs[index]->setVisible(available);
+        mTabs[index]->setUserString("Hidden", available ? "false" : "true");
+        mTabBox->notifyChildrenSizeChanged();
     }
 }

@@ -1137,7 +1137,8 @@ namespace MWGui
         MWGui::GuiMode mode = MWBase::Environment::get().getWindowManager()->getMode();
         mButton->setVisible(visible && mode != MWGui::GM_None);
 
-        if (Settings::gui().mControllerMenus && mode == MWGui::GM_None && pinned() && visible)
+        // (Isowind: for the mouse and keyboard too, as the inventory screen's windows are pages for them as well)
+        if (mode == MWGui::GM_None && pinned() && visible)
         {
             // Restore the window to pinned size.
             MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();
@@ -1387,7 +1388,9 @@ namespace MWGui
 
     void MapWindow::onTitleDoubleClicked()
     {
-        if (Settings::gui().mControllerMenus)
+        // (Isowind: on the inventory screen the window is a page)
+        if (Settings::gui().mControllerMenus
+            || MWBase::Environment::get().getWindowManager()->getMode() == MWGui::GM_Inventory)
             return;
         else if (MyGUI::InputManager::getInstance().isShiftPressed())
             MWBase::Environment::get().getWindowManager()->toggleMaximized(this);
@@ -1585,15 +1588,22 @@ namespace MWGui
         }
     }
 
-    void MapWindow::setActiveControllerWindow(bool active)
+    void MapWindow::setInventoryPage(bool shown)
     {
-        MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
-        if (winMgr->getMode() == MWGui::GM_Inventory)
-        {
-            // Isowind: the windows keep Morrowind's layout (the active one is lit, see WindowBase)
-        }
+        // Fill the screen, or limit to a certain size on large screens. Size chosen to
+        // show the entire local map without scrolling.
+        MyGUI::IntSize canvasSize = mLocalMap->getCanvasSize();
+        MyGUI::IntSize borderSize = mMainWidget->getSize() - mMainWidget->getClientWidget()->getSize();
+        MWBase::Environment::get().getWindowManager()->placeInventoryPage(
+            mMainWidget, canvasSize.width + borderSize.width, canvasSize.height + borderSize.height, shown);
+    }
 
-        WindowBase::setActiveControllerWindow(active);
+    bool MapWindow::stepTab(int /*delta*/)
+    {
+        // Isowind: the local map and the world map, as the two tabs
+        onWorldButtonClicked(mButton);
+        MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
+        return true;
     }
 
     // -------------------------------------------------------------------
@@ -1605,6 +1615,8 @@ namespace MWGui
         getWidget(mCancelButton, "CancelButton");
         getWidget(mDeleteButton, "DeleteButton");
         getWidget(mTextEdit, "TextEdit");
+        // Isowind: the keyboard on the screen's Done only puts it away here (no new line; OK keeps the note)
+        mTextEdit->setUserString("KeyboardDone", "Close");
 
         mCancelButton->eventMouseButtonClick += MyGUI::newDelegate(this, &EditNoteDialog::onCancelButtonClicked);
         mOkButton->eventMouseButtonClick += MyGUI::newDelegate(this, &EditNoteDialog::onOkButtonClicked);
@@ -1646,8 +1658,42 @@ namespace MWGui
         if (Settings::gui().mControllerMenus)
         {
             mControllerFocus = getDeleteButtonShown() ? 1 : 0;
-            mOkButton->setStateSelected(true);
-            mCancelButton->setStateSelected(false);
+            // Isowind: the selection starts on the text
+            mTextSelected = true;
+            setTextFieldSelected(mTextEdit, true);
+            highlightButtons();
+            MWBase::Environment::get().getWindowManager()->updateControllerButtonsOverlay();
+        }
+    }
+
+    MyGUI::Widget* EditNoteDialog::getControllerTextField()
+    {
+        return mTextSelected ? mTextEdit : nullptr;
+    }
+
+    void EditNoteDialog::setTextSelected(bool selected)
+    {
+        if (selected == mTextSelected)
+            return;
+        mTextSelected = selected;
+        setTextFieldSelected(mTextEdit, selected);
+        highlightButtons();
+        MWBase::Environment::get().getWindowManager()->updateControllerButtonsOverlay();
+    }
+
+    void EditNoteDialog::highlightButtons()
+    {
+        const bool lit = !mTextSelected;
+        if (getDeleteButtonShown())
+        {
+            mDeleteButton->setStateSelected(lit && mControllerFocus == 0);
+            mOkButton->setStateSelected(lit && mControllerFocus == 1);
+            mCancelButton->setStateSelected(lit && mControllerFocus == 2);
+        }
+        else
+        {
+            mOkButton->setStateSelected(lit && mControllerFocus == 0);
+            mCancelButton->setStateSelected(lit && mControllerFocus == 1);
         }
     }
 
@@ -1677,6 +1723,22 @@ namespace MWGui
 
     bool EditNoteDialog::onControllerButtonEvent(const SDL_ControllerButtonEvent& arg)
     {
+        // Isowind: D-pad down goes from the text (X brings the keyboard on the screen up for it: ControllerManager) to
+        // the buttons, up back; A on the text is OK
+        if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_UP || arg.button == SDL_CONTROLLER_BUTTON_DPAD_DOWN)
+        {
+            setTextSelected(arg.button == SDL_CONTROLLER_BUTTON_DPAD_UP);
+            return true;
+        }
+        if (mTextSelected)
+        {
+            if (arg.button == SDL_CONTROLLER_BUTTON_A)
+                onOkButtonClicked(mOkButton);
+            else if (arg.button == SDL_CONTROLLER_BUTTON_B)
+                onCancelButtonClicked(mCancelButton);
+            return true;
+        }
+
         if (arg.button == SDL_CONTROLLER_BUTTON_A)
         {
             if (getDeleteButtonShown())

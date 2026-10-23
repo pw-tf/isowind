@@ -34,6 +34,7 @@
 
 #include "../mwmechanics/inventory.hpp"
 #include "../mwmechanics/npcstats.hpp"
+#include "../mwmechanics/security.hpp"
 
 #include "classmodel.hpp"
 #include "nameorid.hpp"
@@ -223,6 +224,10 @@ namespace MWClass
         }
         else
         {
+            // Isowind: the player has a go at picking it instead, with a lockpick they carry (in top-down there is no
+            // crosshair to attack the lock under)
+            if (std::unique_ptr<MWWorld::Action> action = MWMechanics::pickLockOnActivation(ptr, actor))
+                return action;
             std::unique_ptr<MWWorld::Action> action = std::make_unique<MWWorld::FailedAction>(std::string_view{}, ptr);
             action->setSound(ESM::RefId::stringRefId("LockedChest"));
             return action;

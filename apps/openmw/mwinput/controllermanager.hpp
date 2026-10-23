@@ -2,11 +2,17 @@
 #define MWINPUT_MWCONTROLLERMANAGER_H
 
 #include <array>
+#include <chrono>
 #include <filesystem>
 #include <string>
 
 #include <components/sdlutil/events.hpp>
 #include <components/settings/settings.hpp>
+
+namespace MWGui
+{
+    class WindowBase;
+}
 
 namespace MWInput
 {
@@ -53,10 +59,17 @@ namespace MWInput
 
     private:
         // Return true if GUI consumes input.
-        bool gamepadToGuiControl(const SDL_ControllerButtonEvent& arg);
+        bool gamepadToGuiControl(const SDL_ControllerButtonEvent& arg, bool repeat = false);
         bool gamepadToGuiControl(const SDL_ControllerAxisEvent& arg);
 
+        // Isowind: a D-pad direction held in a menu steps again and again, as a held key does
+        void startGuiRepeat(const SDL_ControllerButtonEvent& arg);
+        void updateGuiRepeat();
+
         void enableGyroSensor();
+
+        // Isowind: the controller a button or stick event came from is the one read from now on
+        void useController(SDL_JoystickID instanceID);
 
         int getControllerType();
 
@@ -70,6 +83,14 @@ namespace MWInput
         bool mGamepadMousePressed;
         bool mLeftTriggerGuiPressed;
         bool mRightTriggerGuiPressed;
+
+        // Isowind: the D-pad direction held in a menu (controller buttons don't repeat), the controller holding it,
+        // the window it steps in (only compared: a repeat stops if another window takes the controller) and when it
+        // steps next
+        int mGuiRepeatButton = SDL_CONTROLLER_BUTTON_INVALID;
+        SDL_JoystickID mGuiRepeatController = -1;
+        const MWGui::WindowBase* mGuiRepeatWindow = nullptr;
+        std::chrono::steady_clock::time_point mGuiRepeatNext;
     };
 }
 #endif
