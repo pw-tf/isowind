@@ -1699,7 +1699,12 @@ namespace MWMechanics
                     MWMechanics::AiSequence& seq = stats.getAiSequence();
                     alwaysActive = !seq.isEmpty() && seq.getActivePackage().alwaysActive();
                 }
-                const bool inRange = isPlayer || dist <= actorsProcessingRange || alwaysActive;
+                // Isowind multiplayer: the actors this client has authority over (LocalActors) move however far from
+                // the player they are, as their AI runs above. Left inactive, their AI would keep asking for a walk
+                // that physics never makes, and the other players next to them would see them step in place.
+                const bool isLocalActor = mwmp::Main::isInitialized()
+                    && mwmp::Main::get().getCellController()->isLocalActor(actor.getPtr());
+                const bool inRange = isPlayer || dist <= actorsProcessingRange || alwaysActive || isLocalActor;
                 const int activeFlag = isPlayer ? 2 : 1; // Can be changed back to '2' to keep updating bounding boxes
                                                          // off screen (more accurate, but slower)
                 const int active = inRange ? activeFlag : 0;
