@@ -543,8 +543,8 @@ local function updateParty()
                 end
                 local x, y, depth = viewCoordinates(box.center)
                 if (ally or not mmo) and #arrows < MARKS and (depth < 1 or math.abs(x) > 1 or math.abs(y) > 1) then
-                    if depth < 0 then x, y = -x, -y end
-                    -- On the edge, the way they are from the middle of the screen (the player)
+                    -- On the edge, the way they are from the middle of the screen (the player). Behind the camera too:
+                    -- viewCoordinates divides by the depth's size, so x and y keep the way they are from the camera.
                     local scale = math.min(maxX / math.max(math.abs(x), 1e-4), maxY / math.max(math.abs(y), 1e-4))
                     local direction = v2(x * screen.x, y * screen.y):normalize()
                     arrows[#arrows + 1] = util.vector4((x * scale + 1) / 2, (y * scale + 1) / 2, direction.x,
