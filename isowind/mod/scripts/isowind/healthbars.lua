@@ -100,12 +100,13 @@ local function showsName(actor)
         and (actor.position - self.position):length() <= RANGE
 end
 
--- project(worldPosition) returns a normalised screen position, or nil when it is off screen.
-function M.update(project)
+-- project(worldPosition) returns a normalised screen position, or nil when it is off screen. labelled is the object
+-- whose name the caller's own label shows already (the one under the cursor), if any: no second name for it.
+function M.update(project, labelled)
     local seen = {}
     local seenNames = {}
     for _, actor in ipairs(nearby.actors) do
-        if showsName(actor) then
+        if actor ~= labelled and showsName(actor) then
             local box = actor:getBoundingBox()
             local screen = project(v3(box.center.x, box.center.y, box.center.z + box.halfSize.z + 12))
             if screen then
