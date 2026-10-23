@@ -68,6 +68,9 @@ namespace MWInput
 
         void enableGyroSensor();
 
+        // Isowind: the controller a button or stick event came from is the one read from now on
+        void useController(SDL_JoystickID instanceID);
+
         int getControllerType();
 
         BindingsManager* mBindingsManager;

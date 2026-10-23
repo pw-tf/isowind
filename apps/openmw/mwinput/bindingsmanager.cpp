@@ -684,8 +684,8 @@ namespace MWInput
         const auto& controllers = mInputBinder->getJoystickInstanceMap();
         if (controllers.empty())
             return nullptr;
-        else
-            return controllers.begin()->second;
+        const auto used = controllers.find(mControllerUsed);
+        return used != controllers.end() ? used->second : controllers.begin()->second;
     }
 
     void BindingsManager::actionValueChanged(int action, float currentValue, float previousValue)

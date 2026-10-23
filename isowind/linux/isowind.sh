@@ -158,6 +158,9 @@ play() {
         if ls /dev/input/js* >/dev/null 2>&1; then MENUS=true; else MENUS=false; fi
     fi
     set_setting "$ROOT/profiles/$LOOK/settings.cfg" GUI "controller menus" "$MENUS"
+    # Xbox controllers through the kernel's driver, not SDL's own: SDL's skips one it can't open (a Bluetooth one,
+    # whose hidraw only root reads) when it has another with the same ids (Sunshine's virtual one, left after a stream)
+    export SDL_JOYSTICK_HIDAPI_XBOX=${SDL_JOYSTICK_HIDAPI_XBOX:-0}
     exec "$ENGINE/openmw" --config "$ROOT/profiles/$LOOK" $CONNECT
 }
 

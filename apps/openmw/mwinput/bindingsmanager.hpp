@@ -45,7 +45,11 @@ namespace MWInput
         bool actionIsActive(int id) const;
         float getActionValue(int id) const; // returns value in range [0, 1]
 
+        // Isowind: the controller used last (pressed or pushed), or the first one opened until one is: its sticks,
+        // held buttons and type are what gets read. An idle one, as a stream leaves behind, would hide the rest.
         SDL_GameController* getControllerOrNull() const;
+        SDL_JoystickID getControllerUsed() const { return mControllerUsed; }
+        void setControllerUsed(SDL_JoystickID instanceID) { mControllerUsed = instanceID; }
 
         void mousePressed(const SDL_MouseButtonEvent& evt, Uint8 deviceID);
         void mouseReleased(const SDL_MouseButtonEvent& arg, Uint8 deviceID);
@@ -76,6 +80,8 @@ namespace MWInput
         std::filesystem::path mUserFile;
 
         bool mDragDrop;
+
+        SDL_JoystickID mControllerUsed = -1;
     };
 }
 #endif

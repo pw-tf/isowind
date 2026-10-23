@@ -31,6 +31,10 @@ namespace MWInput
         constexpr std::chrono::milliseconds sGuiRepeatDelay(400);
         constexpr std::chrono::milliseconds sGuiRepeatInterval(100);
 
+        // Isowind: how far a stick or trigger has to move (of 32767) to make its controller the one read, so a resting
+        // stick's drift doesn't
+        constexpr int sControllerUsedAxisValue = 8000;
+
         bool isDpadButton(Uint8 button)
         {
             return button == SDL_CONTROLLER_BUTTON_DPAD_UP || button == SDL_CONTROLLER_BUTTON_DPAD_DOWN
@@ -146,6 +150,7 @@ namespace MWInput
     {
         // Isowind: another button pressed stops a D-pad direction repeating
         mGuiRepeatButton = SDL_CONTROLLER_BUTTON_INVALID;
+        useController(arg.which);
 
         if (!Settings::input().mEnableController || mBindingsManager->isDetectingBindingState())
             return;
@@ -243,6 +248,9 @@ namespace MWInput
 
     void ControllerManager::axisMoved(int deviceID, const SDL_ControllerAxisEvent& arg)
     {
+        if (std::abs(arg.value) > sControllerUsedAxisValue)
+            useController(arg.which);
+
         if (mBindingsManager->isDetectingBindingState())
         {
             mBindingsManager->controllerAxisMoved(deviceID, arg);
@@ -596,6 +604,14 @@ namespace MWInput
             return;
         }
         mGyroAvailable = true;
+    }
+
+    void ControllerManager::useController(SDL_JoystickID instanceID)
+    {
+        if (mBindingsManager->getControllerUsed() == instanceID)
+            return;
+        mBindingsManager->setControllerUsed(instanceID);
+        enableGyroSensor();
     }
 
     bool ControllerManager::isGyroAvailable() const
