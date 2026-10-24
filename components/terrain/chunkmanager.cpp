@@ -1,5 +1,6 @@
 #include "chunkmanager.hpp"
 
+#include <osg/KdTree>
 #include <osg/Material>
 #include <osg/Texture2D>
 
@@ -254,6 +255,11 @@ namespace Terrain
             = static_cast<unsigned>((mStorage->getCellVertices(mWorldspace) - 1) * chunkSize / (1 << lod) + 1);
 
         geometry->addPrimitiveSet(mBufferCache.getIndexBuffer(numVerts, lodFlags));
+
+        // Isowind: a kd-tree, as SceneManager builds for each model, so the rays cast through the scene each frame (the
+        // top-down cursor's pick) test a few of the chunk's triangles rather than all of them
+        osg::ref_ptr<osg::KdTreeBuilder> kdTreeBuilder = new osg::KdTreeBuilder;
+        kdTreeBuilder->apply(*geometry);
 
         bool useCompositeMap = chunkSize >= mCompositeMapLevel;
         unsigned int numUvSets = useCompositeMap ? 1 : 2;

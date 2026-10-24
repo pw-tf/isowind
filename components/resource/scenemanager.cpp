@@ -7,6 +7,7 @@
 #include <osg/Capability>
 #include <osg/ColorMaski>
 #include <osg/Group>
+#include <osg/KdTree>
 #include <osg/Node>
 #include <osg/UserDataContainer>
 
@@ -1006,6 +1007,13 @@ namespace Resource
             }
             else
                 shareState(loaded);
+
+            // Isowind: a kd-tree for every mesh, so each ray cast through the scene (the top-down camera's search for
+            // what hides the player, several a frame, and the cursor's pick) tests a handful of a big mesh's
+            // triangles rather than all of them: Vivec's cantons have tens of thousands, and a frame there went by
+            // their count.
+            osg::ref_ptr<osg::KdTreeBuilder> kdTreeBuilder = new osg::KdTreeBuilder;
+            loaded->accept(*kdTreeBuilder);
 
             if (compile && mIncrementalCompileOperation)
                 mIncrementalCompileOperation->add(loaded);

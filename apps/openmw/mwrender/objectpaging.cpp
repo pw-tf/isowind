@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include <osg/KdTree>
 #include <osg/LOD>
 #include <osg/Material>
 #include <osg/MatrixTransform>
@@ -944,6 +945,11 @@ namespace MWRender
                 | SceneUtil::Optimizer::REMOVE_REDUNDANT_NODES | SceneUtil::Optimizer::MERGE_GEOMETRY;
 
             optimizer.optimize(mergeGroup, options);
+
+            // Isowind: kd-trees for the merged meshes, as SceneManager builds for each model, so the rays cast through
+            // the scene each frame (the top-down cursor's pick reaches this far) stay cheap
+            osg::ref_ptr<osg::KdTreeBuilder> kdTreeBuilder = new osg::KdTreeBuilder;
+            mergeGroup->accept(*kdTreeBuilder);
 
             group->addChild(mergeGroup);
 
