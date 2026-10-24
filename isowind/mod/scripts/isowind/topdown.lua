@@ -345,24 +345,52 @@ local function segmentDistance(p, a, b)
     return (p - (a + ab * t)):length()
 end
 
--- What the camera fades out (shaders/lib/util/cutaway.glsl): the engine fades whole objects that stand in front of
--- the player (camera.getFadedObjects), and indoors removes ceilings and upper floors over them. Floors and the
--- ground below their knees always stay.
+-- What the camera cuts away (shaders/lib/util/cutaway.glsl): the engine fades whole objects that stand in front of
+-- the player (camera.getFadedObjects), and indoors, or under a floor or a bridge outdoors, removes ceilings and upper
+-- floors over them and cuts the walls in the way, within camera.getCutawayRadius of them. Floors and the ground below
+-- their knees always stay.
 local fadedObjects = {}
+local cutawayRadius = 0
 
 local function updateFadedObjects()
     fadedObjects = {}
     for _, object in ipairs(camera.getFadedObjects()) do
         fadedObjects[object.id] = true
     end
+    cutawayRadius = camera.getCutawayRadius and camera.getCutawayRadius() or 0
 end
 
+-- Toward the camera along the ground (unit length)
+local function towardCamera()
+    local f = view.forward
+    local length = math.sqrt(f.x * f.x + f.y * f.y)
+    if length < 1e-4 then return v3(0, -1, 0) end
+    return v3(-f.x / length, -f.y / length, 0)
+end
+
+-- The shader's rules, for a surface the cursor's ray hit from its front (normal: its facing)
 local function isCutAway(pos, object, normal)
-    if pos.z < self.position.z + 25 then return false end
+    local height = pos.z - self.position.z
+    if height < 25 then return false end
     if object and fadedObjects[object.id] then return true end
-    -- Indoors: surfaces facing up or down above the player's head
-    if self.cell and not self.cell.isExterior and pos.z > self.position.z + 200 then
-        return normal ~= nil and math.abs(normal.z) > 0.5
+    if cutawayRadius <= 1 then return false end
+    local rel = pos - self.position
+    local flat = math.sqrt(rel.x * rel.x + rel.y * rel.y)
+    if flat > cutawayRadius * 0.9 then return false end
+    -- Everything above the storey, and ceilings and upper floors over the player's head
+    if height > 230 then return true end
+    if height > 200 and normal and math.abs(normal.z) > 0.5 then return true end
+    -- Above waist height between the player and the camera: faces that hide the room from it (pointing away from the
+    -- player), and level surfaces within the right angle toward the camera
+    if height > 110 and normal then
+        local toward = towardCamera()
+        local ahead = rel.x * toward.x + rel.y * toward.y
+        if ahead > 10 then
+            if math.abs(normal.z) < 0.7 then
+                return normal.x * rel.x + normal.y * rel.y > 0
+            end
+            return ahead > math.sqrt(math.max(0, flat * flat - ahead * ahead))
+        end
     end
     return false
 end

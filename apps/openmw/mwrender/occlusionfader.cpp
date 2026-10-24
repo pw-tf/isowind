@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 
 #include <osg/BlendFunc>
 #include <osg/Group>
@@ -28,6 +29,13 @@ namespace MWRender
         // How long something must have stopped being in the way before it fades back, so walking past a row of
         // posts or along a wall's edge doesn't make it flicker.
         constexpr float sFadeOutDelay = 0.35f;
+        // Cover (isPlayerCovered): looked for straight up from this far over the player's feet (over their head), to
+        // this far up, from over them and from this far around them; and only something this level counts (the
+        // first thing hit: a branch or a leaf of a tree over them is no roof).
+        constexpr float sCoverFrom = 135.f;
+        constexpr float sCoverHeight = 1200.f;
+        constexpr float sCoverSpread = 200.f;
+        constexpr float sCoverFlatness = 0.6f;
 
         MWWorld::Ptr findPtr(const osg::NodePath& nodePath)
         {
@@ -98,6 +106,7 @@ namespace MWRender
         };
 
         osg::ref_ptr<osgUtil::IntersectorGroup> group = new osgUtil::IntersectorGroup;
+        std::vector<osg::ref_ptr<osgUtil::LineSegmentIntersector>> toPlayer;
         for (const osg::Vec3f& point : points)
         {
             osg::ref_ptr<osgUtil::LineSegmentIntersector> intersector
@@ -105,22 +114,54 @@ namespace MWRender
             // Every object along the way, not only the nearest
             intersector->setIntersectionLimit(osgUtil::Intersector::NO_LIMIT);
             group->addIntersector(intersector);
+            toPlayer.push_back(intersector);
+        }
+
+        // Straight up from over the player's head and from around them, for whatever hangs over them (isPlayerCovered)
+        const osg::Vec3f along = across ^ osg::Vec3f(0.f, 0.f, 1.f);
+        const osg::Vec3f overhead = feet + osg::Vec3f(0.f, 0.f, sCoverFrom);
+        const std::array<osg::Vec3f, 5> coverFrom = {
+            overhead,
+            overhead + across * sCoverSpread,
+            overhead - across * sCoverSpread,
+            overhead + along * sCoverSpread,
+            overhead - along * sCoverSpread,
+        };
+        std::vector<osg::ref_ptr<osgUtil::LineSegmentIntersector>> upward;
+        for (const osg::Vec3f& from : coverFrom)
+        {
+            osg::ref_ptr<osgUtil::LineSegmentIntersector> intersector = new osgUtil::LineSegmentIntersector(
+                osgUtil::Intersector::MODEL, from, from + osg::Vec3f(0.f, 0.f, sCoverHeight));
+            intersector->setIntersectionLimit(osgUtil::Intersector::LIMIT_NEAREST);
+            group->addIntersector(intersector);
+            upward.push_back(intersector);
         }
 
         mVisitor->reset();
         mVisitor->setIntersector(group);
         mSceneRoot->accept(*mVisitor);
 
-        for (const osg::ref_ptr<osgUtil::Intersector>& intersector : group->getIntersectors())
+        for (const auto& intersector : toPlayer)
         {
-            const auto& intersections
-                = static_cast<osgUtil::LineSegmentIntersector*>(intersector.get())->getIntersections();
-            for (const auto& intersection : intersections)
+            for (const auto& intersection : intersector->getIntersections())
             {
                 MWWorld::Ptr ptr = findPtr(intersection.nodePath);
                 // (Paged objects, merged with their neighbours, have no Ptr of their own and can't be faded alone)
                 if (canFade(ptr) && std::find(out.begin(), out.end(), ptr) == out.end())
                     out.push_back(ptr);
+            }
+        }
+
+        mPlayerCovered = false;
+        for (const auto& intersector : upward)
+        {
+            const auto& intersections = intersector->getIntersections();
+            if (intersections.empty())
+                continue;
+            if (std::abs(intersections.begin()->getWorldIntersectNormal().z()) > sCoverFlatness)
+            {
+                mPlayerCovered = true;
+                break;
             }
         }
     }
@@ -139,6 +180,8 @@ namespace MWRender
         std::vector<MWWorld::Ptr> occluders;
         if (active && !player.isEmpty() && player.isInCell())
             findOccluders(eye, player, occluders);
+        else
+            mPlayerCovered = false;
 
         for (const MWWorld::Ptr& ptr : occluders)
         {

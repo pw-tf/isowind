@@ -10,8 +10,11 @@
 //    shader applies; OcclusionFader blends faded objects and keeps them out of the depth buffer), so post-processing
 //    that reads depth (ambient occlusion, fog) sees the scene behind them rather than a dither;
 //  - indoors (cutawayOverheadRadius, set by RenderingManager::update; nothing fades there) the room is seen like a
-//    dollhouse, cut with clean edges: what stands between the player and the camera ends at waist height, and
-//    everything above door height (roof, rafters, ceilings, upper floors, people upstairs) is removed;
+//    dollhouse, cut with clean edges: the walls between the player and the camera (the faces that hide the room from
+//    it, not a wall seen from the player's own side) end at waist height, and everything above door height (roof,
+//    rafters, ceilings, upper floors, people upstairs) is removed. Outdoors the same happens, in a smaller circle,
+//    while a floor, a bridge or a canton's tier hangs over the player (OcclusionFader::isPlayerCovered): the fade
+//    alone would leave whatever hangs over the way ahead of them whole;
 //  - wherever something still covers the player (a hill, a faded ghost), it shows their silhouette, outlined, so
 //    they are never lost.
 // Nothing at or below the player's feet is faded, so floors and the ground they stand on stay solid even when they
@@ -161,12 +164,32 @@ vec2 applyCutaway(vec3 viewPos, vec3 viewNormal, bool terrain)
         }
 
         // Indoors: walls (and anything else tall) between the player and the camera end at waist height across the
-        // room, like a dollhouse, so the room and whoever is in it can be seen; outdoors only the window above opens
+        // room, like a dollhouse, so the room and whoever is in it can be seen; outdoors only the window above opens.
+        // Only the faces that hide the room: a face seen from the player's side (it points their way) has the room
+        // in front of it, so it stays whole however the wall runs; before, every bit of a wall nearer the camera
+        // than the player was cut, and a wall running diagonally past them lost its half toward the camera. A face
+        // seen from behind (two-sided geometry) is turned round first. Tops and other level surfaces have no side:
+        // they are cut within the right angle toward the camera from the player, which for a wall running past the
+        // player is where its faces are cut too.
         if (cutawayOverheadRadius > 1.0 && inFront)
         {
-            float around = 1.0 - smoothstep(cutawayOverheadRadius * 0.8, cutawayOverheadRadius,
-                length(world.xy - playerPos.xy));
-            cut = max(cut, around * step(CUTAWAY_WALL_HEIGHT, world.z - playerPos.z));
+            vec3 facing = gl_FrontFacing ? worldNormal : -worldNormal;
+            vec2 fromPlayer = world.xy - playerPos.xy;
+            bool hidesRoom;
+            if (abs(facing.z) < 0.7)
+                hidesRoom = dot(facing.xy, fromPlayer) > 0.0;
+            else
+            {
+                float ahead = dot(fromPlayer, towardCamera);
+                float aside = length(fromPlayer - towardCamera * ahead);
+                hidesRoom = ahead > aside;
+            }
+            if (hidesRoom)
+            {
+                float around = 1.0 - smoothstep(cutawayOverheadRadius * 0.8, cutawayOverheadRadius,
+                    length(fromPlayer));
+                cut = max(cut, around * step(CUTAWAY_WALL_HEIGHT, world.z - playerPos.z));
+            }
         }
 
         // Indoors: ceilings and upper floors above the player's head (surfaces facing up or down), and everything

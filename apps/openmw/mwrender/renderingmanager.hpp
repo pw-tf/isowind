@@ -182,6 +182,10 @@ namespace MWRender
         /// The objects the top-down camera currently fades out because they stand in front of the player.
         std::vector<MWWorld::Ptr> getFadedObjects() const;
 
+        /// The radius around the player within which the top-down camera cuts the room (ceilings and upper floors
+        /// over them, the walls in the way): indoors, and outdoors under cover; 0 where nothing is cut.
+        float getCutawayRadius() const { return mCutawayOverheadRadius; }
+
         RayResult castRay(const osg::Vec3f& origin, const osg::Vec3f& dest, bool ignorePlayer,
             bool ignoreActors = false, std::span<const MWWorld::Ptr> ignoreList = {});
 
@@ -373,7 +377,8 @@ namespace MWRender
 
         // Top-down camera: what stands between it and the player fades out (see OcclusionFader)
         std::unique_ptr<OcclusionFader> mOcclusionFader;
-        // Indoors, ceilings and upper floors over the player are removed within this radius around them
+        // Indoors (and outdoors under cover), ceilings and upper floors over the player are removed within this
+        // radius around them, and the walls in the way cut
         float mCutawayOverheadRadius = 0.f;
         osg::ref_ptr<osg::Uniform> mCutawayOverheadUniform;
 

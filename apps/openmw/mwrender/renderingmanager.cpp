@@ -726,12 +726,20 @@ namespace MWRender
 
             // Top-down camera (shaders/lib/util/cutaway.glsl): outdoors, whole objects between the camera and the
             // player fade out (OcclusionFader); indoors the room is cut cleanly instead (walls in front, the roof and
-            // upper floors), with nothing left see-through.
+            // upper floors), with nothing left see-through. Outdoors under a floor, a bridge or a canton's tier the
+            // room-like cut applies as well, close around the player: the fade alone leaves whatever hangs over the
+            // way ahead of them whole.
+            constexpr float indoorCutawayRadius = 4000.f;
+            constexpr float coveredCutawayRadius = 900.f;
             const bool topDown = mCamera->getMode() == Camera::Mode::Static;
             const bool indoors = player.isInCell() && !player.getCell()->getCell()->isExterior();
             mOcclusionFader->update(dt, mCamera->getPosition(), player, topDown && !indoors);
 
-            const float overheadTarget = topDown && indoors ? 4000.f : 0.f;
+            float overheadTarget = 0.f;
+            if (topDown && indoors)
+                overheadTarget = indoorCutawayRadius;
+            else if (topDown && mOcclusionFader->isPlayerCovered())
+                overheadTarget = coveredCutawayRadius;
             mCutawayOverheadRadius += (overheadTarget - mCutawayOverheadRadius) * std::min(1.f, dt * 5.f);
             mCutawayOverheadUniform->set(mCutawayOverheadRadius);
         }

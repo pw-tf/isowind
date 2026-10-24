@@ -159,9 +159,11 @@ does the map). Zoom it with the mouse wheel over it while a menu is open, or in 
 where you can also keep it pointing north.
 
 Walls, roofs and trees between you and the camera open up in a circle around you, so you can always
-see yourself. Indoors you see the room like a dollhouse: walls toward the camera end at waist height,
-and ceilings and the floor above are removed. Doors are never hidden. Hovering over a creature or person shows a ring under them: blue if peaceful (light
-blue when in reach), red if hostile (orange when in weapon reach).
+see yourself. Indoors you see the room like a dollhouse: the walls between you and the camera end at
+waist height (a wall you see from your own side stays whole), and ceilings and the floor above are
+removed. Under a floor, a bridge or a canton's tier outdoors (Vivec) the same happens close around
+you. Doors are never hidden. Hovering over a creature or person shows a ring under them: blue if
+peaceful (light blue when in reach), red if hostile (orange when in weapon reach).
 
 Options
 -------

@@ -81,6 +81,9 @@ namespace MWLua
                 ids->push_back(getId(ptr));
             return LObjectList{ std::move(ids) };
         };
+        // Isowind: the radius around the player within which the top-down camera cuts the room (ceilings and upper
+        // floors over them, the walls in the way), indoors and under cover outdoors; 0 where nothing is cut
+        api["getCutawayRadius"] = [renderingManager]() { return renderingManager->getCutawayRadius(); };
 
         api["getThirdPersonDistance"] = [camera]() { return camera->getCameraDistance(); };
         api["setPreferredThirdPersonDistance"]

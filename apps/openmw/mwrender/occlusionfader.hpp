@@ -43,6 +43,10 @@ namespace MWRender
         /// Objects currently fading out or faded; the top-down cursor picks through these.
         std::vector<MWWorld::Ptr> getFadedObjects() const;
 
+        /// Whether something level (a floor, a bridge, a canton's tier) hangs over the player or right around them,
+        /// as of the last update while active; the room-like cut then applies outdoors too (RenderingManager::update).
+        bool isPlayerCovered() const { return mPlayerCovered; }
+
     private:
         struct Faded
         {
@@ -66,6 +70,7 @@ namespace MWRender
         osg::ref_ptr<osg::Group> mSceneRoot;
         osg::ref_ptr<osgUtil::IntersectionVisitor> mVisitor;
         std::map<osg::Node*, Faded> mFaded;
+        bool mPlayerCovered = false;
     };
 }
 
