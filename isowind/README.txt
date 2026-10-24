@@ -145,8 +145,8 @@ screen's pages (Map, Inventory, Magic, Stats; one at a time, as with the mouse a
 windows are open side by side (a chest, a shop), between them, the one in use lit, while the triggers switch
 the tabs within a window. The right stick pressed in shows an item's info, and in the inventory and magic
 windows Y puts the item or spell on a quick key. In Options the bumpers switch tabs,
-the D-pad steps a pointer through the settings (up / down) and adjusts the one it is on (left / right), and A
-works it, on the Scripts tab's pages too. The legend along the bottom of each menu says what the buttons do
+the D-pad steps a gold frame through the settings (up / down) and adjusts the one it is on (left / right), and A
+works it, on the Scripts tab's pages too; the mouse pointer stays away until the mouse moves. The legend along the bottom of each menu says what the buttons do
 there. To type something (your name, a server's password, a save's, potion's, spell's or class's name, a map
 note), move onto the box with the D-pad - up from the top of the list or the buttons under it - and press X:
 a keyboard comes up on the screen (never by itself). Start or Back puts it away when you are done; in a box

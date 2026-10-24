@@ -23,6 +23,13 @@
 
 namespace MWInput
 {
+    namespace
+    {
+        // Isowind: a mouse move landing this near (GUI pixels) to where the game last warped the pointer is the
+        // warp coming back from the window system, not the player's hand
+        constexpr float sWarpTolerance = 2.f;
+    }
+
     MouseManager::MouseManager(
         BindingsManager* bindingsManager, SDLUtil::InputWrapper* inputWrapper, SDL_Window* window)
         : mBindingsManager(bindingsManager)
@@ -50,6 +57,28 @@ namespace MWInput
         mBindingsManager->mouseMoved(arg);
 
         MWBase::InputManager* input = MWBase::Environment::get().getInputManager();
+        MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
+        const float uiScale = winMgr->getScalingFactor();
+
+        // Isowind: a move the game made itself, warping the pointer onto a control for the controller (warpMouse),
+        // comes back from the window system as a mouse move on some of them (Windows, with the display scaled or a
+        // stream in between, not always to the pixel; the SDL wrapper only eats an exact echo). It says nothing about
+        // what the player is using: it only tells the GUI where the pointer is, and neither brings the pointer up nor
+        // makes the mouse the device in use, which would have the pointer show over the menus made for the controller
+        // at each step of the D-pad.
+        if (mGuiCursorEnabled && mLastWarpX >= 0 && mLastWarpY >= 0
+            && std::abs(static_cast<float>(arg.x) / uiScale - mLastWarpX) <= sWarpTolerance
+            && std::abs(static_cast<float>(arg.y) / uiScale - mLastWarpY) <= sWarpTolerance)
+        {
+            mLastWarpX = -1;
+            mLastWarpY = -1;
+            mGuiCursorX = static_cast<float>(arg.x) / uiScale;
+            mGuiCursorY = static_cast<float>(arg.y) / uiScale;
+            MyGUI::InputManager::getInstance().injectMouseMove(
+                static_cast<int>(mGuiCursorX), static_cast<int>(mGuiCursorY), mMouseWheel);
+            return;
+        }
+
         input->setJoystickLastUsed(false);
         input->resetIdleTime();
 
@@ -59,8 +88,6 @@ namespace MWInput
 
             // We keep track of our own mouse position, so that moving the mouse while in
             // game mode does not move the position of the GUI cursor
-            MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
-            float uiScale = winMgr->getScalingFactor();
             mGuiCursorX = static_cast<float>(arg.x) / uiScale;
             mGuiCursorY = static_cast<float>(arg.y) / uiScale;
 
@@ -75,19 +102,15 @@ namespace MWInput
 
             winMgr->setCursorActive(true);
 
-            // Check if this movement is from our recent mouse warp
-            bool isFromWarp = (mLastWarpX >= 0 && mLastWarpY >= 0 && std::abs(mGuiCursorX - mLastWarpX) < 0.5f
-                && std::abs(mGuiCursorY - mLastWarpY) < 0.5f);
-
             if (Settings::gui().mControllerMenus && !winMgr->getCursorVisible()
-                && (std::abs(arg.xrel) > 1 || std::abs(arg.yrel) > 1) && !isFromWarp)
+                && (std::abs(arg.xrel) > 1 || std::abs(arg.yrel) > 1))
             {
                 // Unhide the cursor if it was hidden to show a controller tooltip.
                 winMgr->setControllerTooltipVisible(false);
                 winMgr->setCursorVisible(true);
             }
 
-            // Clear warp tracking after processing
+            // A move of the mouse itself: a warp still to come back is no longer told apart
             mLastWarpX = -1;
             mLastWarpY = -1;
         }
@@ -286,6 +309,10 @@ namespace MWInput
         // Isowind: the scale the window reports (the setting times the drawable to window ratio), the same one
         // mouseMoved divides by, or the warp lands off target where the compositor scales
         float guiUiScale = MWBase::Environment::get().getWindowManager()->getScalingFactor();
+        // Where it went, so the move it may come back as is known for one (mouseMoved); the stick moving the pointer
+        // warps every frame
+        mLastWarpX = mGuiCursorX;
+        mLastWarpY = mGuiCursorY;
         mInputWrapper->warpMouse(
             static_cast<int>(mGuiCursorX * guiUiScale), static_cast<int>(mGuiCursorY * guiUiScale));
     }
@@ -298,10 +325,7 @@ namespace MWInput
         {
             mGuiCursorX = widgetX;
             mGuiCursorY = widgetY;
-            // Remember where we warped to so we can ignore movement from this warp
-            mLastWarpX = widgetX;
-            mLastWarpY = widgetY;
-            warpMouse();
+            warpMouse(); // (remembers where to, so the move this may come back as is ignored)
         }
     }
 

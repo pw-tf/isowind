@@ -1324,9 +1324,11 @@ namespace MWGui
         const MyGUI::IntCoord coord = target->getAbsoluteCoord();
         MyGUI::InputManager::getInstance().injectMouseMove(
             coord.left + coord.width / 2, coord.top + static_cast<int>(coord.height * yFraction), 0);
+        // The frame (frameControl) is the pointer: the mouse cursor stays hidden, as in the other menus made for the
+        // controller, until the mouse itself moves. The setting's description still shows, at the frame.
         MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
-        winMgr->setCursorVisible(true);
-        winMgr->setCursorActive(true);
+        winMgr->setCursorVisible(false);
+        winMgr->setControllerTooltipVisible(Settings::gui().mControllerTooltips);
         frameControl(control);
     }
 
