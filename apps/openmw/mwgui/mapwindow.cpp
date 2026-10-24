@@ -328,7 +328,7 @@ namespace MWGui
         MarkerUserData data(mLocalMapRender);
         data.caption = name;
         MarkerWidget* markerWidget = mLocalMap->createWidget<MarkerWidget>(
-            "MarkerButton", getMarkerCoordinates(x, y, data, 8), MyGUI::Align::Default);
+            "MarkerButton", getMarkerCoordinates(x, y, data, markerSize(8)), MyGUI::Align::Default);
         markerWidget->setNormalColour(
             MyGUI::Colour::parse(MyGUI::LanguageManager::getInstance().replaceTags("#{fontcolour=normal}")));
         markerWidget->setHoverColour(
@@ -376,7 +376,8 @@ namespace MWGui
                 const ESM::CustomMarker& marker = it->second;
                 MarkerUserData markerPos(mLocalMapRender);
                 MarkerWidget* markerWidget = mLocalMap->createWidget<MarkerWidget>("CustomMarkerButton",
-                    getMarkerCoordinates(marker.mWorldX, marker.mWorldY, markerPos, 16), MyGUI::Align::Default);
+                    getMarkerCoordinates(marker.mWorldX, marker.mWorldY, markerPos, markerSize(16)),
+                    MyGUI::Align::Default);
                 markerWidget->setDepth(Local_MarkerAboveFogLayer);
                 markerWidget->setUserString("ToolTipType", "Layout");
                 markerWidget->setUserString("ToolTipLayout", "TextToolTipOneLine");
@@ -605,7 +606,8 @@ namespace MWGui
             const ESM::Position& worldPos = ptr.getRefData().getPosition();
             MarkerUserData markerPos(mLocalMapRender);
             MyGUI::ImageBox* markerWidget = mLocalMap->createWidget<MyGUI::ImageBox>("ImageBox",
-                getMarkerCoordinates(worldPos.pos[0], worldPos.pos[1], markerPos, 8), MyGUI::Align::Default);
+                getMarkerCoordinates(worldPos.pos[0], worldPos.pos[1], markerPos, markerSize(8)),
+                MyGUI::Align::Default);
             markerWidget->setDepth(Local_MarkerAboveFogLayer);
             markerWidget->setImageTexture(markerTexture);
             markerWidget->setImageCoord(MyGUI::IntCoord(0, 0, 8, 8));
@@ -743,7 +745,7 @@ namespace MWGui
                 data = markerWidget->getUserData<MarkerUserData>();
                 data->notes = std::move(destNotes);
                 data->caption = marker.name;
-                markerWidget->setCoord(getMarkerCoordinates(marker.x, marker.y, *data, 8));
+                markerWidget->setCoord(getMarkerCoordinates(marker.x, marker.y, *data, markerSize(8)));
                 markerWidget->setVisible(true);
             }
 
@@ -775,7 +777,7 @@ namespace MWGui
         {
             MarkerUserData markerPos(mLocalMapRender);
             MyGUI::ImageBox* markerWidget = mLocalMap->createWidget<MyGUI::ImageBox>("ImageBox",
-                getMarkerCoordinates(markedPosition.pos[0], markedPosition.pos[1], markerPos, 8),
+                getMarkerCoordinates(markedPosition.pos[0], markedPosition.pos[1], markerPos, markerSize(8)),
                 MyGUI::Align::Default);
             markerWidget->setDepth(Local_MarkerAboveFogLayer);
             markerWidget->setImageTexture("textures\\menu_map_smark.dds");
@@ -850,16 +852,16 @@ namespace MWGui
 
         MarkerUserData markerPos(mLocalMapRender);
         for (MyGUI::Widget* widget : currentDoorMarkersWidgets())
-            updateMarkerCoordinates(widget, 8);
+            updateMarkerCoordinates(widget, markerSize(8));
 
         for (MyGUI::Widget* widget : mCustomMarkerWidgets)
         {
             const auto& marker = *widget->getUserData<ESM::CustomMarker>();
-            widget->setCoord(getMarkerCoordinates(marker.mWorldX, marker.mWorldY, markerPos, 16));
+            widget->setCoord(getMarkerCoordinates(marker.mWorldX, marker.mWorldY, markerPos, markerSize(16)));
         }
 
         for (MyGUI::Widget* widget : mMagicMarkerWidgets)
-            updateMarkerCoordinates(widget, 8);
+            updateMarkerCoordinates(widget, markerSize(8));
     }
 
     // ------------------------------------------------------------------------------------------
@@ -889,6 +891,7 @@ namespace MWGui
         mEditNoteDialog.eventOkClicked += MyGUI::newDelegate(this, &MapWindow::onNoteEditOk);
         mEditNoteDialog.eventDeleteClicked += MyGUI::newDelegate(this, &MapWindow::onNoteEditDelete);
 
+        mBigMarkers = Settings::gui().mControllerMenus;
         setCoord(500, 0, 320, 300);
 
         getWidget(mLocalMap, "LocalMap");
@@ -1310,7 +1313,7 @@ namespace MWGui
 
     float MapWindow::getMarkerSize(size_t agregatedWeight) const
     {
-        float markerSize = 12.f * mGlobalMapZoom;
+        const float markerSize = static_cast<float>(LocalMapBase::markerSize(12)) * mGlobalMapZoom;
         if (mGlobalMapZoom < 1)
             return static_cast<float>(markerSize * std::sqrt(agregatedWeight)); // we want to see agregated object
         return agregatedWeight ? 0 : markerSize; // we want to see only original markers (i.e. non agregated)

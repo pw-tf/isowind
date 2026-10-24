@@ -124,6 +124,11 @@ namespace MWGui
         bool mFogOfWarToggled = true;
         bool mFogOfWarEnabled;
         bool mNeedDoorMarkersUpdate = false;
+        // Isowind: on the map window with the menus made for a controller, the markers are bigger, so the pointer the
+        // stick moves lands on them (the minimap keeps them small)
+        bool mBigMarkers = false;
+        int markerSize(int size) const { return mBigMarkers ? size + sBigMarkerExtra : size; }
+        static constexpr int sBigMarkerExtra = 6;
 
         // Stores markers that were placed by a player. May be shared between multiple map views.
         CustomMarkerCollection& mCustomMarkers;
