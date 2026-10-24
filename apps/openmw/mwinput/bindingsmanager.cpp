@@ -659,6 +659,11 @@ namespace MWInput
         mInputBinder->controllerRemoved(arg);
     }
 
+    void BindingsManager::resetControllerControls()
+    {
+        mInputBinder->resetJoystickControls();
+    }
+
     void BindingsManager::controllerButtonPressed(int deviceID, const SDL_ControllerButtonEvent& arg)
     {
         mInputBinder->buttonPressed(deviceID, arg);

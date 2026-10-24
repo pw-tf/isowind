@@ -100,6 +100,9 @@ namespace ICS
 
 		void controllerAdded  (int deviceID, const SDL_ControllerDeviceEvent &args);
 		void controllerRemoved(const SDL_ControllerDeviceEvent &args);
+		// Isowind: every control a stick or a button is bound to back at rest (a controller gone, or another taken up:
+		// a stick left pushed when it went would push for good)
+		void resetJoystickControls();
 		JoystickIDList& getJoystickIdList(){ return mJoystickIDList; };
 		JoystickInstanceMap& getJoystickInstanceMap(){ return mJoystickInstanceMap; };
 

@@ -50,6 +50,8 @@ namespace MWInput
         SDL_GameController* getControllerOrNull() const;
         SDL_JoystickID getControllerUsed() const { return mControllerUsed; }
         void setControllerUsed(SDL_JoystickID instanceID) { mControllerUsed = instanceID; }
+        /// Every control a stick or a button is bound to back at rest (see ControllerManager::useController)
+        void resetControllerControls();
 
         void mousePressed(const SDL_MouseButtonEvent& evt, Uint8 deviceID);
         void mouseReleased(const SDL_MouseButtonEvent& arg, Uint8 deviceID);

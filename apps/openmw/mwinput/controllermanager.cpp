@@ -257,6 +257,12 @@ namespace MWInput
             return;
         }
 
+        // Isowind: another controller's sticks say nothing (a stream's virtual pad left behind, resting off centre)
+        // until one is pushed far enough to make it the one read
+        const SDL_JoystickID used = mBindingsManager->getControllerUsed();
+        if (used != -1 && arg.which != used)
+            return;
+
         if (!Settings::input().mEnableController || MWBase::Environment::get().getInputManager()->controlsDisabled())
             return;
 
@@ -610,6 +616,9 @@ namespace MWInput
     {
         if (mBindingsManager->getControllerUsed() == instanceID)
             return;
+        // Whatever the one read before last said is over (a stream's pad that went quiet with a stick pushed would
+        // otherwise push for good, the pointer drifting to the screen's edge)
+        mBindingsManager->resetControllerControls();
         mBindingsManager->setControllerUsed(instanceID);
         enableGyroSensor();
     }

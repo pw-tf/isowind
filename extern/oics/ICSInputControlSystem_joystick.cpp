@@ -328,6 +328,34 @@ namespace ICS
             SDL_GameControllerClose(mJoystickInstanceMap.at(args.which));
             mJoystickInstanceMap.erase(args.which);
         }
+        // Isowind: whatever its sticks and buttons last said is over with it: no event comes to say they were let go
+        resetJoystickControls();
+	}
+
+	void InputControlSystem::resetJoystickControls()
+	{
+		for(JoystickAxisBinderMapType::iterator device = mControlsJoystickAxisBinderMap.begin();
+			device != mControlsJoystickAxisBinderMap.end(); ++device)
+		{
+			for(ControlsAxisBinderMapType::iterator it = device->second.begin(); it != device->second.end(); ++it)
+			{
+				Control* control = it->second.control;
+				if(control)
+				{
+					control->setChangingDirection(Control::STOP);
+					control->setValue(control->getInitialValue());
+				}
+			}
+		}
+		for(JoystickButtonBinderMapType::iterator device = mControlsJoystickButtonBinderMap.begin();
+			device != mControlsJoystickButtonBinderMap.end(); ++device)
+		{
+			for(ControlsButtonBinderMapType::iterator it = device->second.begin(); it != device->second.end(); ++it)
+			{
+				if(it->second.control)
+					it->second.control->setChangingDirection(Control::STOP);
+			}
+		}
 	}
 
 	// joystick auto bindings
