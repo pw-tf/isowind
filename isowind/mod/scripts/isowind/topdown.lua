@@ -26,7 +26,9 @@
 --   left stick in   sneak                    right stick in  rest
 --   in water, A held swims up and the left stick held in dives (the Jump and Sneak bindings)
 -- There is no cursor then: what the right stick points at (or else what is nearest in front) gets the ring and the
--- label, and X uses it (as E does: a locked door or chest is picked). With a weapon or spell ready the aim locks
+-- label, and X uses it (as E does: a locked door or chest is picked). Indoors, people and doors come before the
+-- things lying between (the shopkeeper over the wares on the counter), and nothing on the floor below or above
+-- counts, for E and X and the cursor alike. With a weapon or spell ready the aim locks
 -- onto the nearest hostile creature in front (X still uses what is nearest, not that creature); with no hostile one
 -- there the ring and label stay on what X uses (friendly people, doors, containers and their locks), but the aim
 -- never locks onto those. A lockpick or probe never locks on, and looks for doors and containers first.
@@ -95,6 +97,10 @@ local AIM_DEAD_ZONE = 80            -- ignore the cursor for aiming when it is t
 local CURSOR_SPEED = 1.0            -- cursor speed relative to the mouse
 local ZOOM_STEP = 0.15              -- about this fraction of the distance per wheel notch
 local ACTIVATE_SLACK = 64           -- extra reach on top of the game's activation distance (top-down is imprecise)
+local REACH_BELOW, REACH_ABOVE = 120, 200 -- how far below or above the player's feet something can be and be used:
+                                    -- a few steps, a shelf; never a floor down or up (seen through the stairs)
+local INDOOR_PREFERENCE = { actor = 0.5, door = 0.6, item = 2.5 } -- indoors, with nothing pointed at, how much
+                                    -- sooner people and doors are used than things lying about (counters), by score
 local SNAP_RADIUS = 0.06            -- the cursor picks a creature this close to its figure (fraction of screen height)
 local SNAP_RANGE = 3000             -- only creatures this close to the player are picked that way
 local TAG = 'IsowindTopDown'
@@ -134,6 +140,13 @@ local pendingMode = nil             -- the first / third person camera mode aske
 
 -- Defined further down
 local nearestUsable, setRingVisible, hideSignLabels
+
+-- Whether something is at the player's own level: not on the floor below (seen through the stairs) or above. A door
+-- may be any height up: a hatch in the ceiling is opened from below.
+local function withinReachHeight(object)
+    local dz = object.position.z - self.position.z
+    return dz >= -REACH_BELOW and (dz <= REACH_ABOVE or types.Door.objectIsInstance(object))
+end
 
 local cursorElement, labelElement
 
@@ -430,7 +443,7 @@ local function updatePick()
         if object and object ~= self.object and objectName(object) and object.type ~= types.Static then
             hovered = object
             local reach = core.getGMST('iMaxActivateDist') + ACTIVATE_SLACK
-            hoveredInRange = (result.hitPos - self.position):length() <= reach
+            hoveredInRange = (result.hitPos - self.position):length() <= reach and withinReachHeight(object)
         end
     elseif dir.z < -0.001 then
         -- Nothing hit (e.g. empty sky over the edge): use the plane at the player's feet.
@@ -462,7 +475,7 @@ local function updatePick()
         aimPoint = bestBox.center
         local d = best.position - self.position
         local gap = math.sqrt(d.x * d.x + d.y * d.y) - math.max(bestBox.halfSize.x, bestBox.halfSize.y)
-        hoveredInRange = gap <= core.getGMST('iMaxActivateDist') + ACTIVATE_SLACK
+        hoveredInRange = gap <= core.getGMST('iMaxActivateDist') + ACTIVATE_SLACK and withinReachHeight(best)
     end
 end
 
@@ -952,6 +965,7 @@ local function updateGamepadPick()
             aimPoint = target:getBoundingBox().center
             local d = target.position - self.position
             hoveredInRange = math.sqrt(d.x * d.x + d.y * d.y) <= core.getGMST('iMaxActivateDist') + ACTIVATE_SLACK
+                and withinReachHeight(target)
             return
         end
         if stickAim then
@@ -1110,19 +1124,35 @@ local function activateHovered()
     return true
 end
 
--- The nearest usable thing within reach, favouring what is in front of the player (or in the given direction). With a
--- controller and no direction given, anything in reach will do (it can't be pointed at). locksOnly: only doors and
--- containers.
+-- Indoors, what is wanted sooner when nothing is pointed at: the person behind the counter and the door, over the
+-- things lying on the counter in between (INDOOR_PREFERENCE: the score is multiplied by it, lower wins). A dead
+-- body is a container.
+local function usePreference(object, indoors)
+    if not indoors then return 1 end
+    if Actor.objectIsInstance(object) then
+        return Actor.isDead(object) and 1 or INDOOR_PREFERENCE.actor
+    elseif types.Door.objectIsInstance(object) then
+        return INDOOR_PREFERENCE.door
+    elseif types.Item.objectIsInstance(object) then
+        return INDOOR_PREFERENCE.item
+    end
+    return 1
+end
+
+-- The nearest usable thing within reach, favouring what is in front of the player (or in the given direction), and
+-- indoors people and doors (usePreference); nothing on another floor (withinReachHeight). With a controller and no
+-- direction given, anything in reach will do (it can't be pointed at). locksOnly: only doors and containers.
 nearestUsable = function(direction, locksOnly)
     local reach = core.getGMST('iMaxActivateDist') + ACTIVATE_SLACK
     local yaw = self.rotation:getYaw()
     local facing = direction or v3(math.sin(yaw), math.cos(yaw), 0)
+    local indoors = self.cell ~= nil and not self.cell.isExterior
     local best, bestScore = nil, math.huge
     local lists = locksOnly and { nearby.doors, nearby.containers }
         or { nearby.doors, nearby.containers, nearby.items, nearby.actors, nearby.activators }
     for _, list in ipairs(lists) do
         for _, object in ipairs(list) do
-            if object ~= self.object and objectName(object) then
+            if object ~= self.object and objectName(object) and withinReachHeight(object) then
                 local d = object.position - self.position
                 local dist = d:length()
                 if dist <= reach then
@@ -1136,7 +1166,7 @@ nearestUsable = function(direction, locksOnly)
                         allowed = ahead > 0.2 or dist < 80
                     end
                     if allowed then
-                        local score = dist * (2 - ahead)
+                        local score = dist * (2 - ahead) * usePreference(object, indoors)
                         if score < bestScore then best, bestScore = object, score end
                     end
                 end

@@ -108,7 +108,9 @@ Mouse             Move the cursor. With a weapon or spell ready you aim at it wh
 Left click        Attack / cast when ready, otherwise use whatever is under the cursor
                   (doors, people, chests, items).
 Right click       Power attack: your weapon's strongest attack type.
-E                 Use what is under the cursor, or the nearest thing in front of you.
+E                 Use what is under the cursor, or the nearest thing in front of you. Indoors a person
+                  or a door comes before the things lying between (the shopkeeper over the wares on the
+                  counter), and nothing on the floor below or above you counts.
                   A locked door or chest you have no key to: E (X on a controller) has a go at picking
                   the lock if you carry a lockpick - the one in your hand, else your best one.
 Space             Jump. In water, hold it to swim up.

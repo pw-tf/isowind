@@ -160,7 +160,7 @@ The defaults; Options > Controls rebinds them (and Options > Scripts > Isowind t
 | Mouse              | Move the cursor. With a weapon or spell ready you aim at it while your legs run the way you move |
 | Left click         | Attack / cast when ready, otherwise use what is under the cursor (doors, people, chests, items) |
 | Right click        | Power attack: your weapon's strongest attack type                                               |
-| E                  | Use what is under the cursor, or the nearest thing in front of you. A locked door or chest you have no key to: a go at picking it, with a lockpick carried |
+| E                  | Use what is under the cursor, or the nearest thing in front of you (indoors, a person or a door before the things lying between; never something on the floor below or above). A locked door or chest you have no key to: a go at picking it, with a lockpick carried |
 | Space              | Jump. In water, hold it to swim up                                                              |
 | Ctrl               | Sneak. In water, hold it to dive                                                                |
 | F / R              | Ready weapon / ready magic                                                                      |
@@ -201,7 +201,7 @@ Q / E and Z / C type as usual in a text box.
 | Right stick        | Aim, or point at what X uses                                                                    |
 | A                  | Jump. In water, hold it to swim up                                                              |
 | B                  | Ready weapon                                                                                    |
-| X                  | Use / talk (a lock is picked, as with E)                                                        |
+| X                  | Use / talk: what the right stick points at, or else the nearest thing (indoors, a person or a door before the things lying between). A lock is picked, as with E |
 | Y                  | Ready magic                                                                                     |
 | Right trigger      | Attack / cast                                                                                   |
 | Left trigger       | Power attack                                                                                    |
