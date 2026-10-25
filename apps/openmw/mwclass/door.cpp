@@ -65,9 +65,9 @@ namespace MWClass
         {
             renderingInterface.getObjects().insertModel(ptr, model);
             ptr.getRefData().getBaseNode()->setNodeMask(MWRender::Mask_Static);
-            // Doors stay visible in the top-down cutaway (shaders/lib/util/cutaway.glsl), so they can be found
-            // even in a wall that is cut away, and are drawn double-sided: their back is never modelled, since in
-            // first person it can't be seen, but the top-down camera often looks at it.
+            // Doors are drawn double-sided: their back is never modelled, since in first person it can't be seen,
+            // but the top-down camera often looks at it. They are never cut away by it (MWRender::Cutaway) but with
+            // the storey above the player, as characters are, so there is always a way out to be seen.
             osg::StateSet* stateset = ptr.getRefData().getBaseNode()->getOrCreateStateSet();
             stateset->addUniform(new osg::Uniform("noCutaway", 0.75f));
             stateset->setMode(GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::OVERRIDE);

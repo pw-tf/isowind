@@ -8,6 +8,7 @@
 #include "../mwbase/environment.hpp"
 #include "../mwbase/world.hpp"
 #include "../mwrender/camera.hpp"
+#include "../mwrender/cutaway.hpp"
 #include "../mwrender/renderingmanager.hpp"
 
 #include "object.hpp"
@@ -74,16 +75,25 @@ namespace MWLua
         api["getExtraRoll"] = [camera]() { return -camera->getExtraRoll(); };
         api["getProjectionOffset"] = [renderingManager]() { return renderingManager->getProjectionOffset(); };
 
-        // Isowind: the objects the top-down camera fades because they stand in front of the player
-        api["getFadedObjects"] = [renderingManager]() {
-            auto ids = std::make_shared<std::vector<ObjectId>>();
-            for (const MWWorld::Ptr& ptr : renderingManager->getFadedObjects())
-                ids->push_back(getId(ptr));
-            return LObjectList{ std::move(ids) };
+        // Isowind: whether the top-down camera cuts this point away, exactly as it is drawn (actor: it is on a
+        // character, creature or door, never in the porthole; object: what it is on, gone if on another floor
+        // indoors); see MWRender::Cutaway
+        api["isCutAway"] = [renderingManager](
+                               const osg::Vec3f& point, sol::optional<bool> actor, sol::optional<LObject> object) {
+            const MWRender::Cutaway& cutaway = renderingManager->getCutaway();
+            return (object && cutaway.isHidden(object->ptr())) || cutaway.isCut(point, actor.value_or(false));
         };
-        // Isowind: the radius around the player within which the top-down camera cuts the room (ceilings and upper
-        // floors over them, the walls in the way), indoors and under cover outdoors; 0 where nothing is cut
-        api["getCutawayRadius"] = [renderingManager]() { return renderingManager->getCutawayRadius(); };
+        // Isowind: draw what the top-down camera cuts away tinted instead (blue: the porthole, orange: another floor
+        // going); 4 shows the ghost's own pass (magenta: drawn see-through, cyan: the clear opening, dark blue: left to
+        // the main view), -1 cuts nothing at all (to compare). true is 1, false or 0 is off.
+        api["setCutawayDebug"] = [renderingManager](sol::object level) {
+            int value = 0;
+            if (level.is<bool>())
+                value = level.as<bool>() ? 1 : 0;
+            else if (level.is<double>())
+                value = static_cast<int>(level.as<double>());
+            renderingManager->getCutaway().setDebug(value);
+        };
 
         api["getThirdPersonDistance"] = [camera]() { return camera->getCameraDistance(); };
         api["setPreferredThirdPersonDistance"]

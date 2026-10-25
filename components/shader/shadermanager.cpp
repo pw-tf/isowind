@@ -719,6 +719,9 @@ namespace Shader
             case Slot::PlayerMask:
                 slotDescr = "player mask";
                 break;
+            case Slot::CutawayNoise:
+                slotDescr = "cutaway noise";
+                break;
             default:
                 slotDescr = "UNKNOWN";
         }

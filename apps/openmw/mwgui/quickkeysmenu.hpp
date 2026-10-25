@@ -1,7 +1,9 @@
 #ifndef MWGUI_QUICKKEYS_H
 #define MWGUI_QUICKKEYS_H
 
+#include <chrono>
 #include <memory>
+#include <optional>
 
 #include "components/esm3/quickkeys.hpp"
 
@@ -40,8 +42,13 @@ namespace MWGui
         void onClose() override;
 
         void activateQuickKey(int index);
-        /// Isowind: uses the next (1) or previous (-1) key that holds something, counting from the one in use
+        /// Isowind: uses the next (1) or previous (-1) key that holds something, counting from the current one
         void stepQuickKey(int direction);
+
+        /// Isowind: the current key (0-based), or -1: the one used last (stepped to, pressed or clicked) while it
+        /// still holds something, else the one in use (the weapon in hand or bare hands, the spell or enchanted item
+        /// ready). The action bar highlights it, and stepping counts from it.
+        int getCurrentKey();
 
         /// Isowind's action bar: what a key (1-based) holds; item is the inventory item of an item key, if any.
         struct QuickKeyInfo
@@ -82,6 +89,8 @@ namespace MWGui
             ESM::QuickKeys::Type type = ESM::QuickKeys::Type::Unassigned;
             ESM::RefId id;
             std::string name;
+            // Isowind: since when the item has been gone from the inventory (none to replace it), if it is
+            std::optional<std::chrono::steady_clock::time_point> missingSince;
         };
 
         std::vector<keyData> mKey;
@@ -89,6 +98,7 @@ namespace MWGui
         keyData* mSelected;
         int mLastStepped = -1;
         bool isKeyInUse(int index);
+        bool holdsSomething(int index);
         keyData* mActivated;
 
         MyGUI::EditBox* mInstructionLabel;

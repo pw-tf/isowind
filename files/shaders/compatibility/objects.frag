@@ -117,7 +117,7 @@ varying vec3 orthoDepthMapCoord;
 
 void main()
 {
-    vec2 cutawaySilhouette = applyCutaway(passViewPos, normalize(gl_NormalMatrix * passNormal), false);
+    vec4 cutaway = applyCutaway(passViewPos, false);
 
 #if @particleOcclusion
     applyOcclusionDiscard(orthoDepthMapCoord, texture2D(orthoDepthMap, orthoDepthMapCoord.xy * 0.5 + 0.5).r);
@@ -249,9 +249,7 @@ vec2 screenCoords = gl_FragCoord.xy / screenRes;
 #endif
 
     gl_FragData[0] = applyFogAtPos(gl_FragData[0], passViewPos, far);
-    gl_FragData[0].xyz = applyCutawaySilhouette(gl_FragData[0].xyz, cutawaySilhouette);
-    // Faded by the top-down cutaway: OcclusionFader blends such objects
-    gl_FragData[0].a *= cutawayAlpha;
+    gl_FragData[0].xyz = applyCutawayColour(gl_FragData[0].xyz, cutaway);
 
 #if !defined(FORCE_OPAQUE) && @softParticles
     gl_FragData[0].a *= calcSoftParticleFade(
@@ -275,6 +273,9 @@ vec2 screenCoords = gl_FragCoord.xy / screenRes;
 #if !defined(FORCE_OPAQUE) && !@disableNormals
     gl_FragData[1].xyz = viewNormal * 0.5 + 0.5;
 #endif
+
+    // The top-down camera's see-through ghost (lib/util/cutaway.glsl) keeps its own opacity
+    gl_FragData[0].a = applyCutawayAlpha(gl_FragData[0].a);
 
     applyShadowDebugOverlay();
 }

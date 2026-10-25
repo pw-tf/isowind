@@ -47,7 +47,7 @@ uniform float far;
 
 void main()
 {
-    vec2 cutawaySilhouette = applyCutaway(passViewPos, normalize(gl_NormalMatrix * passNormal), true);
+    vec4 cutaway = applyCutaway(passViewPos, true);
 
     vec2 adjustedUV = (gl_TextureMatrix[0] * vec4(uv, 0.0, 1.0)).xy;
 
@@ -100,7 +100,7 @@ void main()
     gl_FragData[0].xyz = gl_FragData[0].xyz * lighting + specular;
 
     gl_FragData[0] = applyFogAtDist(gl_FragData[0], euclideanDepth, linearDepth, far);
-    gl_FragData[0].xyz = applyCutawaySilhouette(gl_FragData[0].xyz, cutawaySilhouette);
+    gl_FragData[0].xyz = applyCutawayColour(gl_FragData[0].xyz, cutaway);
 
 #if !@disableNormals && @writeNormals
     gl_FragData[1].xyz = viewNormal * 0.5 + 0.5;

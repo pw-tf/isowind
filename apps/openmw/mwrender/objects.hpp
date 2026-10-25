@@ -86,6 +86,9 @@ namespace MWRender
 
         void removeCell(const MWWorld::CellStore* store);
 
+        /// Isowind: the scene node holding a cell's objects, or nullptr
+        osg::Group* getCellNode(const MWWorld::CellStore* store) const;
+
         /// Updates containing cell for object rendering data
         void updatePtr(const MWWorld::Ptr& old, const MWWorld::Ptr& cur);
 

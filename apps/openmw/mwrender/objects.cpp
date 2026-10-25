@@ -37,6 +37,12 @@ namespace MWRender
         mCellSceneNodes.clear();
     }
 
+    osg::Group* Objects::getCellNode(const MWWorld::CellStore* store) const
+    {
+        const auto found = mCellSceneNodes.find(store);
+        return found != mCellSceneNodes.end() ? found->second.get() : nullptr;
+    }
+
     void Objects::insertBegin(const MWWorld::Ptr& ptr)
     {
         assert(mObjects.find(ptr.mRef) == mObjects.end());

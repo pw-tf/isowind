@@ -129,6 +129,8 @@ namespace MWGui
         bool mBigMarkers = false;
         int markerSize(int size) const { return mBigMarkers ? size + sBigMarkerExtra : size; }
         static constexpr int sBigMarkerExtra = 6;
+        // The doors' squares on the local map: as big as the towns' on the world map (MapWindow::getMarkerSize)
+        int doorMarkerSize() const { return mBigMarkers ? 12 + sBigMarkerExtra : 8; }
 
         // Stores markers that were placed by a player. May be shared between multiple map views.
         CustomMarkerCollection& mCustomMarkers;

@@ -104,10 +104,28 @@ namespace MWGui
                     item = store.findReplacement(mKey[index].id);
 
                     if (!item.isEmpty())
+                    {
                         mKey[index].button->setUserData(MWWorld::Ptr(item));
+                        mKey[index].missingSince.reset();
+                    }
+                    else
+                    {
+                        // Isowind: with none left in the inventory, the key no longer holds it (the action bar shows
+                        // it empty; the bumpers skip it at once). After a moment: in multiplayer an item used goes to
+                        // the server and back, and may be away from the inventory in between.
+                        const auto now = std::chrono::steady_clock::now();
+                        if (!mKey[index].missingSince)
+                            mKey[index].missingSince = now;
+                        else if (now - *mKey[index].missingSince > std::chrono::seconds(1))
+                        {
+                            mKey[index].missingSince.reset();
+                            unassign(&mKey[index]);
+                        }
+                    }
 
                     break;
                 }
+                mKey[index].missingSince.reset();
             }
         }
     }
@@ -489,27 +507,44 @@ namespace MWGui
             case ESM::QuickKeys::Type::Magic:
                 return store.getSelectedEnchantItem() == store.end()
                     && MWBase::Environment::get().getWindowManager()->getSelectedSpell() == key.id;
+            case ESM::QuickKeys::Type::HandToHand:
+                return store.getSlot(MWWorld::InventoryStore::Slot_CarriedRight) == store.end();
             default:
                 return false;
         }
     }
 
+    // Whether a key holds something to use (an item key's item still being carried)
+    bool QuickKeysMenu::holdsSomething(int index)
+    {
+        const keyData& key = mKey[index];
+        if (key.type == ESM::QuickKeys::Type::Unassigned)
+            return false;
+        if (key.type == ESM::QuickKeys::Type::Item || key.type == ESM::QuickKeys::Type::MagicItem)
+        {
+            const MWWorld::Ptr* item = key.button->getUserData<MWWorld::Ptr>(false);
+            return item && !item->isEmpty() && item->getCellRef().getCount() >= 1;
+        }
+        return true;
+    }
+
+    int QuickKeysMenu::getCurrentKey()
+    {
+        if (mLastStepped >= 0 && mLastStepped < static_cast<int>(mKey.size()) && holdsSomething(mLastStepped))
+            return mLastStepped;
+        for (int i = 0; i < static_cast<int>(mKey.size()); ++i)
+        {
+            if (isKeyInUse(i))
+                return i;
+        }
+        return -1;
+    }
+
     void QuickKeysMenu::stepQuickKey(int direction)
     {
-        // From the key in use (the weapon in hand, the spell or enchanted item ready), the one stepped to last
-        // otherwise
-        int current = mLastStepped;
-        if (current < 0 || !isKeyInUse(current))
-        {
-            for (int i = 0; i < static_cast<int>(mKey.size()); ++i)
-            {
-                if (isKeyInUse(i))
-                {
-                    current = i;
-                    break;
-                }
-            }
-        }
+        // From the current key: the one used last (not only while it is in use, or stepping from bare hands or a
+        // potion would start over from a spell still selected and skip keys), else the one in use
+        int current = getCurrentKey();
         const int count = static_cast<int>(mKey.size());
         if (current < 0)
             current = direction > 0 ? -1 : count;
@@ -517,16 +552,8 @@ namespace MWGui
         {
             const int index = ((current + direction * step) % count + count) % count;
             validate(index);
-            const keyData& key = mKey[index];
-            if (key.type == ESM::QuickKeys::Type::Unassigned)
+            if (!holdsSomething(index))
                 continue;
-            if (key.type == ESM::QuickKeys::Type::Item || key.type == ESM::QuickKeys::Type::MagicItem)
-            {
-                const MWWorld::Ptr* item = key.button->getUserData<MWWorld::Ptr>(false);
-                if (!item || item->isEmpty() || item->getCellRef().getCount() < 1)
-                    continue;
-            }
-            mLastStepped = index;
             activateQuickKey(index + 1);
             return;
         }
@@ -537,6 +564,8 @@ namespace MWGui
         assert(index >= 1 && index <= 10);
 
         keyData* key = &mKey[index - 1];
+        // Isowind: the current key now, however it was used (see getCurrentKey)
+        mLastStepped = index - 1;
 
         MWWorld::Ptr player = MWMechanics::getPlayer();
         MWWorld::InventoryStore& store = player.getClass().getInventoryStore(player);

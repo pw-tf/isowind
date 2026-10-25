@@ -1970,8 +1970,9 @@ namespace MWGui
 
     float WindowManager::getControllerCursorSpeedScale()
     {
-        if (Settings::gui().mControllerMenus && Settings::map().mGlobal && getMode() == GM_Inventory
-            && getActiveControllerWindow() == mMap)
+        // The pointer the stick moves goes slower over the maps (the local map and the world map alike), so it can
+        // be put on a door or a town
+        if (Settings::gui().mControllerMenus && getMode() == GM_Inventory && getActiveControllerWindow() == mMap)
             return 0.45f;
         return 1.f;
     }
