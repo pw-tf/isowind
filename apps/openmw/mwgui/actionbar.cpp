@@ -1,6 +1,9 @@
 #include "actionbar.hpp"
 
+#include <algorithm>
+
 #include <MyGUI_Button.h>
+#include <MyGUI_ImageBox.h>
 #include <MyGUI_ProgressBar.h>
 #include <MyGUI_RenderManager.h>
 #include <MyGUI_TextBox.h>
@@ -35,6 +38,12 @@ namespace MWGui
         constexpr int sBoxSize = 36;
         constexpr int sSpacing = 4;
         constexpr int sStatusHeight = 6;
+        // The key ready to use: its border's width and colour; while one is, how far the others dim (empty ones more)
+        constexpr int sBorderWidth = 2;
+        const MyGUI::Colour sBorderColour(0.88f, 0.88f, 0.85f);
+        constexpr float sDimmed = 0.55f;
+        constexpr float sEmptyDimmed = 0.35f;
+        constexpr float sEmpty = 0.5f;
 
         // Frames are drawn on 64 pixel textures at 44 pixels; bigger texture packs scale that
         int frameSize(const std::string& texture)
@@ -104,6 +113,22 @@ namespace MWGui
                 (*bar)->setVisible(false);
             }
 
+            // The border, over the box's own edge
+            const int far = sBoxSize - sBorderWidth;
+            const std::array<MyGUI::IntCoord, 4> edges = { MyGUI::IntCoord(0, 0, sBoxSize, sBorderWidth),
+                MyGUI::IntCoord(0, far, sBoxSize, sBorderWidth), MyGUI::IntCoord(0, 0, sBorderWidth, sBoxSize),
+                MyGUI::IntCoord(far, 0, sBorderWidth, sBoxSize) };
+            for (size_t e = 0; e < edges.size(); ++e)
+            {
+                MyGUI::ImageBox* edge
+                    = slot.mButton->createWidget<MyGUI::ImageBox>("ImageBox", edges[e], MyGUI::Align::Default);
+                edge->setImageTexture("white");
+                edge->setColour(sBorderColour);
+                edge->setNeedMouseFocus(false);
+                edge->setVisible(false);
+                slot.mBorder[e] = edge;
+            }
+
             // How many there are, in the corner like the inventory shows it
             slot.mCountText = slot.mButton->createWidget<MyGUI::TextBox>(
                 "CountText", MyGUI::IntCoord(2, sBoxSize - 18, sBoxSize - 5, 16), MyGUI::Align::Default);
@@ -133,6 +158,23 @@ namespace MWGui
             return;
         for (int i = 0; i < sSlots; ++i)
             showSlot(i, mSlots[i]);
+
+        // The current key stands out (the one used last, stepping counts from it: QuickKeysMenu::getCurrentKey): a
+        // border, a brighter number, and the others dim (while there is none, none dims)
+        const int current = mQuickKeysMenu->getCurrentKey();
+        for (int i = 0; i < sSlots; ++i)
+        {
+            Slot& slot = mSlots[i];
+            const bool isCurrent = i == current;
+            for (MyGUI::ImageBox* edge : slot.mBorder)
+                edge->setVisible(isCurrent);
+            slot.mLabel->setTextColour(
+                isCurrent ? MyGUI::Colour(1.f, 0.94f, 0.75f) : MyGUI::Colour(0.79f, 0.65f, 0.38f));
+            float alpha = slot.mEmpty ? sEmpty : 1.f;
+            if (current >= 0 && !isCurrent)
+                alpha = slot.mEmpty ? sEmptyDimmed : sDimmed;
+            slot.mButton->setAlpha(alpha);
+        }
     }
 
     void ActionBar::showSlot(int index, Slot& slot)
@@ -198,8 +240,8 @@ namespace MWGui
             case ESM::QuickKeys::Type::Item:
                 if (!key.item.isEmpty())
                 {
-                    // The gold frame of equipped items, as in the inventory
-                    slot.mIcon->setItem(key.item, active ? ItemWidget::Equip : ItemWidget::None);
+                    // (No gold frame when equipped: the border shows the key ready to use)
+                    slot.mIcon->setItem(key.item, ItemWidget::None);
                     slot.mButton->setUserString("ToolTipType", "ItemPtr");
                     slot.mButton->setUserData(MWWorld::Ptr(key.item));
                 }
@@ -207,8 +249,7 @@ namespace MWGui
             case ESM::QuickKeys::Type::MagicItem:
                 if (!key.item.isEmpty())
                 {
-                    const std::string frame
-                        = active ? "textures\\menu_icon_equip.dds" : "textures\\menu_icon_select_magic_magic.dds";
+                    const std::string frame = "textures\\menu_icon_select_magic_magic.dds";
                     const int size = frameSize(frame);
                     slot.mIcon->setFrame(frame, MyGUI::IntCoord(0, 0, size, size));
                     slot.mIcon->setIcon(key.item);
@@ -226,8 +267,7 @@ namespace MWGui
                     = esmStore.get<ESM::MagicEffect>().search(spell->mEffects.mList.front().mData.mEffectID);
                 if (!effect)
                     break;
-                const std::string frame
-                    = active ? "textures\\menu_icon_equip.dds" : "textures\\menu_icon_select_magic.dds";
+                const std::string frame = "textures\\menu_icon_select_magic.dds";
                 const int size = frameSize(frame);
                 slot.mIcon->setFrame(frame, MyGUI::IntCoord(0, 0, size, size));
                 slot.mIcon->setIcon(Misc::ResourceHelpers::correctBigIconPath(VFS::Path::toNormalized(effect->mIcon),
@@ -238,9 +278,7 @@ namespace MWGui
             }
             case ESM::QuickKeys::Type::HandToHand:
             {
-                const std::string frame = active ? "textures\\menu_icon_equip.dds" : "";
-                const int size = frame.empty() ? 0 : frameSize(frame);
-                slot.mIcon->setFrame(frame, MyGUI::IntCoord(0, 0, size, size));
+                slot.mIcon->setFrame({}, MyGUI::IntCoord());
                 slot.mIcon->setIcon("icons\\k\\stealth_handtohand.dds");
                 break;
             }
@@ -257,14 +295,11 @@ namespace MWGui
         if (status >= 0)
             bar->setProgressPosition(std::clamp(status, 0, 100));
 
-        // The number of the key ready to use shows brighter
-        slot.mLabel->setTextColour(active ? MyGUI::Colour(1.f, 0.94f, 0.75f) : MyGUI::Colour(0.79f, 0.65f, 0.38f));
 
-        // Keys with nothing on them stay in the background
-        const bool empty = key.type == ESM::QuickKeys::Type::Unassigned
+        // Keys with nothing on them stay in the background (update() sets how much)
+        slot.mEmpty = key.type == ESM::QuickKeys::Type::Unassigned
             || ((key.type == ESM::QuickKeys::Type::Item || key.type == ESM::QuickKeys::Type::MagicItem)
                 && key.item.isEmpty());
-        slot.mButton->setAlpha(empty ? 0.5f : 1.f);
     }
 
     int ActionBar::indexOf(MyGUI::Widget* sender) const
