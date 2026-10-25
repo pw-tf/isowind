@@ -328,7 +328,7 @@ namespace MWGui
         MarkerUserData data(mLocalMapRender);
         data.caption = name;
         MarkerWidget* markerWidget = mLocalMap->createWidget<MarkerWidget>(
-            "MarkerButton", getMarkerCoordinates(x, y, data, markerSize(8)), MyGUI::Align::Default);
+            "MarkerButton", getMarkerCoordinates(x, y, data, doorMarkerSize()), MyGUI::Align::Default);
         markerWidget->setNormalColour(
             MyGUI::Colour::parse(MyGUI::LanguageManager::getInstance().replaceTags("#{fontcolour=normal}")));
         markerWidget->setHoverColour(
@@ -522,7 +522,7 @@ namespace MWGui
         mNeedDoorMarkersUpdate = true;
 
         for (MyGUI::Widget* widget : currentDoorMarkersWidgets())
-            updateMarkerCoordinates(widget, 8);
+            updateMarkerCoordinates(widget, doorMarkerSize());
 
         updateMagicMarkers();
         updateCustomMarkers();
@@ -745,7 +745,7 @@ namespace MWGui
                 data = markerWidget->getUserData<MarkerUserData>();
                 data->notes = std::move(destNotes);
                 data->caption = marker.name;
-                markerWidget->setCoord(getMarkerCoordinates(marker.x, marker.y, *data, markerSize(8)));
+                markerWidget->setCoord(getMarkerCoordinates(marker.x, marker.y, *data, doorMarkerSize()));
                 markerWidget->setVisible(true);
             }
 
@@ -755,7 +755,7 @@ namespace MWGui
         }
 
         for (MyGUI::Widget* widget : currentDoorMarkersWidgets())
-            updateMarkerCoordinates(widget, 8);
+            updateMarkerCoordinates(widget, doorMarkerSize());
     }
 
     void LocalMapBase::updateMagicMarkers()
@@ -852,7 +852,7 @@ namespace MWGui
 
         MarkerUserData markerPos(mLocalMapRender);
         for (MyGUI::Widget* widget : currentDoorMarkersWidgets())
-            updateMarkerCoordinates(widget, markerSize(8));
+            updateMarkerCoordinates(widget, doorMarkerSize());
 
         for (MyGUI::Widget* widget : mCustomMarkerWidgets)
         {
