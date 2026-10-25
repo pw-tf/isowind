@@ -33,6 +33,11 @@ namespace MWGui
 
         bool onControllerButtonEvent(const SDL_ControllerButtonEvent& arg) override;
         bool stepTab(int delta) override;
+        bool onControllerTrigger(int delta) override;
+        ControllerButtons* getControllerButtons() override;
+        /// Isowind: the tabs inside the page shown (the triggers, Z / C): the Video page's, the Controls page's mouse
+        /// and keyboard / controller; false if it has none
+        bool stepSubTab(int delta);
 
     protected:
         MyGUI::TabControl* mSettingsTab;
@@ -137,6 +142,9 @@ namespace MWGui
         void stepControl(int delta);
         void adjustControl(int delta);
         void selectControl();
+        MyGUI::Widget* getShownPage() const;
+        MyGUI::TabControl* getSubTabs() const;
+        void onSubTabChanged(MyGUI::TabControl* sender, size_t index);
         /// A frame around the control the pointer is on (nullptr: none)
         void frameControl(MyGUI::Widget* control);
         MyGUI::Widget* mControllerFrame = nullptr;

@@ -183,7 +183,7 @@ The defaults; Options > Controls rebinds them (and Options > Scripts > Isowind t
 | Key                | What it does                                                                                    |
 |--------------------|-------------------------------------------------------------------------------------------------|
 | Q / E              | Previous / next page of the inventory screen (Map, Inventory, Magic, Stats), or tab in Options  |
-| Z / C              | Previous / next tab inside a window: the kinds of item in the inventory or a shop, a chest's containers opened together, the local or world map. With a chest or shop open, the window under the pointer |
+| Z / C              | Previous / next tab inside a window: the kinds of item in the inventory or a shop, a chest's containers opened together, the local or world map, in Options the Video tab's (Detail Level, Water, Lights) and the Controls tab's mouse and keyboard / controller. With a chest or shop open, the window under the pointer |
 | Click a tab        | That page. The HUD's bars, weapon, spell and minimap go to theirs too                           |
 | 1 - 0              | Over an item, spell or enchanted item: puts it on that quick key                                |
 | Drag onto a slot   | An item dragged onto a quick key slot along the bottom goes on that key                         |
@@ -221,7 +221,7 @@ Q / E and Z / C type as usual in a text box.
 | D-pad, A           | Choose                                                                                          |
 | B                  | Back                                                                                            |
 | Bumpers            | The inventory screen's pages; with a chest or shop open, between its window and yours; Options' tabs |
-| Triggers           | The tabs inside a window                                                                        |
+| Triggers           | The tabs inside a window, and in Options inside a tab (Video's; Controls' mouse and keyboard / controller) |
 | Right stick in     | An item's info                                                                                  |
 | Y                  | In the inventory and magic pages: puts the item or spell on a quick key                         |
 | X                  | On a text box (moved onto with the D-pad): a keyboard on the screen. Start or Back puts it away |

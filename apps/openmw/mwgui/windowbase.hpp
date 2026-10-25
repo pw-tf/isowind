@@ -109,6 +109,9 @@ namespace MWGui
         /// Isowind: the keyboard's keys for the tabs inside a window (Z / C, as a controller's triggers) step through
         /// this window's tabs; false if it has none
         virtual bool stepTab(int delta) { return false; }
+        /// Isowind: a controller's trigger pressed while this window has the controller (-1 the left, 1 the right);
+        /// false leaves it to what the triggers otherwise do (switch between the windows open)
+        virtual bool onControllerTrigger(int delta) { return false; }
 
     protected:
         virtual void onTitleDoubleClicked();

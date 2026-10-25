@@ -154,6 +154,33 @@ namespace
             textBox->setCaption(labelCaption);
         }
     }
+
+    // Isowind: the tab bar inside a page of Options (the Video page's), if it has one
+    MyGUI::TabControl* findTabControl(MyGUI::Widget* parent)
+    {
+        MyGUI::EnumeratorWidgetPtr children = parent->getEnumerator();
+        while (children.next())
+        {
+            MyGUI::Widget* widget = children.current();
+            if (!widget->getVisible())
+                continue;
+            if (MyGUI::TabControl* tabs = widget->castType<MyGUI::TabControl>(false))
+                return tabs;
+            if (MyGUI::TabControl* tabs = findTabControl(widget))
+                return tabs;
+        }
+        return nullptr;
+    }
+
+    // A tab's caption without the spaces it is padded with
+    std::string tabName(const MyGUI::UString& caption)
+    {
+        const std::string name = caption.asUTF8();
+        const size_t first = name.find_first_not_of(' ');
+        if (first == std::string::npos)
+            return {};
+        return name.substr(first, name.find_last_not_of(' ') - first + 1);
+    }
 }
 
 namespace MWGui
@@ -324,6 +351,11 @@ namespace MWGui
             += MyGUI::newDelegate(this, &SettingsWindow::onWindowResize);
 
         mSettingsTab->eventTabChangeSelect += MyGUI::newDelegate(this, &SettingsWindow::onTabChanged);
+        for (size_t i = 0; i < mSettingsTab->getItemCount(); ++i)
+        {
+            if (MyGUI::TabControl* subTabs = findTabControl(mSettingsTab->getItemAt(i)))
+                subTabs->eventTabChangeSelect += MyGUI::newDelegate(this, &SettingsWindow::onSubTabChanged);
+        }
         mOkButton->eventMouseButtonClick += MyGUI::newDelegate(this, &SettingsWindow::onOkButtonClicked);
         mTextureFilteringButton->eventComboChangePosition
             += MyGUI::newDelegate(this, &SettingsWindow::onTextureFilteringChanged);
@@ -486,6 +518,13 @@ namespace MWGui
     void SettingsWindow::onTabChanged(MyGUI::TabControl* /*sender*/, size_t /*index*/)
     {
         resetScrollbars();
+        MWBase::Environment::get().getWindowManager()->updateControllerButtonsOverlay();
+    }
+
+    void SettingsWindow::onSubTabChanged(MyGUI::TabControl* /*sender*/, size_t /*index*/)
+    {
+        // The legend names the tabs the triggers go to
+        MWBase::Environment::get().getWindowManager()->updateControllerButtonsOverlay();
     }
 
     void SettingsWindow::onOkButtonClicked(MyGUI::Widget* /*sender*/)
@@ -810,6 +849,7 @@ namespace MWGui
         mControllerSwitch->setStateSelected(false);
         updateControlsBox();
         resetScrollbars();
+        MWBase::Environment::get().getWindowManager()->updateControllerButtonsOverlay();
     }
 
     void SettingsWindow::onControllerSwitchClicked(MyGUI::Widget* /*sender*/)
@@ -821,6 +861,7 @@ namespace MWGui
         mControllerSwitch->setStateSelected(true);
         updateControlsBox();
         resetScrollbars();
+        MWBase::Environment::get().getWindowManager()->updateControllerButtonsOverlay();
     }
 
     void SettingsWindow::updateControlsBox()
@@ -1146,7 +1187,9 @@ namespace MWGui
     bool SettingsWindow::stepTab(int delta)
     {
         mSettingsTab->setIndexSelected(wrap(mSettingsTab->getIndexSelected(), mSettingsTab->getItemCount(), delta));
-        MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
+        MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
+        winMgr->playSound(ESM::RefId::stringRefId("Menu Click"));
+        winMgr->updateControllerButtonsOverlay();
         return true;
     }
 
@@ -1459,6 +1502,7 @@ namespace MWGui
             if (tabs->getItemCount() == 0)
                 return;
             tabs->setIndexSelected(wrap(tabs->getIndexSelected(), tabs->getItemCount(), delta));
+            onSubTabChanged(tabs, tabs->getIndexSelected());
             pointAt(tabs);
         }
         else
@@ -1494,6 +1538,74 @@ namespace MWGui
             button->eventMouseButtonClick(button);
         winMgr->playSound(ESM::RefId::stringRefId("Menu Click"));
         winMgr->setCursorActive(true);
+    }
+
+    MyGUI::Widget* SettingsWindow::getShownPage() const
+    {
+        const size_t index = mSettingsTab->getIndexSelected();
+        return index != MyGUI::ITEM_NONE ? mSettingsTab->getItemAt(index) : nullptr;
+    }
+
+    MyGUI::TabControl* SettingsWindow::getSubTabs() const
+    {
+        MyGUI::Widget* page = getShownPage();
+        return page ? findTabControl(page) : nullptr;
+    }
+
+    bool SettingsWindow::stepSubTab(int delta)
+    {
+        if (isInside(mKeyboardSwitch, getShownPage()))
+        {
+            // Two of them: either way goes to the other
+            if (mKeyboardMode)
+                onControllerSwitchClicked(mControllerSwitch);
+            else
+                onKeyboardSwitchClicked(mKeyboardSwitch);
+        }
+        else if (MyGUI::TabControl* tabs = getSubTabs(); tabs && tabs->getItemCount() > 1)
+        {
+            tabs->setIndexSelected(wrap(tabs->getIndexSelected(), tabs->getItemCount(), delta));
+            onSubTabChanged(tabs, tabs->getIndexSelected());
+        }
+        else
+            return false;
+        MWBase::Environment::get().getWindowManager()->playSound(ESM::RefId::stringRefId("Menu Click"));
+        return true;
+    }
+
+    bool SettingsWindow::onControllerTrigger(int delta)
+    {
+        // The pointer starts on the tab as it does on a page the bumpers turn to. On a page without tabs inside the
+        // triggers do nothing, rather than go to the windows under Options.
+        if (stepSubTab(delta))
+            pointAtFirstControl();
+        return true;
+    }
+
+    ControllerButtons* SettingsWindow::getControllerButtons()
+    {
+        // The triggers, by the names of the tabs inside the page they go to: the one either side, or of two the
+        // other on its side
+        std::vector<std::string> names;
+        size_t shown = 0;
+        if (isInside(mKeyboardSwitch, getShownPage()))
+        {
+            names = { tabName(mKeyboardSwitch->getCaption()), tabName(mControllerSwitch->getCaption()) };
+            shown = mKeyboardMode ? 0 : 1;
+        }
+        else if (MyGUI::TabControl* tabs = getSubTabs(); tabs && tabs->getIndexSelected() != MyGUI::ITEM_NONE)
+        {
+            for (size_t i = 0; i < tabs->getItemCount(); ++i)
+                names.push_back(tabName(tabs->getItemNameAt(i)));
+            shown = tabs->getIndexSelected();
+        }
+        mControllerButtons.mL2.clear();
+        mControllerButtons.mR2.clear();
+        if (names.size() > 2 || (names.size() == 2 && shown == 1))
+            mControllerButtons.mL2 = names[wrap(shown, names.size(), -1)];
+        if (names.size() > 2 || (names.size() == 2 && shown == 0))
+            mControllerButtons.mR2 = names[wrap(shown, names.size(), 1)];
+        return &mControllerButtons;
     }
 
 }

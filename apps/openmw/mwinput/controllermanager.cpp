@@ -253,6 +253,12 @@ namespace MWInput
 
         if (mBindingsManager->isDetectingBindingState())
         {
+            // Isowind: a trigger pulled to be bound is bound partway down; the rest of the pull isn't then a press in
+            // the menu (it would switch Options' tab under the bindings)
+            if (arg.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT)
+                mLeftTriggerGuiPressed = arg.value > 0;
+            else if (arg.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT)
+                mRightTriggerGuiPressed = arg.value > 0;
             mBindingsManager->controllerAxisMoved(deviceID, arg);
             return;
         }
@@ -490,6 +496,9 @@ namespace MWInput
                 if (winMgr->isOnScreenKeyboardVisible())
                     return;
                 MWGui::WindowBase* activeWin = winMgr->getActiveControllerWindow();
+                // A window may have its own use for them (Options: the tabs inside the page shown)
+                if (activeWin && activeWin->isVisible() && activeWin->onControllerTrigger(right ? 1 : -1))
+                    return;
                 if (winMgr->controllerCyclesWindows() && activeWin && activeWin->isVisible())
                 {
                     SDL_ControllerButtonEvent bumper{};

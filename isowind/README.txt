@@ -121,7 +121,8 @@ Q / E             In the menus: the previous / next page of the inventory screen
                   Magic, Stats), or tab in Options. Click a page's tab along the top, or what it
                   stands for on the HUD (the bars, the weapon, the spell, the minimap), to go to it.
 Z / C             In the menus: the previous / next tab inside a window - the kinds of item in the
-                  inventory or a shop, a chest's containers opened together, the local or world map.
+                  inventory or a shop, a chest's containers opened together, the local or world map,
+                  in Options the Video tab's and the Controls tab's mouse and keyboard / controller.
                   With a chest or shop open, the window under the pointer.
 Mouse wheel       Zoom, within the view you are in.
 F7                Switch view: top-down, then Morrowind's third person view, then first person. Change the
@@ -146,7 +147,8 @@ Menus are made for the controller: the D-pad and A choose, B goes back, the bump
 screen's pages (Map, Inventory, Magic, Stats; one at a time, as with the mouse and keyboard) and, where two
 windows are open side by side (a chest, a shop), between them, the one in use lit, while the triggers switch
 the tabs within a window. The right stick pressed in shows an item's info, and in the inventory and magic
-windows Y puts the item or spell on a quick key. In Options the bumpers switch tabs,
+windows Y puts the item or spell on a quick key. In Options the bumpers switch tabs and the triggers the
+tabs inside one (Video's; Controls' mouse and keyboard / controller),
 the D-pad steps a gold frame through the settings (up / down) and adjusts the one it is on (left / right), and A
 works it, on the Scripts tab's pages too; the mouse pointer stays away until the mouse moves. The legend along the bottom of each menu says what the buttons do
 there. To type something (your name, a server's password, a save's, potion's, spell's or class's name, a map

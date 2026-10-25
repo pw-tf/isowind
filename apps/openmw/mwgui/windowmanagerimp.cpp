@@ -2825,8 +2825,13 @@ namespace MWGui
         }
 
         // The tabs inside a window, as the controller's triggers do: the window's under the pointer, or else the
-        // first one open with tabs
-        if (mGuiModes.empty() || isSettingsWindowVisible())
+        // first one open with tabs; in Options the page's (the pointer stays, as for Q / E)
+        if (isSettingsWindowVisible())
+        {
+            MWBase::Environment::get().getInputManager()->setJoystickLastUsed(false);
+            return mSettingsWindow->stepSubTab(delta);
+        }
+        if (mGuiModes.empty())
             return false;
         const std::vector<WindowBase*>& windows = mGuiModeStates[mGuiModes.back()].mWindows;
         MyGUI::Widget* underPointer = MyGUI::InputManager::getInstance().getMouseFocusWidget();
