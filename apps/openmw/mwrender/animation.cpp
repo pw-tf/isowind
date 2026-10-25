@@ -573,8 +573,8 @@ namespace MWRender
 
         mLightListCallback = new SceneUtil::LightListCallback;
 
-        // The top-down cutaway (shaders/lib/util/cutaway.glsl) never fades characters or creatures; indoors they
-        // only go with the storey above the player.
+        // The top-down cutaway (MWRender::Cutaway) never cuts into characters or creatures; indoors they only go
+        // with the storey above the player.
         if (!ptr.isEmpty() && ptr.getClass().isActor() && mInsert)
             mInsert->getOrCreateStateSet()->addUniform(new osg::Uniform("noCutaway", 0.75f));
     }

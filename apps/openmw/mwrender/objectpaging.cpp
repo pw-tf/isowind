@@ -63,7 +63,8 @@ namespace MWRender
                 case ESM::REC_DOOR4:
                 case ESM::REC_TREE4:
                     return true;
-                // Nearby doors keep their own nodes: the top-down cutaway never hides them (see Door).
+                // Nearby doors keep their own nodes: the top-down camera draws them double-sided and never cuts them
+                // (see Door).
                 case ESM::REC_DOOR:
                     return far;
                 case ESM::REC_CONT:

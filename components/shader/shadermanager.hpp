@@ -81,6 +81,7 @@ namespace Shader
             SkyTexture,
             ShadowMaps,
             PlayerMask,
+            CutawayNoise,
             SLOT_COUNT
         };
 

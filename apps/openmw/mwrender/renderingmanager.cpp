@@ -77,7 +77,7 @@
 #include "npcanimation.hpp"
 #include "objectpaging.hpp"
 #include "pathgrid.hpp"
-#include "occlusionfader.hpp"
+#include "cutaway.hpp"
 #include "playermask.hpp"
 #include "postprocessor.hpp"
 #include "recastmesh.hpp"
@@ -90,35 +90,6 @@
 
 namespace MWRender
 {
-    // Binds the player mask (see PlayerMask) for everything drawn below the node, for the top-down cutaway.
-    class BindPlayerMaskCallback
-        : public SceneUtil::NodeCallback<BindPlayerMaskCallback, osg::Node*, osgUtil::CullVisitor*>
-    {
-    public:
-        BindPlayerMaskCallback(PlayerMask* mask, int unit)
-            : mMask(mask)
-            , mUnit(unit)
-        {
-        }
-
-        void operator()(osg::Node* node, osgUtil::CullVisitor* cv)
-        {
-            if (!mStateSet)
-            {
-                mStateSet = new osg::StateSet;
-                mStateSet->setTextureAttribute(mUnit, mMask->getColorTexture(cv), osg::StateAttribute::ON);
-            }
-            cv->pushStateSet(mStateSet);
-            traverse(node, cv);
-            cv->popStateSet();
-        }
-
-    private:
-        osg::ref_ptr<PlayerMask> mMask;
-        int mUnit;
-        osg::ref_ptr<osg::StateSet> mStateSet;
-    };
-
     class PreloadCommonAssetsWorkItem : public SceneUtil::WorkItem
     {
     public:
@@ -337,23 +308,16 @@ namespace MWRender
         sceneRoot->getOrCreateStateSet()->addUniform(new osg::Uniform("emissiveMult", 1.f));
         sceneRoot->getOrCreateStateSet()->addUniform(new osg::Uniform("specStrength", 1.f));
         sceneRoot->getOrCreateStateSet()->addUniform(new osg::Uniform("distortionStrength", 0.f));
-        // Top-down cutaway uniforms (shaders/lib/util/cutaway.glsl). On the root node rather than the scene root so
-        // they also reach paged objects (merged statics), which otherwise would see whatever value was set last.
-        // Actors and doors override noCutaway with 0.75 (see Animation, MWClass::Door): the cutaway never fades them.
-        mRootNode->getOrCreateStateSet()->addUniform(new osg::Uniform("noCutaway", 0.f));
-        mCutawayOverheadUniform = new osg::Uniform("cutawayOverheadRadius", 0.f);
-        mRootNode->getOrCreateStateSet()->addUniform(mCutawayOverheadUniform);
-        // Objects faded by the OcclusionFader override this with their own
-        mRootNode->getOrCreateStateSet()->addUniform(new osg::Uniform("occluderFade", 0.f));
-        mOcclusionFader = std::make_unique<OcclusionFader>(mRootNode);
-        // The player rendered alone into a small texture, so the cutaway can remove exactly what hides them.
+        // Top-down camera: what is cut away so the player can be seen (shaders/lib/util/cutaway.glsl), with the
+        // player rendered alone into a small texture, to outline them where something still covers them.
         {
             osg::ref_ptr<PlayerMask> playerMask = new PlayerMask(sceneRoot);
             mRootNode->addChild(playerMask);
-            const int unit = resourceSystem->getSceneManager()->getShaderManager().reserveGlobalTextureUnits(
-                Shader::ShaderManager::Slot::PlayerMask);
-            mRootNode->getOrCreateStateSet()->addUniform(new osg::Uniform("playerMaskTex", unit));
-            mRootNode->addCullCallback(new BindPlayerMaskCallback(playerMask, unit));
+            Shader::ShaderManager& shaderManager = resourceSystem->getSceneManager()->getShaderManager();
+            const int maskUnit = shaderManager.reserveGlobalTextureUnits(Shader::ShaderManager::Slot::PlayerMask);
+            const int noiseUnit = shaderManager.reserveGlobalTextureUnits(Shader::ShaderManager::Slot::CutawayNoise);
+            mCutaway = std::make_unique<Cutaway>(
+                mRootNode, sceneRoot, mViewer->getCamera(), playerMask, maskUnit, noiseUnit);
         }
 
         resourceSystem->getSceneManager()->setUpNormalsRTForStateSet(sceneRoot->getOrCreateStateSet(), true);
@@ -594,9 +558,6 @@ namespace MWRender
     }
     void RenderingManager::removeCell(const MWWorld::CellStore* store)
     {
-        // The faded objects may be in it
-        mOcclusionFader->clear();
-
         mPathgrid->removeCell(store);
         mActorsPaths->removeCell(store);
         mObjects->removeCell(store);
@@ -723,25 +684,6 @@ namespace MWRender
             float windSpeed = mSky->getBaseWindSpeed();
             mSharedUniformStateUpdater->setWindSpeed(windSpeed);
             mSharedUniformStateUpdater->setPlayerPos(playerPos);
-
-            // Top-down camera (shaders/lib/util/cutaway.glsl): outdoors, whole objects between the camera and the
-            // player fade out (OcclusionFader); indoors the room is cut cleanly instead (walls in front, the roof and
-            // upper floors), with nothing left see-through. Outdoors under a floor, a bridge or a canton's tier the
-            // room-like cut applies as well, close around the player: the fade alone leaves whatever hangs over the
-            // way ahead of them whole.
-            constexpr float indoorCutawayRadius = 4000.f;
-            constexpr float coveredCutawayRadius = 900.f;
-            const bool topDown = mCamera->getMode() == Camera::Mode::Static;
-            const bool indoors = player.isInCell() && !player.getCell()->getCell()->isExterior();
-            mOcclusionFader->update(dt, mCamera->getPosition(), player, topDown && !indoors);
-
-            float overheadTarget = 0.f;
-            if (topDown && indoors)
-                overheadTarget = indoorCutawayRadius;
-            else if (topDown && mOcclusionFader->isPlayerCovered())
-                overheadTarget = coveredCutawayRadius;
-            mCutawayOverheadRadius += (overheadTarget - mCutawayOverheadRadius) * std::min(1.f, dt * 5.f);
-            mCutawayOverheadUniform->set(mCutawayOverheadRadius);
         }
 
         updateNavMesh();
@@ -753,6 +695,18 @@ namespace MWRender
             updateProjectionMatrix();
         }
         mCamera->update(dt, paused);
+
+        // Top-down camera: the cut follows the camera, as it is this frame, and the player (see Cutaway)
+        if (!paused)
+        {
+            const MWWorld::Ptr& player = mPlayerAnimation->getPtr();
+            const bool topDown = mCamera->getMode() == Camera::Mode::Static;
+            // (Mournhold's plazas are interiors that behave like the outdoors, and are cut like them)
+            const bool indoors = player.isInCell() && !player.getCell()->getCell()->isExterior()
+                && !player.getCell()->getCell()->isQuasiExterior();
+            mCutaway->update(dt, mCamera->getPosition(), player, topDown, indoors,
+                indoors ? mObjects->getCellNode(player.getCell()) : nullptr);
+        }
 
         bool isUnderwater = mWater->isUnderwater(mCamera->getPosition());
 
@@ -1042,11 +996,6 @@ namespace MWRender
         return mIntersectionVisitor;
     }
 
-    std::vector<MWWorld::Ptr> RenderingManager::getFadedObjects() const
-    {
-        return mOcclusionFader->getFadedObjects();
-    }
-
     RenderingManager::RayResult RenderingManager::castRay(const osg::Vec3f& origin, const osg::Vec3f& dest,
         bool ignorePlayer, bool ignoreActors, std::span<const MWWorld::Ptr> ignoreList)
     {
@@ -1290,6 +1239,10 @@ namespace MWRender
     void RenderingManager::setScreenRes(int width, int height)
     {
         mSharedUniformStateUpdater->setScreenRes(static_cast<float>(width), static_cast<float>(height));
+        // (The size the scene is drawn at: smaller than the window with the pixel art look. The post-processor sets
+        // it while it is made, before the cut is.)
+        if (mCutaway)
+            mCutaway->setRenderSize(width, height);
     }
 
     void RenderingManager::updateTextureFiltering()

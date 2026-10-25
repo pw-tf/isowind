@@ -124,6 +124,9 @@ namespace
                     partsys->addUpdateCallback(new InitWorldSpaceParticlesCallback);
                 }
                 partsys->setNodeMask(mMask);
+                // Isowind's top-down camera only takes particles away with the storey above the player, as it does
+                // characters: never in its porthole or ghost (they aren't in the ghost's pass, and would vanish)
+                partsys->getOrCreateStateSet()->addUniform(new osg::Uniform("noCutaway", 0.75f));
             }
         }
 
