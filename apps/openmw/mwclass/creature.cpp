@@ -360,6 +360,27 @@ namespace MWClass
     void Creature::onHit(const MWWorld::Ptr& ptr, const std::map<std::string, float>& damages, ESM::RefId object,
         const MWWorld::Ptr& attacker, bool successful, const MWMechanics::DamageSourceType sourceType) const
     {
+        // Isowind multiplayer: as for Npc::onHit (here, someone's follower as this game shows it)
+        if (mwmp::hooks::isPvpBlocked(attacker, ptr))
+        {
+            if (sourceType != MWMechanics::DamageSourceType::Magical)
+                mwmp::hooks::finishLocalHit(attacker, ptr, 0.f, false);
+            return;
+        }
+
+        // Isowind MMO: someone's follower as this game shows it takes no hits here: a local attacker's hit goes to its
+        // owner's game (MechanicsHelper::getTargetPtr), where the follower is
+        if (mwmp::hooks::isFollowerCopy(ptr))
+        {
+            if (sourceType != MWMechanics::DamageSourceType::Magical)
+            {
+                const auto health = damages.find("health");
+                mwmp::hooks::finishLocalHit(attacker, ptr,
+                    successful && health != damages.end() ? health->second : 0.f, successful);
+            }
+            return;
+        }
+
         MWMechanics::CreatureStats& stats = getCreatureStats(ptr);
 
         // Self defense
@@ -475,6 +496,15 @@ namespace MWClass
 
     std::unique_ptr<MWWorld::Action> Creature::activate(const MWWorld::Ptr& ptr, const MWWorld::Ptr& actor) const
     {
+        // Isowind MMO: someone's follower as this game shows it (a pack guar's packs are its owner's; a party member's
+        // comes over to this player's game, the server decides)
+        if (mwmp::hooks::isFollowerCopy(ptr))
+        {
+            if (actor == MWMechanics::getPlayer())
+                mwmp::hooks::requestFollowerCopy(ptr);
+            return std::make_unique<MWWorld::FailedAction>();
+        }
+
         if (actor.getClass().isNpc() && actor.getClass().getNpcStats(actor).isWerewolf())
         {
             const MWWorld::ESMStore& store = *MWBase::Environment::get().getESMStore();

@@ -128,6 +128,9 @@ namespace MWScript
 
                 MWMechanics::AiEscort escortPackage(actorID, {}, static_cast<int>(duration), x, y, z, repeat);
                 ptr.getClass().getCreatureStats(ptr).getAiSequence().stack(escortPackage, ptr);
+                // Isowind multiplayer: wherever the actor's AI runs
+                mwmp::hooks::sendScriptEscort(ptr, MWBase::Environment::get().getWorld()->searchPtr(actorID, true),
+                    static_cast<int>(duration), x, y, z);
 
                 Log(Debug::Info) << "AiEscort: " << x << ", " << y << ", " << z << ", " << duration;
             }
@@ -175,6 +178,9 @@ namespace MWScript
 
                 MWMechanics::AiEscort escortPackage(actorID, cellID, static_cast<int>(duration), x, y, z, repeat);
                 ptr.getClass().getCreatureStats(ptr).getAiSequence().stack(escortPackage, ptr);
+                // Isowind multiplayer: wherever the actor's AI runs
+                mwmp::hooks::sendScriptEscort(ptr, MWBase::Environment::get().getWorld()->searchPtr(actorID, true),
+                    static_cast<int>(duration), x, y, z);
 
                 Log(Debug::Info) << "AiEscort: " << x << ", " << y << ", " << z << ", " << duration;
             }

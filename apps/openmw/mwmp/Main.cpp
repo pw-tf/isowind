@@ -176,6 +176,7 @@ void Main::updateWorld(float dt) const
     {
         mLocalPlayer->update();
         mCellController->updateLocal(false);
+        MechanicsHelper::updatePrivateFollowers(dt);
     }
 }
 

@@ -9,6 +9,12 @@
 
 namespace mwmp
 {
+    // Isowind MMO: a player's own follower as the other players see it (a look-alike their games make,
+    // MechanicsHelper::isFollowerCopy): numbered 0-<mpNum>, the mpNum being this base plus its owner's player id times
+    // FOLLOWER_COPIES_PER_PLAYER plus which of their followers it is. Only the owner's game moves it.
+    const unsigned int FOLLOWER_COPY_BASE = 0x40000000;
+    const unsigned int FOLLOWER_COPIES_PER_PLAYER = 256;
+
     class BaseActor
     {
     public:
@@ -44,14 +50,14 @@ namespace mwmp
 
         Target killer;
 
-        bool isFollowerCellChange;
+        bool isFollowerCellChange = false;
 
-        bool hasAiTarget;
+        bool hasAiTarget = false;
         Target aiTarget;
-        unsigned int aiAction;
-        unsigned int aiDistance;
-        unsigned int aiDuration;
-        bool aiShouldRepeat;
+        unsigned int aiAction = 0;
+        unsigned int aiDistance = 0;
+        unsigned int aiDuration = 0;
+        bool aiShouldRepeat = false;
         ESM::Position aiCoordinates;
 
         bool hasPositionData;

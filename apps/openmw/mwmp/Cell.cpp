@@ -125,7 +125,7 @@ void Cell::updateDedicated(float dt)
     // Are we the authority over this cell? If so, uninitialize DedicatedActors
     // after the above update
     if (hasLocalAuthority())
-        uninitializeDedicatedActors();
+        uninitializeDedicatedActors(true);
 }
 
 void Cell::readPositions(ActorList& actorList)
@@ -480,8 +480,9 @@ void Cell::readCellChange(ActorList& actorList)
 
 void Cell::initializeLocalActor(const MWWorld::Ptr& ptr)
 {
-    // Isowind MMO: one this client runs for itself only (a one-off event's), not for the others
-    if (Main::get().getCellController()->isClientLocalActor(ptr))
+    // Isowind MMO: one this client runs for itself only (a one-off event's), not for the others, nor someone's
+    // follower as this game shows it (moved by its owner's game)
+    if (Main::get().getCellController()->isClientLocalActor(ptr) || MechanicsHelper::isFollowerCopy(ptr))
         return;
 
     std::string mapIndex = Main::get().getCellController()->generateMapIndex(ptr);
@@ -538,6 +539,8 @@ void Cell::initializeDedicatedActor(const MWWorld::Ptr& ptr)
     DedicatedActor *actor = new DedicatedActor();
     actor->cell = store->getCell()->getEsm3();
     actor->setPtr(ptr);
+    // Standing where it is (setPtr) until its movement comes
+    actor->direction = ESM::Position();
 
     dedicatedActors[mapIndex] = actor;
 
@@ -556,7 +559,10 @@ void Cell::initializeDedicatedActors(ActorList& actorList)
         if (dedicatedActors.count(mapIndex) == 0
             && !Main::get().getCellController()->isClientLocalActor(baseActor.refNum, baseActor.mpNum))
         {
-            MWWorld::Ptr ptrFound = store->searchExact(baseActor.refNum, baseActor.mpNum, refId(baseActor.refId), true);
+            // (Isowind MMO: someone's follower as this game shows it, made or brought here as it comes)
+            MWWorld::Ptr ptrFound = baseActor.mpNum >= FOLLOWER_COPY_BASE
+                ? MechanicsHelper::getFollowerCopy(store, baseActor.mpNum)
+                : store->searchExact(baseActor.refNum, baseActor.mpNum, refId(baseActor.refId), true);
 
             if (ptrFound.isEmpty()) continue;
 
@@ -583,7 +589,7 @@ void Cell::uninitializeDedicatedActors(ActorList& actorList)
         std::string mapIndex = Main::get().getCellController()->generateMapIndex(baseActor);
         // (none for the actors this client runs itself)
         auto it = dedicatedActors.find(mapIndex);
-        if (it == dedicatedActors.end())
+        if (it == dedicatedActors.end() || baseActor.mpNum >= FOLLOWER_COPY_BASE)
             continue;
         Main::get().getCellController()->removeDedicatedActorRecord(mapIndex);
         delete it->second;
@@ -591,15 +597,19 @@ void Cell::uninitializeDedicatedActors(ActorList& actorList)
     }
 }
 
-void Cell::uninitializeDedicatedActors()
+void Cell::uninitializeDedicatedActors(bool keepFollowerCopies)
 {
-    for (const auto &actor : dedicatedActors)
+    for (auto it = dedicatedActors.begin(); it != dedicatedActors.end();)
     {
-        Main::get().getCellController()->removeDedicatedActorRecord(actor.first);
-        delete actor.second;
+        if (keepFollowerCopies && it->second->mpNum >= FOLLOWER_COPY_BASE)
+        {
+            ++it;
+            continue;
+        }
+        Main::get().getCellController()->removeDedicatedActorRecord(it->first);
+        delete it->second;
+        it = dedicatedActors.erase(it);
     }
-
-    dedicatedActors.clear();
 }
 
 LocalActor *Cell::getLocalActor(std::string actorIndex)

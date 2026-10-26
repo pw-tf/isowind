@@ -202,6 +202,21 @@ int ActorFunctions::GetActorKillerPid(unsigned int index) noexcept
     return -1;
 }
 
+int ActorFunctions::GetActorAIAction(unsigned int index) noexcept
+{
+    return readActorList->baseActors.at(index).aiAction;
+}
+
+int ActorFunctions::GetActorAITargetPid(unsigned int index) noexcept
+{
+    const BaseActor& actor = readActorList->baseActors.at(index);
+    if (!actor.hasAiTarget || !actor.aiTarget.isPlayer)
+        return -1;
+
+    Player *player = Players::getPlayer(actor.aiTarget.guid);
+    return player != nullptr ? player->getId() : -1;
+}
+
 const char *ActorFunctions::GetActorKillerRefId(unsigned int index) noexcept
 {
     return readActorList->baseActors.at(index).killer.refId.c_str();

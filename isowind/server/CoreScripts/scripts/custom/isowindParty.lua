@@ -9,7 +9,11 @@
 --   /p <message>                 talk to your party
 --
 -- Kept in the world's data (isowindParties): members, and the party's journal, topics and quest variables, so
--- members who were offline catch up when they log in.
+-- members who were offline catch up when they log in. What's shared only ever moves a member forward in a quest: an
+-- earlier stage than the one they're at isn't given to them.
+--
+-- A party has one of each follower (isowindFollowers.lua), held by one member at a time (followers: uniqueIndex ->
+-- that member's name).
 
 if not IsowindHost.IsMmo() then
     return
@@ -72,6 +76,37 @@ function IsowindParty.GetMemberNames(name)
     return { name }
 end
 
+-- The pids of a player's party's other members who are on
+function IsowindParty.GetOnlineMemberPids(name)
+    local pids = {}
+    local _, party = partyOf(name)
+    if party ~= nil then
+        for _, member in ipairs(party.members) do
+            local pid = onlinePid(member)
+            if member ~= name and pid ~= nil then
+                table.insert(pids, pid)
+            end
+        end
+    end
+    return pids
+end
+
+-- Which member of a player's party holds one of its followers (nil: none, or no party)
+function IsowindParty.GetFollowerHolder(name, uniqueIndex)
+    local _, party = partyOf(name)
+    return party ~= nil and party.followers ~= nil and party.followers[uniqueIndex] or nil
+end
+
+function IsowindParty.SetFollowerHolder(name, uniqueIndex, holder)
+    local _, party = partyOf(name)
+    if party == nil then
+        return
+    end
+    party.followers = party.followers or {}
+    party.followers[uniqueIndex] = holder
+    WorldInstance:QuicksaveToDrive()
+end
+
 -- --- Sharing ----------------------------------------------------------------------------------------------------
 
 local function journalKey(item)
@@ -82,17 +117,24 @@ local function isQuestVariable(id)
     return tableHelper.containsCaseInsensitiveString(clientVariableScopes.globals.quest, id)
 end
 
--- Journal entries a member doesn't have yet: saved for them, and sent if they're on
+-- Journal entries a member doesn't have yet: saved for them, and sent if they're on. Only those that move them forward:
+-- an entry or index below the stage they're at in that quest would set them back (the game takes an entry's index as
+-- the quest's).
 local function giveJournal(player, items)
     player.data.journal = player.data.journal or {}
     local have = {}
+    local reached = {}
     for _, item in ipairs(player.data.journal) do
         have[journalKey(item)] = true
+        local quest = lower(item.quest)
+        reached[quest] = math.max(reached[quest] or item.index, item.index)
     end
     local missing = {}
     for _, item in ipairs(items) do
-        if not have[journalKey(item)] then
+        local quest = lower(item.quest)
+        if not have[journalKey(item)] and (reached[quest] == nil or item.index >= reached[quest]) then
             have[journalKey(item)] = true
+            reached[quest] = item.index
             table.insert(missing, item)
         end
     end
@@ -346,6 +388,15 @@ local function leave(pid)
     if party == nil then
         message(pid, "You're not in a party.")
         return
+    end
+    -- The party's followers this member had that follow them go to another member who is on, or else stay theirs
+    if IsowindFollowers ~= nil then
+        IsowindFollowers.OnLeavingParty(pid)
+    end
+    for uniqueIndex, holder in pairs(party.followers or {}) do
+        if holder == name then
+            party.followers[uniqueIndex] = nil
+        end
     end
     tableHelper.removeValue(party.members, name)
     tableHelper.cleanNils(party.members)

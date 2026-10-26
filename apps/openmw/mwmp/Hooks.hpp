@@ -166,9 +166,14 @@ namespace mwmp::hooks
     /// for other settings
     bool applyServerRule(const std::string& name, const std::string& value);
     /// Whether this is a hit or harmful spell from one player on another while the server has PvP off
+    /// (Also true for a player's hits on someone's follower as this game shows it, PvP or not)
     bool isPvpBlocked(const MWWorld::Ptr& attacker, const MWWorld::Ptr& victim);
     /// Whether the server is in MMO mode (everyone loots and quests for themselves)
     bool isMmoMode();
+    /// Isowind MMO: someone's follower as this game shows it (a look-alike, moved by its owner's game)
+    bool isFollowerCopy(const MWWorld::Ptr& ptr);
+    /// The local player used one: the server may hand the follower over (a party member's)
+    void requestFollowerCopy(const MWWorld::Ptr& ptr);
     /// A summoned creature going away: the server removes it for everyone, when this client is the one to say so
     void sendSummonRemoval(const MWWorld::Ptr& creature);
 
@@ -268,6 +273,8 @@ namespace mwmp::hooks
     /// AI given by scripts (combat with the player, following, StartCombat): the client with authority over the actor
     /// is told, through the server. aiAction: mwmp::BaseActorList::COMBAT or FOLLOW
     void sendScriptAi(const MWWorld::Ptr& actor, const MWWorld::Ptr& target, int aiAction);
+    /// AiEscort / AiEscortCell: the actor leads the target to a place, as for sendScriptAi
+    void sendScriptEscort(const MWWorld::Ptr& actor, const MWWorld::Ptr& target, int duration, float x, float y, float z);
     /// PlayGroup on an object, by a script the server hears from: other clients play it too
     void sendScriptAnimation(const Interpreter::Context& context, const MWWorld::Ptr& ptr, const std::string& group,
         int mode);

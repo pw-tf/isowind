@@ -29,6 +29,32 @@ namespace MechanicsHelper
     /// with where the body lies, as that player's (a ClientScriptLocal packet as gameplay, floats 0 to 2 the place)
     void sendClientLocalDeath(const MWWorld::Ptr& actor);
 
+    /// Isowind MMO: someone from the world told to follow this player, who has their own of it (the others keep the
+    /// world's at its post): the server's commands "isowind own <n>" (just told to follow here: this client's from now
+    /// on, as it is), "isowind follow <n>" (at the player's side, following, after logging in) and "isowind stay <x> <y> <z>
+    /// <cell>" / "isowind stay dead <x> <y> <z> <cell>" (where it stopped following, or its body), the objects' cell
+    /// being where the game's files have it. Returns false for other commands.
+    bool runPrivateFollowerCommand(const std::string& command, MWWorld::CellStore* cellStore, unsigned int refNum,
+        unsigned int mpNum, const std::string& refId);
+    bool isPrivateFollower(const MWWorld::Ptr& ptr);
+    /// One of them went to another cell (mwmp::hooks::updatePtr)
+    void onPrivateFollowerMoved(const MWWorld::Ptr& ptr);
+    /// Someone else's follower as this game shows it: a look-alike (a record like the actor's, with no script) that
+    /// can't be talked to or hurt here, moved by what its owner's game sends about it (as about a copy numbered 0-<n>,
+    /// n from mwmp::FOLLOWER_COPY_BASE); the server's commands "isowind copy <x> <y> <z>" (it's there; the objects'
+    /// refId the actor it looks like) and "isowind uncopy" (it no longer follows them)
+    bool isFollowerCopy(const MWWorld::Ptr& ptr);
+    /// The player used someone's follower as this game shows it: the server hands it over if they're in the player's
+    /// party ("isowind take <n> <flags> <x> <y> <z> <cell>", and "isowind release" to the game that had it)
+    void requestFollowerCopy(const MWWorld::Ptr& copy);
+    /// This player's own follower whose copy the others' games know by that number (what they send about hitting it)
+    MWWorld::Ptr getPrivateFollowerByCopy(unsigned int mpNum);
+    /// The look-alike in a cell this game has in use, made or brought there, for what's sent about it there
+    MWWorld::Ptr getFollowerCopy(MWWorld::CellStore* store, unsigned int mpNum);
+    /// Tells the server, every few seconds, of the private followers that changed: following, staying (and where) or
+    /// dead (and where the body lies), as for sendClientLocalDeath with short 0 the state
+    void updatePrivateFollowers(float dt);
+
     bool isUsingRangedWeapon(const MWWorld::Ptr& ptr);
 
     mwmp::Attack *getLocalAttack(const MWWorld::Ptr& ptr);

@@ -58,8 +58,11 @@ LocalActor::~LocalActor()
 
 void LocalActor::update(bool forceUpdate)
 {
-    updateStatsDynamic(forceUpdate);
-    updateEquipment(forceUpdate, false);
+    if (!isFollowerCopy)
+    {
+        updateStatsDynamic(forceUpdate);
+        updateEquipment(forceUpdate, false);
+    }
 
     if (forceUpdate || !creatureStats.mDeathAnimationFinished)
     {

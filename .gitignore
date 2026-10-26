@@ -39,6 +39,8 @@ resources
 /*.cfg
 /*.desktop
 /*.install
+/mods
+/mod
 
 ## binaries
 /esmtool

@@ -38,8 +38,10 @@ namespace mwmp
         void initializeDedicatedActors(ActorList& actorList);
 
         void uninitializeLocalActors();
+        /// (Under this client's authority: they're LocalActors here. Not someone's follower as this game shows it,
+        /// which only its owner's game moves, whoever has authority)
         void uninitializeDedicatedActors(ActorList& actorList);
-        void uninitializeDedicatedActors();
+        void uninitializeDedicatedActors(bool keepFollowerCopies = false);
 
         virtual LocalActor *getLocalActor(std::string actorIndex);
         virtual DedicatedActor *getDedicatedActor(std::string actorIndex);

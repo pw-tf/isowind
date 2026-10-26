@@ -58,6 +58,11 @@ Hosting a server
      disarmed or set off is still there for them.
      Quests that count kills (like the Fighters Guild's rats) count the kills you made yourself,
      or your party made; someone else killing them first doesn't take them from you, they come back.
+     Someone who follows you (an escort, a companion, a pack guar) is your own: they stay at their
+     post for everyone else, who can each take them along too. Others see yours walking and
+     fighting with you, but can't talk to it or hurt it. Log out while they follow and they're at
+     your side when you're back; once they stop following they stay where they stopped, for you.
+     If they die, they're dead for you only.
    - PvP (whether players can hurt each other), difficulty and how fast the time of day goes.
    Then the server's window opens; it runs the server, and closing it stops the server (saved). It shows:
    - The players in the world, their staff rank, ping, level and cell. Pick one to change their staff rank
@@ -90,7 +95,10 @@ When you die you wake up at the nearest temple.
 
 Parties (MMO servers): players in a party share their quests as on a co-op server - journal,
 topics, quest progress, kill credit and what quests change in the world - and the locks and traps
-they open, from when they joined, while each keeps their own loot. Type in the chat:
+they open, from when they joined, while each keeps their own loot. Sharing never sets anyone back
+in a quest they're further along in. A party has one of each companion: use a member's companion
+(talk to it) and it comes over to you; if the member it follows logs out or leaves the party, it
+follows another member. Type in the chat:
    /party invite NAME     invite a player (their name, or the number before it in the player list)
    /party accept          join the party you were invited to (or /party decline)
    /party                 who is in your party

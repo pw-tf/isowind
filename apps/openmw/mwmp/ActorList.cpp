@@ -98,6 +98,7 @@ void ActorList::addAiActor(const MWWorld::Ptr& actorPtr, const MWWorld::Ptr& tar
     baseActor.refNum = actorPtr.getCellRef().getMpRefNum();
     baseActor.mpNum = actorPtr.getCellRef().getMpNum();
     baseActor.aiAction = aiAction;
+    baseActor.hasAiTarget = true;
     baseActor.aiTarget = MechanicsHelper::getTarget(targetPtr);
 
     LOG_MESSAGE_SIMPLE(TimedLog::LOG_INFO, "Preparing to send ID_ACTOR_AI about %s %i-%i\n- action: %i",
@@ -265,8 +266,9 @@ void ActorList::sendActorsInCell(MWWorld::CellStore* cellStore)
         if (ptr.getCellRef().getMpRefNum() == 0 && ptr.getCellRef().getMpNum() == 0)
             return true;
 
-        // Isowind MMO: nor one this client runs for itself only (a one-off event's)
-        if (Main::get().getCellController()->isClientLocalActor(ptr))
+        // Isowind MMO: nor one this client runs for itself only (a one-off event's), nor someone's follower as
+        // this game shows it
+        if (Main::get().getCellController()->isClientLocalActor(ptr) || MechanicsHelper::isFollowerCopy(ptr))
             return true;
 
         BaseActor actor;

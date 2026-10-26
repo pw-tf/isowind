@@ -42,6 +42,8 @@
     \
     {"DoesActorHavePlayerKiller",              ActorFunctions::DoesActorHavePlayerKiller},\
     {"GetActorKillerPid",                      ActorFunctions::GetActorKillerPid},\
+    {"GetActorAIAction",                       ActorFunctions::GetActorAIAction},\
+    {"GetActorAITargetPid",                    ActorFunctions::GetActorAITargetPid},\
     {"GetActorKillerRefId",                    ActorFunctions::GetActorKillerRefId},\
     {"GetActorKillerRefNum",                   ActorFunctions::GetActorKillerRefNum},\
     {"GetActorKillerMpNum",                    ActorFunctions::GetActorKillerMpNum},\
@@ -396,6 +398,24 @@ public:
     * \return The player ID of the killer.
     */
     static int GetActorKillerPid(unsigned int index) noexcept;
+
+    /**
+    * rief Isowind: get the AI action of the actor at a certain index in the read actor list (an ID_ACTOR_AI
+    * packet's), as in enumerations.ai (CANCEL 0, ACTIVATE 1, COMBAT 2, ESCORT 3, FOLLOW 4, TRAVEL 5, WANDER 6).
+    *
+    * \param index The index of the actor.
+    * eturn The AI action.
+    */
+    static int GetActorAIAction(unsigned int index) noexcept;
+
+    /**
+    * rief Isowind: get the player ID of the target of the AI of the actor at a certain index in the read actor
+    * list (who it follows, escorts, fights or activates), if that is a player.
+    *
+    * \param index The index of the actor.
+    * eturn The player ID of the target, or -1 if the target isn't a player (or there is none).
+    */
+    static int GetActorAITargetPid(unsigned int index) noexcept;
 
     /**
     * \brief Get the refId of the actor killer of the actor at a certain index in the read actor list.

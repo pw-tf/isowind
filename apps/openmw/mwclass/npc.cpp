@@ -727,6 +727,19 @@ namespace MWClass
             return;
         }
 
+        // Isowind MMO: someone's follower as this game shows it takes no hits here: a local attacker's hit goes to its
+        // owner's game (MechanicsHelper::getTargetPtr), where the follower is
+        if (mwmp::hooks::isFollowerCopy(ptr))
+        {
+            if (sourceType != MWMechanics::DamageSourceType::Magical)
+            {
+                const auto health = damages.find("health");
+                mwmp::hooks::finishLocalHit(attacker, ptr,
+                    successful && health != damages.end() ? health->second : 0.f, successful);
+            }
+            return;
+        }
+
         MWMechanics::CreatureStats& stats = getCreatureStats(ptr);
         bool wasDead = stats.isDead();
 
@@ -870,9 +883,16 @@ namespace MWClass
     {
         if (mwmp::hooks::isMultiplayer())
         {
-            // Isowind multiplayer: no dialogue between two players
+            // Isowind multiplayer: no dialogue between two players, nor with someone's follower as this game shows it
             if (actor == MWMechanics::getPlayer() && mwmp::hooks::isDedicatedPlayer(ptr))
                 return std::make_unique<MWWorld::FailedAction>();
+            if (mwmp::hooks::isFollowerCopy(ptr))
+            {
+                // (a party member's comes over to this player's game, where it's talked to: the server decides)
+                if (actor == MWMechanics::getPlayer())
+                    mwmp::hooks::requestFollowerCopy(ptr);
+                return std::make_unique<MWWorld::FailedAction>();
+            }
             // nor for NPCs activating each other (the dialogue would open for the local player)
             if (ptr != MWMechanics::getPlayer() && actor != MWMechanics::getPlayer())
                 return std::make_unique<MWWorld::FailedAction>();

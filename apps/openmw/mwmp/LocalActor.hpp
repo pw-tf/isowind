@@ -36,6 +36,9 @@ namespace mwmp
         void setPtr(const MWWorld::Ptr& newPtr);
 
         bool hasSentData;
+        // Isowind MMO: the copy of this player's own follower that the others see (MechanicsHelper's): only how it
+        // moves, attacks and casts
+        bool isFollowerCopy = false;
 
     private:
         MWWorld::Ptr ptr;

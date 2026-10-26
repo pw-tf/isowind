@@ -1,4 +1,7 @@
+#include <cstdio>
 #include <locale>
+#include <map>
+#include <memory>
 #include <sstream>
 
 #include <components/openmw-mp/TimedLog.hpp>
@@ -24,6 +27,8 @@
 
 #include "../mwmechanics/activespells.hpp"
 #include "../mwmechanics/actorutil.hpp"
+#include "../mwmechanics/aifollow.hpp"
+#include "../mwmechanics/aisequence.hpp"
 #include "../mwmechanics/combat.hpp"
 #include "../mwmechanics/creaturestats.hpp"
 #include "../mwmechanics/damagesourcetype.hpp"
@@ -37,6 +42,7 @@
 #include "../mwworld/esmstore.hpp"
 #include "../mwworld/inventorystore.hpp"
 #include "../mwworld/manualref.hpp"
+#include "../mwworld/worldmodel.hpp"
 
 #include "MechanicsHelper.hpp"
 #include "Main.hpp"
@@ -47,6 +53,7 @@
 #include "ObjectList.hpp"
 #include "CellController.hpp"
 #include "Ids.hpp"
+#include "LocalActor.hpp"
 
 using namespace mwmp;
 
@@ -158,6 +165,9 @@ bool MechanicsHelper::respawnActor(const MWWorld::Ptr& ptr)
 bool MechanicsHelper::runClientLocalCommand(const std::string& command, MWWorld::CellStore* cellStore,
     unsigned int refNum, unsigned int mpNum, const std::string& refIdString)
 {
+    if (runPrivateFollowerCommand(command, cellStore, refNum, mpNum, refIdString))
+        return true;
+
     static const std::string deadPrefix = "isowind local dead ";
     const bool dead = command.rfind(deadPrefix, 0) == 0;
     if (command != "isowind local" && !dead)
@@ -228,6 +238,9 @@ void MechanicsHelper::sendClientLocalDeath(const MWWorld::Ptr& actor)
 {
     if (!mwmp::hooks::isLoggedIn() || actor.isEmpty() || !actor.isInCell() || actor.getCell()->getCell()->isEsm4())
         return;
+    // (A private follower's death is told with the rest about it: updatePrivateFollowers)
+    if (isPrivateFollower(actor))
+        return;
 
     LOG_MESSAGE_SIMPLE(TimedLog::LOG_INFO, "Sending the death of %s %i-%i, which this client runs itself",
         idString(actor.getCellRef().getRefId()).c_str(), actor.getCellRef().getMpRefNum(),
@@ -250,6 +263,577 @@ void MechanicsHelper::sendClientLocalDeath(const MWWorld::Ptr& actor)
     }
     objectList->addBaseObject(baseObject);
     objectList->sendClientScriptLocal();
+}
+
+namespace
+{
+    enum PrivateFollowerState
+    {
+        FOLLOWING = 1,
+        STAYING = 2,
+        DEAD = 3,
+        // (asked of the server about someone's follower as this game shows it: requestFollowerCopy)
+        WANTED = 4
+    };
+
+    // Where each private follower was last found, what the server was last told of it, and what's sent about it as
+    // the others' copy of it while it follows
+    struct PrivateFollower
+    {
+        unsigned int refNum = 0;
+        unsigned int mpNum = 0;
+        ESM::RefId refId;
+        MWWorld::CellStore* cell = nullptr;
+        int reportedState = 0;
+        MWWorld::CellStore* reportedCell = nullptr;
+        osg::Vec3f reportedPosition;
+        unsigned int copyMpNum = 0;
+        std::unique_ptr<LocalActor> mirror;
+        // Gone to another member of the player's party ("isowind release"): out of this game, kept for if it comes
+        // back
+        bool released = false;
+    };
+
+    std::map<std::string, PrivateFollower> privateFollowers;
+    float privateFollowerTimer = 0.f;
+    float mirrorTimer = 0.f;
+
+    // The others' followers as this game shows them, by their mpNum: who they look like, and where the server last
+    // said they were (cell: where the look-alike is, once made)
+    struct FollowerCopy
+    {
+        ESM::RefId originalId;
+        ESM::Position position;
+        MWWorld::CellStore* cell = nullptr;
+    };
+
+    std::map<unsigned int, FollowerCopy> followerCopies;
+    // The look-alikes' records, one for each actor they look like: the same but with no script (so nothing a quest
+    // does by the actor's id happens to them)
+    std::map<ESM::RefId, ESM::RefId> copyRecords;
+
+    std::string followerIndex(unsigned int refNum, unsigned int mpNum)
+    {
+        return Main::get().getCellController()->generateMapIndex(refNum, mpNum);
+    }
+
+    // Where it was last found, else in the cells around the player (it walked or went through a door with them)
+    MWWorld::Ptr findPrivateFollower(PrivateFollower& follower)
+    {
+        MWWorld::Ptr ptr = follower.cell->searchExact(follower.refNum, follower.mpNum, follower.refId, true);
+        if (ptr.isEmpty())
+        {
+            for (MWWorld::CellStore* cell : MWBase::Environment::get().getWorldScene()->getActiveCells())
+            {
+                ptr = cell->searchExact(follower.refNum, follower.mpNum, follower.refId, true);
+                if (!ptr.isEmpty())
+                    break;
+            }
+        }
+        if (!ptr.isEmpty())
+            follower.cell = ptr.getCell();
+        return ptr;
+    }
+
+    // As the game counts a follower (MWMechanics::Actors::getActorsFollowing): following the player, with only
+    // fighting or wandering before that
+    bool isFollowingPlayer(const MWWorld::Ptr& ptr)
+    {
+        const MWWorld::Ptr player = MWMechanics::getPlayer();
+        for (const auto& package : ptr.getClass().getCreatureStats(ptr).getAiSequence())
+        {
+            if (package->followTargetThroughDoors() && package->targetIs(player))
+                return true;
+            if (package->getTypeId() != MWMechanics::AiPackageTypeId::Combat
+                && package->getTypeId() != MWMechanics::AiPackageTypeId::Wander)
+                return false;
+        }
+        return false;
+    }
+
+    // What's sent about a private follower as its copy, while it follows (its attacks and casts go with it)
+    LocalActor* getMirror(const MWWorld::Ptr& ptr)
+    {
+        if (privateFollowers.empty() || ptr.isEmpty() || ptr.mRef == nullptr)
+            return nullptr;
+        auto found
+            = privateFollowers.find(followerIndex(ptr.getCellRef().getMpRefNum(), ptr.getCellRef().getMpNum()));
+        return found != privateFollowers.end() ? found->second.mirror.get() : nullptr;
+    }
+
+    void followPlayer(const MWWorld::Ptr& ptr)
+    {
+        MWMechanics::AiFollow package(MWMechanics::getPlayer());
+        package.allowAnyDistance(true);
+        ptr.getClass().getCreatureStats(ptr).getAiSequence().stack(package, ptr);
+    }
+
+    // What's sent about the follower goes as about its copy
+    void setMirrorPtr(PrivateFollower& follower, const MWWorld::Ptr& ptr)
+    {
+        follower.mirror->setPtr(ptr);
+        follower.mirror->refNum = 0;
+        follower.mirror->mpNum = follower.copyMpNum;
+        follower.mirror->cell = ptr.getCell()->getCell()->getEsm3();
+    }
+
+    // A cell as the server describes it: "<x>, <y>" outdoors, its name indoors
+    MWWorld::CellStore* getCellStoreFromDescription(const std::string& description)
+    {
+        MWWorld::WorldModel* worldModel = MWBase::Environment::get().getWorldModel();
+        int x = 0;
+        int y = 0;
+        int length = 0;
+        if (std::sscanf(description.c_str(), "%d, %d%n", &x, &y, &length) == 2
+            && length == static_cast<int>(description.size()))
+            return &worldModel->getExterior(ESM::ExteriorCellLocation(x, y, ESM::Cell::sDefaultWorldspaceId));
+        try
+        {
+            return worldModel->findInterior(description);
+        }
+        catch (std::exception&)
+        {
+            return nullptr;
+        }
+    }
+
+    // A command's words after its name, or false if it isn't that command
+    bool takeCommand(const std::string& command, const std::string& name, std::string& rest)
+    {
+        if (command == name)
+        {
+            rest.clear();
+            return true;
+        }
+        if (command.rfind(name + " ", 0) != 0)
+            return false;
+        rest = command.substr(name.size() + 1);
+        return true;
+    }
+
+    void sendPrivateFollower(const MWWorld::Ptr& ptr, int state)
+    {
+        const osg::Vec3f position = ptr.getRefData().getPosition().asVec3();
+        ObjectList* objectList = Main::get().getNetworking()->getObjectList();
+        objectList->reset();
+        objectList->packetOrigin = CLIENT_GAMEPLAY;
+        objectList->cell = ptr.getCell()->getCell()->getEsm3();
+        BaseObject baseObject = objectList->getBaseObjectFromPtr(ptr);
+        for (int i = 0; i < 3; ++i)
+        {
+            ClientVariable place;
+            place.internalIndex = i;
+            place.variableType = VARIABLE_TYPE::FLOAT;
+            place.intValue = 0;
+            place.floatValue = position[i];
+            baseObject.clientLocals.push_back(place);
+        }
+        ClientVariable stateVariable;
+        stateVariable.internalIndex = 0;
+        stateVariable.variableType = VARIABLE_TYPE::SHORT;
+        stateVariable.intValue = state;
+        stateVariable.floatValue = 0.f;
+        baseObject.clientLocals.push_back(stateVariable);
+        objectList->addBaseObject(baseObject);
+        objectList->sendClientScriptLocal();
+    }
+
+    ESM::RefId getCopyRecord(const ESM::RefId& originalId)
+    {
+        auto found = copyRecords.find(originalId);
+        if (found != copyRecords.end())
+            return found->second;
+        MWWorld::ESMStore& store = MWBase::Environment::get().getWorld()->getStore();
+        ESM::RefId recordId;
+        if (const ESM::NPC* npc = store.get<ESM::NPC>().search(originalId))
+        {
+            ESM::NPC record = *npc;
+            record.mScript = ESM::RefId();
+            recordId = store.insert(record)->mId;
+        }
+        else if (const ESM::Creature* creature = store.get<ESM::Creature>().search(originalId))
+        {
+            ESM::Creature record = *creature;
+            record.mScript = ESM::RefId();
+            recordId = store.insert(record)->mId;
+        }
+        copyRecords[originalId] = recordId;
+        return recordId;
+    }
+
+    MWWorld::Ptr findFollowerCopy(unsigned int mpNum, FollowerCopy& copy)
+    {
+        if (copy.cell == nullptr)
+            return {};
+        MWWorld::Ptr ptr = copy.cell->searchExact(0, mpNum, {}, true);
+        if (ptr.isEmpty())
+            copy.cell = nullptr;
+        return ptr;
+    }
+
+    void removeFollowerCopy(unsigned int mpNum, FollowerCopy& copy)
+    {
+        MWWorld::Ptr ptr = findFollowerCopy(mpNum, copy);
+        Main::get().getCellController()->forgetActor(0, mpNum);
+        if (!ptr.isEmpty())
+            MWBase::Environment::get().getWorld()->deleteObject(ptr);
+        copy.cell = nullptr;
+    }
+
+    // The look-alike in a cell in use here: made, or brought over from the cell it was in
+    MWWorld::Ptr placeFollowerCopy(
+        unsigned int mpNum, FollowerCopy& copy, MWWorld::CellStore* store, const ESM::Position& position)
+    {
+        MWBase::World* world = MWBase::Environment::get().getWorld();
+        MWWorld::Ptr ptr = findFollowerCopy(mpNum, copy);
+        if (!ptr.isEmpty())
+        {
+            if (ptr.getCell() == store)
+                return ptr;
+            Main::get().getCellController()->forgetActor(0, mpNum);
+            ptr = world->moveObject(ptr, store, position.asVec3());
+            copy.cell = ptr.getCell();
+            return ptr;
+        }
+
+        const ESM::RefId recordId = getCopyRecord(copy.originalId);
+        if (recordId.empty())
+            return {};
+        MWWorld::ManualRef manualRef(world->getStore(), recordId);
+        manualRef.getPtr().getCellRef().setMpNum(mpNum);
+        ptr = world->placeObject(manualRef.getPtr(), store, position);
+        // Moved only by what its owner's game sends, not by AI of its own here
+        MWMechanics::CreatureStats& stats = ptr.getClass().getCreatureStats(ptr);
+        stats.getAiSequence().clear();
+        stats.setAiSetting(MWMechanics::AiSetting::Fight, 0);
+        stats.setAiSetting(MWMechanics::AiSetting::Hello, 0);
+        copy.cell = ptr.getCell();
+        LOG_MESSAGE_SIMPLE(TimedLog::LOG_INFO, "Showing someone's %s as 0-%u in %s", idString(copy.originalId).c_str(),
+            mpNum, std::string(store->getCell()->getDescription()).c_str());
+        return ptr;
+    }
+
+    // "isowind copy <x> <y> <z>" (someone's follower is there: the look-alike, if this game has the cell in use, else
+    // later when what its owner's game sends about it comes) and "isowind uncopy" (it no longer follows them)
+    bool runFollowerCopyCommand(const std::string& command, MWWorld::CellStore* cellStore, unsigned int mpNum,
+        const std::string& refIdString)
+    {
+        std::string rest;
+        if (takeCommand(command, "isowind uncopy", rest))
+        {
+            auto found = followerCopies.find(mpNum);
+            if (found != followerCopies.end())
+            {
+                removeFollowerCopy(mpNum, found->second);
+                followerCopies.erase(found);
+            }
+            return true;
+        }
+        if (!takeCommand(command, "isowind copy", rest))
+            return false;
+        if (mpNum < FOLLOWER_COPY_BASE)
+            return true;
+
+        FollowerCopy& copy = followerCopies[mpNum];
+        copy.originalId = refId(refIdString);
+        std::istringstream stream(rest);
+        stream.imbue(std::locale::classic());
+        copy.position = ESM::Position();
+        stream >> copy.position.pos[0] >> copy.position.pos[1] >> copy.position.pos[2];
+
+        if (cellStore != nullptr && cellStore->getState() == MWWorld::CellStore::State_Loaded
+            && MWBase::Environment::get().getWorldScene()->isCellActive(*cellStore))
+            placeFollowerCopy(mpNum, copy, cellStore, copy.position);
+        else
+        {
+            // Gone where this game doesn't show
+            MWWorld::Ptr ptr = findFollowerCopy(mpNum, copy);
+            if (!ptr.isEmpty())
+                removeFollowerCopy(mpNum, copy);
+        }
+        return true;
+    }
+}
+
+bool MechanicsHelper::runPrivateFollowerCommand(const std::string& command, MWWorld::CellStore* cellStore,
+    unsigned int refNum, unsigned int mpNum, const std::string& refIdString)
+{
+    if (runFollowerCopyCommand(command, cellStore, mpNum, refIdString))
+        return true;
+
+    std::string rest;
+    const bool own = takeCommand(command, "isowind own", rest);
+    const bool follow = !own && takeCommand(command, "isowind follow", rest);
+    const bool stay = !own && !follow && takeCommand(command, "isowind stay", rest);
+    const bool take = !own && !follow && !stay && takeCommand(command, "isowind take", rest);
+    const bool release = !own && !follow && !stay && !take && takeCommand(command, "isowind release", rest);
+    if (!own && !follow && !stay && !take && !release)
+        return false;
+
+    const std::string index = followerIndex(refNum, mpNum);
+    auto known = privateFollowers.find(index);
+    const bool wasPrivate = known != privateFollowers.end();
+
+    // It went to another member of the player's party: out of this game (they have it; this player sees its copy)
+    if (release)
+    {
+        if (!wasPrivate)
+            return true;
+        PrivateFollower& follower = known->second;
+        MWWorld::Ptr ptr = findPrivateFollower(follower);
+        follower.mirror.reset();
+        follower.released = true;
+        follower.reportedState = 0;
+        if (!ptr.isEmpty() && ptr.getRefData().isEnabled())
+            MWBase::Environment::get().getWorld()->disable(ptr);
+        LOG_MESSAGE_SIMPLE(TimedLog::LOG_INFO, "%s %s went to another member of the party", refIdString.c_str(),
+            index.c_str());
+        return true;
+    }
+    MWWorld::Ptr ptr;
+    if (wasPrivate)
+        ptr = findPrivateFollower(known->second);
+    else if (cellStore != nullptr)
+    {
+        // Where the game's files have it, which the player's game may not have loaded (they logged in elsewhere)
+        if (cellStore->getState() != MWWorld::CellStore::State_Loaded)
+            cellStore->load();
+        ptr = cellStore->searchExact(refNum, mpNum, refId(refIdString), true);
+    }
+    if (ptr.isEmpty())
+    {
+        LOG_MESSAGE_SIMPLE(TimedLog::LOG_WARN, "No actor %s %s for \"%s\"", refIdString.c_str(), index.c_str(),
+            command.c_str());
+        return true;
+    }
+
+    Main::get().getCellController()->setClientLocalActor(refNum, mpNum);
+    PrivateFollower& follower = privateFollowers[index];
+    follower.refNum = refNum;
+    follower.mpNum = mpNum;
+    follower.refId = ptr.getCellRef().getRefId();
+    follower.cell = ptr.getCell();
+    LOG_MESSAGE_SIMPLE(TimedLog::LOG_INFO, "%s %s is this player's own follower (\"%s\")", refIdString.c_str(),
+        index.c_str(), command.c_str());
+
+    // "own", "follow" and "take" come with the number of its copy for the others; "take" then with what to do with it
+    // (1: follow the player, 2: talk to it, as the player did to its copy) and where it is
+    int takeFlags = 0;
+    if (own || follow || take)
+    {
+        std::istringstream stream(rest);
+        unsigned int copyMpNum = 0;
+        if (stream >> copyMpNum && copyMpNum >= FOLLOWER_COPY_BASE)
+            follower.copyMpNum = copyMpNum;
+        if (take)
+        {
+            stream >> takeFlags;
+            std::getline(stream >> std::ws, rest);
+        }
+    }
+
+    // Back from another member of the party
+    if (follower.released)
+    {
+        follower.released = false;
+        MWBase::Environment::get().getWorld()->enable(ptr);
+    }
+
+    // Just told to follow here, as it is (the follow order normally already stacked: stacked again in case what the
+    // game running its cell sent undid it)
+    if (own)
+    {
+        if (!isFollowingPlayer(ptr))
+            followPlayer(ptr);
+        return true;
+    }
+
+    // At login: as the game's files have it, undoing what the world's (others') sent about it
+    if (!wasPrivate && respawnActor(ptr))
+    {
+        ptr = cellStore->searchExact(refNum, mpNum, refId(refIdString), true);
+        if (ptr.isEmpty())
+            return true;
+    }
+
+    MWBase::World* world = MWBase::Environment::get().getWorld();
+    if (follow)
+    {
+        // Where the player is, as followers come through a door with them (MWWorld::ActionTeleport)
+        const MWWorld::Ptr player = world->getPlayerPtr();
+        ptr = world->moveObject(ptr, player.getCell(), player.getRefData().getPosition().asVec3());
+        follower.cell = ptr.getCell();
+        if (!isFollowingPlayer(ptr))
+            followPlayer(ptr);
+        return true;
+    }
+
+    static const std::string deadPrefix = "dead ";
+    std::string place = rest;
+    const bool dead = place.rfind(deadPrefix, 0) == 0;
+    if (dead)
+        place = place.substr(deadPrefix.size());
+    osg::Vec3f position;
+    std::istringstream stream(place);
+    stream.imbue(std::locale::classic());
+    if (!(stream >> position.x() >> position.y() >> position.z()))
+        return true;
+    std::string cellDescription;
+    std::getline(stream >> std::ws, cellDescription);
+    MWWorld::CellStore* destination = getCellStoreFromDescription(cellDescription);
+    if (destination == nullptr)
+    {
+        LOG_MESSAGE_SIMPLE(TimedLog::LOG_WARN, "No cell %s for \"%s\"", cellDescription.c_str(), command.c_str());
+        return true;
+    }
+    if (destination->getState() != MWWorld::CellStore::State_Loaded)
+        destination->load();
+    ptr = world->moveObject(ptr, destination, position);
+    follower.cell = ptr.getCell();
+
+    if (dead)
+    {
+        // Dead already, its death not played again (as for an event's person: runClientLocalCommand)
+        MWMechanics::CreatureStats& stats = ptr.getClass().getCreatureStats(ptr);
+        if (!stats.isDead())
+        {
+            MWMechanics::DynamicStat<float> health = stats.getHealth();
+            health.setCurrent(0.f);
+            stats.setHealth(health);
+            stats.setDeathAnimationFinished(true);
+        }
+        world->enableActorCollision(ptr, false);
+    }
+    if (takeFlags & 1)
+        followPlayer(ptr);
+    if (takeFlags & 2)
+        MWBase::Environment::get().getLuaManager()->objectActivated(ptr, world->getPlayerPtr());
+    return true;
+}
+
+void MechanicsHelper::requestFollowerCopy(const MWWorld::Ptr& copy)
+{
+    if (!mwmp::hooks::isLoggedIn() || !isFollowerCopy(copy) || !copy.isInCell() || copy.getCell()->getCell()->isEsm4())
+        return;
+    sendPrivateFollower(copy, WANTED);
+}
+
+bool MechanicsHelper::isPrivateFollower(const MWWorld::Ptr& ptr)
+{
+    if (privateFollowers.empty() || ptr.isEmpty() || ptr.mRef == nullptr)
+        return false;
+    return privateFollowers.count(followerIndex(ptr.getCellRef().getMpRefNum(), ptr.getCellRef().getMpNum())) > 0;
+}
+
+void MechanicsHelper::onPrivateFollowerMoved(const MWWorld::Ptr& ptr)
+{
+    auto found
+        = privateFollowers.find(followerIndex(ptr.getCellRef().getMpRefNum(), ptr.getCellRef().getMpNum()));
+    if (found == privateFollowers.end() || !ptr.isInCell() || ptr.getCell()->getCell()->isEsm4())
+        return;
+    found->second.cell = ptr.getCell();
+    if (found->second.mirror != nullptr)
+        setMirrorPtr(found->second, ptr);
+}
+
+bool MechanicsHelper::isFollowerCopy(const MWWorld::Ptr& ptr)
+{
+    return !ptr.isEmpty() && ptr.mRef != nullptr && ptr.getCellRef().getMpNum() >= FOLLOWER_COPY_BASE;
+}
+
+MWWorld::Ptr MechanicsHelper::getPrivateFollowerByCopy(unsigned int mpNum)
+{
+    for (auto& [index, follower] : privateFollowers)
+        if (follower.copyMpNum == mpNum)
+            return findPrivateFollower(follower);
+    return {};
+}
+
+MWWorld::Ptr MechanicsHelper::getFollowerCopy(MWWorld::CellStore* store, unsigned int mpNum)
+{
+    auto found = followerCopies.find(mpNum);
+    if (found == followerCopies.end() || store == nullptr || store->getState() != MWWorld::CellStore::State_Loaded
+        || !MWBase::Environment::get().getWorldScene()->isCellActive(*store))
+        return {};
+    MWWorld::Ptr ptr = findFollowerCopy(mpNum, found->second);
+    return placeFollowerCopy(
+        mpNum, found->second, store, ptr.isEmpty() ? found->second.position : ptr.getRefData().getPosition());
+}
+
+void MechanicsHelper::updatePrivateFollowers(float dt)
+{
+    if (privateFollowers.empty() || !mwmp::hooks::isLoggedIn())
+        return;
+
+    // What the others' copies do, as often as what's sent about the actors this game runs (Cell::updateLocal)
+    mirrorTimer += dt;
+    if (mirrorTimer >= 0.025f)
+    {
+        mirrorTimer = 0.f;
+        ActorList* actorList = Main::get().getNetworking()->getActorList();
+        for (auto& [index, follower] : privateFollowers)
+        {
+            if (follower.mirror == nullptr)
+                continue;
+            actorList->reset();
+            actorList->cell = follower.mirror->cell;
+            follower.mirror->update(!follower.mirror->hasSentData);
+            actorList->sendPositionActors();
+            actorList->sendAnimFlagsActors();
+            actorList->sendAnimPlayActors();
+            actorList->sendSpeechActors();
+            actorList->sendAttackActors();
+            actorList->sendCastActors();
+        }
+    }
+
+    privateFollowerTimer += dt;
+    if (privateFollowerTimer < 1.f)
+        return;
+    privateFollowerTimer = 0.f;
+
+    for (auto& [index, follower] : privateFollowers)
+    {
+        if (follower.released)
+            continue;
+        MWWorld::Ptr ptr = findPrivateFollower(follower);
+        if (ptr.isEmpty() || !ptr.isInCell() || ptr.getCell()->getCell()->isEsm4())
+            continue;
+        int state = STAYING;
+        if (ptr.getClass().getCreatureStats(ptr).isDead())
+            state = DEAD;
+        else if (isFollowingPlayer(ptr))
+            state = FOLLOWING;
+
+        // The others see it only while it follows
+        if (state == FOLLOWING && follower.copyMpNum != 0)
+        {
+            if (follower.mirror == nullptr)
+            {
+                follower.mirror = std::make_unique<LocalActor>();
+                follower.mirror->isFollowerCopy = true;
+                setMirrorPtr(follower, ptr);
+            }
+            else if (follower.mirror->getPtr().getCell() != ptr.getCell())
+                setMirrorPtr(follower, ptr);
+        }
+        else
+            follower.mirror.reset();
+
+        const osg::Vec3f position = ptr.getRefData().getPosition().asVec3();
+        // Where it stays or lies matters to the server; where it follows, roughly (where the others' games first
+        // show it: their copy then goes by what's sent about it as it moves)
+        const float far = state == FOLLOWING ? 1024.f : 128.f;
+        const bool moved = ptr.getCell() != follower.reportedCell
+            || (position - follower.reportedPosition).length2() > far * far;
+        if (state == follower.reportedState && !moved)
+            continue;
+
+        sendPrivateFollower(ptr, state);
+        follower.reportedState = state;
+        follower.reportedCell = ptr.getCell();
+        follower.reportedPosition = position;
+    }
 }
 
 bool MechanicsHelper::isUsingRangedWeapon(const MWWorld::Ptr& ptr)
@@ -278,6 +862,8 @@ Attack *MechanicsHelper::getLocalAttack(const MWWorld::Ptr& ptr)
         return &mwmp::Main::get().getLocalPlayer()->attack;
     else if (mwmp::Main::get().getCellController()->isLocalActor(ptr))
         return &mwmp::Main::get().getCellController()->getLocalActor(ptr)->attack;
+    else if (LocalActor* mirror = getMirror(ptr))
+        return &mirror->attack;
 
     return nullptr;
 }
@@ -298,6 +884,8 @@ Cast *MechanicsHelper::getLocalCast(const MWWorld::Ptr& ptr)
         return &mwmp::Main::get().getLocalPlayer()->cast;
     else if (mwmp::Main::get().getCellController()->isLocalActor(ptr))
         return &mwmp::Main::get().getCellController()->getLocalActor(ptr)->cast;
+    else if (LocalActor* mirror = getMirror(ptr))
+        return &mirror->cast;
 
     return nullptr;
 }
@@ -335,6 +923,10 @@ MWWorld::Ptr MechanicsHelper::getTargetPtr(const mwmp::Target& target)
 {
     if (target.isPlayer)
         return getPlayerPtr(target);
+
+    // Isowind MMO: this player's own follower, as the others' games know it (its copy)
+    if (target.refNum == 0 && target.mpNum >= FOLLOWER_COPY_BASE)
+        return getPrivateFollowerByCopy(target.mpNum);
 
     auto controller = mwmp::Main::get().getCellController();
     if (controller->isLocalActor(target.refNum, target.mpNum))

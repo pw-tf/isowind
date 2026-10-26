@@ -1,5 +1,7 @@
 #include "Hooks.hpp"
 
+#include <algorithm>
+
 #include <components/esm/util.hpp>
 
 #include "../mwbase/environment.hpp"
@@ -299,6 +301,9 @@ namespace mwmp::hooks
             cellController->getDedicatedActor(oldPtr)->setPtr(newPtr);
         else if (DedicatedPlayer* player = PlayerList::getPlayer(oldPtr))
             player->setPtr(newPtr);
+        // Isowind MMO: this player's own followers (what the others see of them goes with them)
+        else if (MechanicsHelper::isPrivateFollower(newPtr))
+            MechanicsHelper::onPrivateFollowerMoved(newPtr);
     }
 
     ServerChange::ServerChange()
@@ -587,13 +592,29 @@ namespace mwmp::hooks
 
     bool isPvpBlocked(const MWWorld::Ptr& attacker, const MWWorld::Ptr& victim)
     {
-        return isMultiplayer() && !sPvp && !attacker.isEmpty() && !victim.isEmpty() && attacker != victim
-            && isPlayer(attacker) && isPlayer(victim);
+        if (!isMultiplayer() || attacker.isEmpty() || victim.isEmpty() || attacker == victim || !isPlayer(attacker))
+            return false;
+        // Isowind MMO: someone's follower as this game shows it can't be hurt by a player (the real one is in its
+        // owner's game)
+        if (MechanicsHelper::isFollowerCopy(victim))
+            return true;
+        return !sPvp && isPlayer(victim);
     }
 
     bool isMmoMode()
     {
         return isMultiplayer() && sMmo;
+    }
+
+    bool isFollowerCopy(const MWWorld::Ptr& ptr)
+    {
+        return isMultiplayer() && MechanicsHelper::isFollowerCopy(ptr);
+    }
+
+    void requestFollowerCopy(const MWWorld::Ptr& ptr)
+    {
+        if (isMultiplayer())
+            MechanicsHelper::requestFollowerCopy(ptr);
     }
 
     void sendSummonRemoval(const MWWorld::Ptr& creature)
@@ -1191,6 +1212,31 @@ namespace mwmp::hooks
         actorList->reset();
         actorList->cell = actor.getCell()->getCell()->getEsm3();
         actorList->addAiActor(actor, target, static_cast<unsigned int>(aiAction));
+        actorList->sendAiActors();
+    }
+
+    void sendScriptEscort(const MWWorld::Ptr& actor, const MWWorld::Ptr& target, int duration, float x, float y, float z)
+    {
+        if (!isLoggedIn() || actor.isEmpty() || target.isEmpty() || !actor.isInCell()
+            || actor.getCell()->getCell()->isEsm4())
+            return;
+        // Isowind MMO: as for sendScriptAi
+        if (Main::get().getCellController()->isClientLocalActor(actor))
+            return;
+        ActorList* actorList = Main::get().getNetworking()->getActorList();
+        actorList->reset();
+        actorList->cell = actor.getCell()->getCell()->getEsm3();
+        BaseActor escort;
+        escort.refNum = actor.getCellRef().getMpRefNum();
+        escort.mpNum = actor.getCellRef().getMpNum();
+        escort.aiAction = BaseActorList::ESCORT;
+        escort.hasAiTarget = true;
+        escort.aiTarget = MechanicsHelper::getTarget(target);
+        escort.aiDuration = static_cast<unsigned int>(std::max(duration, 0));
+        escort.aiCoordinates.pos[0] = x;
+        escort.aiCoordinates.pos[1] = y;
+        escort.aiCoordinates.pos[2] = z;
+        actorList->addAiActor(escort);
         actorList->sendAiActors();
     }
 

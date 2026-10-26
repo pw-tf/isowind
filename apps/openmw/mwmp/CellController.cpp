@@ -392,6 +392,13 @@ void CellController::setClientLocalActor(int refNum, int mpNum)
         TimedLog::LOG_INFO, "Running actor %s here, whoever has authority over its cell", actorIndex.c_str());
 
     // No longer sent about as a LocalActor, or moved by what another client sends as a DedicatedActor
+    forgetActor(refNum, mpNum);
+}
+
+void CellController::forgetActor(int refNum, int mpNum)
+{
+    std::string actorIndex = generateMapIndex(refNum, mpNum);
+
     auto localIt = localActorsToCells.find(actorIndex);
     if (localIt != localActorsToCells.end())
     {

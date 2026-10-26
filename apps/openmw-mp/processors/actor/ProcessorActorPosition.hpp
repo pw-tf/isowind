@@ -18,7 +18,8 @@ namespace mwmp
             // Send only to players who have the cell loaded
             Cell *serverCell = CellController::get()->getCell(&actorList.cell);
 
-            if (serverCell != nullptr && *serverCell->getAuthority() == actorList.guid)
+            if (serverCell != nullptr
+                && (*serverCell->getAuthority() == actorList.guid || isOwnFollowerCopies(player, actorList)))
             {
                 serverCell->readActorList(packetID, &actorList);
                 serverCell->sendToLoaded(&packet, &actorList);
