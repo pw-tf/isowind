@@ -20,12 +20,9 @@ namespace MWGui
         mCancelButton->eventMouseButtonClick += MyGUI::newDelegate(this, &ConfirmationDialog::onCancelButtonClicked);
         mOkButton->eventMouseButtonClick += MyGUI::newDelegate(this, &ConfirmationDialog::onOkButtonClicked);
 
-        if (Settings::gui().mControllerMenus)
-        {
-            mDisableGamepadCursor = true;
-            mControllerButtons.mA = "#{Interface:OK}";
-            mControllerButtons.mB = "#{Interface:Cancel}";
-        }
+        mDisableGamepadCursor = true;
+        mControllerButtons.mA = "#{Interface:OK}";
+        mControllerButtons.mB = "#{Interface:Cancel}";
     }
 
     void ConfirmationDialog::askForConfirmation(const std::string& message)

@@ -175,28 +175,31 @@ namespace MWGui
 
         setCoord(400, 0, 400, 300);
 
-        if (Settings::gui().mControllerMenus)
+        mControllerButtons.mA = "#{Interface:Buy}";
+        mControllerButtons.mB = "#{Interface:Cancel}";
+        mControllerButtons.mX = "#{Interface:Offer}";
+        mControllerButtons.mR3 = "#{Interface:Info}";
+        mControllerButtons.mL2 = "#{Interface:Inventory}";
+        onControllerMenusChanged();
+    }
+
+    void TradeWindow::onControllerMenusChanged()
+    {
+        // With a controller, L1 and R1 next to the tabs
+        const bool controller = Settings::gui().mControllerMenus;
+        const std::pair<const char*, SDL_GameControllerButton> images[]
+            = { { "BtnL1Image", SDL_CONTROLLER_BUTTON_LEFTSHOULDER },
+                  { "BtnR1Image", SDL_CONTROLLER_BUTTON_RIGHTSHOULDER } };
+        for (const auto& [name, button] : images)
         {
-            // Show L1 and R1 buttons next to tabs
             MyGUI::ImageBox* image;
-            getWidget(image, "BtnL1Image");
-            image->setVisible(true);
-            image->setUserString("Hidden", "false");
-            image->setImageTexture(MWBase::Environment::get().getInputManager()->getControllerButtonIcon(
-                SDL_CONTROLLER_BUTTON_LEFTSHOULDER));
-
-            getWidget(image, "BtnR1Image");
-            image->setVisible(true);
-            image->setUserString("Hidden", "false");
-            image->setImageTexture(MWBase::Environment::get().getInputManager()->getControllerButtonIcon(
-                SDL_CONTROLLER_BUTTON_RIGHTSHOULDER));
-
-            mControllerButtons.mA = "#{Interface:Buy}";
-            mControllerButtons.mB = "#{Interface:Cancel}";
-            mControllerButtons.mX = "#{Interface:Offer}";
-            mControllerButtons.mR3 = "#{Interface:Info}";
-            mControllerButtons.mL2 = "#{Interface:Inventory}";
+            getWidget(image, name);
+            image->setVisible(controller);
+            image->setUserString("Hidden", controller ? "false" : "true");
+            if (controller)
+                image->setImageTexture(MWBase::Environment::get().getInputManager()->getControllerButtonIcon(button));
         }
+        WindowBase::onControllerMenusChanged();
     }
 
     void TradeWindow::setPtr(const MWWorld::Ptr& actor)

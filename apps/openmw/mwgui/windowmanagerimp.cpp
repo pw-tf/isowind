@@ -23,6 +23,7 @@
 #include <LinearMath/btQuickprof.h>
 
 #include <SDL_clipboard.h>
+#include <SDL_gamecontroller.h>
 #include <SDL_keyboard.h>
 
 #include <components/debug/debuglog.hpp>
@@ -194,6 +195,14 @@ namespace MWGui
         , mWindowVisible(true)
         , mCfgMgr(cfgMgr)
     {
+        // Isowind: the menus made for a controller or the mouse's, as what is used picks (onInputDeviceUsed). To begin
+        // with, those of the last time, if a controller is connected; before any window is made, as they make
+        // themselves for one or the other.
+        bool controllerConnected = false;
+        for (int i = 0; i < SDL_NumJoysticks(); ++i)
+            controllerConnected = controllerConnected || SDL_IsGameController(i);
+        Settings::gui().mControllerMenus.set(Settings::gui().mControllerMenus.get() && controllerConnected);
+
         int w, h;
         SDL_GetWindowSize(window, &w, &h);
         int dw, dh;
@@ -1493,6 +1502,10 @@ namespace MWGui
         if (mode == GM_Inventory && mAllowed == GW_None)
             return;
 
+        // The first menu to open opens as made for what was used last
+        if (mGuiModes.empty())
+            applyWantedControllerMenus();
+
         if (mGuiModes.empty() || mGuiModes.back() != mode)
         {
             // If this mode already exists somewhere in the stack, just bring it to the front.
@@ -1611,6 +1624,50 @@ namespace MWGui
         }
         else
             reapplyActiveControllerWindow();
+
+        // The last menu closed: what was used meanwhile picks the menus now
+        if (mGuiModes.empty())
+            applyWantedControllerMenus();
+    }
+
+    void WindowManager::onInputDeviceUsed(bool controller)
+    {
+        mWantedControllerMenus = controller;
+        // Never in the middle of a menu (it was laid out for the other), but for the main menu: a column of buttons,
+        // fine either way
+        if (mGuiModes.empty() || (mGuiModes.size() == 1 && mGuiModes.back() == GM_MainMenu))
+            applyWantedControllerMenus();
+    }
+
+    void WindowManager::applyWantedControllerMenus()
+    {
+        if (!mWantedControllerMenus.has_value() || *mWantedControllerMenus == Settings::gui().mControllerMenus.get())
+            return;
+        const bool controller = *mWantedControllerMenus;
+        Settings::gui().mControllerMenus.set(controller);
+        Log(Debug::Info) << "Menus made for " << (controller ? "a controller" : "the mouse and keyboard");
+
+        for (const auto& window : mWindows)
+            window->onControllerMenusChanged();
+
+        mControllerTooltipEnabled = Settings::gui().mControllerTooltips;
+        mControllerTooltipVisible = false;
+        if (controller)
+        {
+            // The main menu, if it is open, is worked with the D-pad: no pointer
+            if (isGuiMode())
+                setCursorVisible(false);
+            reapplyActiveControllerWindow();
+            updateControllerButtonsOverlay();
+        }
+        else
+        {
+            if (mControllerButtonsOverlay)
+                mControllerButtonsOverlay->setVisible(false);
+            updateInventoryTabs();
+            if (isGuiMode())
+                setCursorVisible(true);
+        }
     }
 
     void WindowManager::removeGuiMode(GuiMode mode)

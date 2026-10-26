@@ -94,14 +94,11 @@ namespace MWGui
         mFilterValue->eventEditTextChange += MyGUI::newDelegate(this, &AlchemyWindow::onFilterEdited);
         mFilterType->eventMouseButtonClick += MyGUI::newDelegate(this, &AlchemyWindow::switchFilterType);
 
-        if (Settings::gui().mControllerMenus)
-        {
-            mControllerButtons.mA = "#{Interface:Select}";
-            mControllerButtons.mB = "#{Interface:Cancel}";
-            mControllerButtons.mX = "#{Interface:Create}";
-            mControllerButtons.mY = "#{Interface:MagicEffects}";
-            mControllerButtons.mR3 = "#{Interface:Info}";
-        }
+        mControllerButtons.mA = "#{Interface:Select}";
+        mControllerButtons.mB = "#{Interface:Cancel}";
+        mControllerButtons.mX = "#{Interface:Create}";
+        mControllerButtons.mY = "#{Interface:MagicEffects}";
+        mControllerButtons.mR3 = "#{Interface:Info}";
 
         center();
     }

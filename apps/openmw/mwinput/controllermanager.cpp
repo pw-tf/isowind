@@ -151,6 +151,10 @@ namespace MWInput
         // Isowind: another button pressed stops a D-pad direction repeating
         mGuiRepeatButton = SDL_CONTROLLER_BUTTON_INVALID;
         useController(arg.which);
+        // Isowind: the menus become the ones made for a controller (when they can: see WindowManager)
+        if (!Settings::gui().mControllerMenus)
+            Log(Debug::Verbose) << "Controller used: button " << static_cast<int>(arg.button);
+        MWBase::Environment::get().getWindowManager()->onInputDeviceUsed(true);
 
         if (!Settings::input().mEnableController || mBindingsManager->isDetectingBindingState())
             return;
@@ -249,7 +253,12 @@ namespace MWInput
     void ControllerManager::axisMoved(int deviceID, const SDL_ControllerAxisEvent& arg)
     {
         if (std::abs(arg.value) > sControllerUsedAxisValue)
+        {
             useController(arg.which);
+            if (!Settings::gui().mControllerMenus)
+                Log(Debug::Verbose) << "Controller used: axis " << static_cast<int>(arg.axis) << " at " << arg.value;
+            MWBase::Environment::get().getWindowManager()->onInputDeviceUsed(true);
+        }
 
         if (mBindingsManager->isDetectingBindingState())
         {

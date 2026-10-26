@@ -6,11 +6,10 @@
 #   ./isowind.sh join ADDRESS     play on a server, e.g. ./isowind.sh join 203.0.113.7:25565 (look optional after it)
 #   ./isowind.sh host             run a server here, in this terminal, after asking its settings (others join
 #                                 with this computer's address)
-#   ./isowind.sh gui              the launcher window (look, controller, join, host), like Isowind.exe; also what
+#   ./isowind.sh gui              the launcher window (look, join, host), like Isowind.exe; also what
 #                                 isowind.sh opens when started from a file manager
-#   --controller, --no-controller menus made for a controller, or Morrowind's own, with any of the above; otherwise
-#                                 whichever fits what is plugged in (a controller that comes with a stream, as
-#                                 Moonlight's does, wants --controller)
+#
+# The menus are made for a controller while one is used, and Morrowind's own while the mouse is: the game picks.
 #
 # The first time, it finds Morrowind (Steam's usual places; otherwise run it as MORROWIND=/path/to/Morrowind
 # ./isowind.sh, the folder with "Data Files" and Morrowind.ini) and sets up OpenMW for it, like OpenMW's wizard.
@@ -152,12 +151,6 @@ play() {
     echo "$LOOK" > "$LOOK_FILE"
     setup_morrowind
     [ "$LOOK" = pixelart ] && build_textures
-    # Menus made for a controller when one is plugged in (or asked for with --controller), Morrowind's own (drag and
-    # drop) otherwise
-    if [ -z "$MENUS" ]; then
-        if ls /dev/input/js* >/dev/null 2>&1; then MENUS=true; else MENUS=false; fi
-    fi
-    set_setting "$ROOT/profiles/$LOOK/settings.cfg" GUI "controller menus" "$MENUS"
     # Xbox controllers through the kernel's driver, not SDL's own: SDL's skips one it can't open (a Bluetooth one,
     # whose hidraw only root reads) when it has another with the same ids (Sunshine's virtual one, left after a stream)
     export SDL_JOYSTICK_HIDAPI_XBOX=${SDL_JOYSTICK_HIDAPI_XBOX:-0}
@@ -171,13 +164,12 @@ launcher() {
     exec python3 "$ROOT/isowind-launcher.py"
 }
 
-# --controller / --no-controller, anywhere among the arguments (none of the others has spaces in it)
-MENUS=""
+# --controller / --no-controller, from before the game picked the menus by itself: taken and ignored (none of the
+# other arguments has spaces in it)
 ARGS=""
 for arg in "$@"; do
     case $arg in
-        --controller) MENUS=true ;;
-        --no-controller) MENUS=false ;;
+        --controller | --no-controller) ;;
         *) ARGS="$ARGS $arg" ;;
     esac
 done

@@ -93,7 +93,12 @@ namespace MWGui
 
         virtual ControllerButtons* getControllerButtons() { return &mControllerButtons; }
         MyGUI::Widget* getControllerScrollWidget() { return mControllerScrollWidget; }
-        bool isGamepadCursorAllowed() { return !mDisableGamepadCursor; }
+        /// mDisableGamepadCursor holds only in the menus made for a controller
+        bool isGamepadCursorAllowed() const;
+        /// Isowind: the menus have switched between those made for a controller and the mouse's (the game picks by
+        /// what is used; never while this window is open, but for the main menu). What a window sets up differently
+        /// for each when it is made, it sets up again here.
+        virtual void onControllerMenusChanged();
         /// Isowind: whether A goes to onControllerButtonEvent even while the pointer is shown (otherwise it is a click)
         virtual bool handlesPointerSelect() const { return false; }
         virtual bool onControllerButtonEvent(const SDL_ControllerButtonEvent& arg) { return true; }
@@ -118,6 +123,7 @@ namespace MWGui
 
         ControllerButtons mControllerButtons;
         bool mActiveControllerWindow = false;
+        /// No pointer for the left stick in this window, in the menus made for a controller (it is worked with the D-pad)
         bool mDisableGamepadCursor = false;
         MyGUI::Widget* mControllerScrollWidget = nullptr;
 

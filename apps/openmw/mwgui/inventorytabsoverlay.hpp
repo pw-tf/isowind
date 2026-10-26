@@ -24,6 +24,7 @@ namespace MWGui
         void setTab(size_t index);
         /// Isowind: a tab only for a page open (character creation opens them one by one)
         void setTabAvailable(size_t index, bool available);
+        void onControllerMenusChanged() override;
 
     private:
         std::vector<MyGUI::Button*> mTabs;

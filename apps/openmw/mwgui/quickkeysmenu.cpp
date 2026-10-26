@@ -64,11 +64,8 @@ namespace MWGui
             unassign(&mKey[i]);
         }
 
-        if (Settings::gui().mControllerMenus)
-        {
-            mControllerButtons.mA = "#{Interface:Select}";
-            mControllerButtons.mB = "#{Interface:OK}";
-        }
+        mControllerButtons.mA = "#{Interface:Select}";
+        mControllerButtons.mB = "#{Interface:OK}";
     }
 
     void QuickKeysMenu::clear()
@@ -146,6 +143,14 @@ namespace MWGui
             for (size_t i = 0; i < mKey.size(); i++)
                 mKey[i].button->setControllerFocus(i == mControllerFocus);
         }
+    }
+
+    void QuickKeysMenu::onControllerMenusChanged()
+    {
+        // Its dialogs set themselves up for one menus or the other when they are made: they are made again
+        mAssignDialog.reset();
+        mMagicSelectionDialog.reset();
+        WindowBase::onControllerMenusChanged();
     }
 
     void QuickKeysMenu::onClose()
@@ -919,11 +924,8 @@ namespace MWGui
         mMagicList->setHighlightSelected(false);
         mMagicList->eventSpellClicked += MyGUI::newDelegate(this, &MagicSelectionDialog::onModelIndexSelected);
 
-        if (Settings::gui().mControllerMenus)
-        {
-            mControllerButtons.mA = "#{Interface:Select}";
-            mControllerButtons.mB = "#{Interface:Cancel}";
-        }
+        mControllerButtons.mA = "#{Interface:Select}";
+        mControllerButtons.mB = "#{Interface:Cancel}";
 
         center();
     }

@@ -4,6 +4,7 @@
 #include <MyGUI_InputManager.h>
 #include <MyGUI_RenderManager.h>
 
+#include <components/debug/debuglog.hpp>
 #include <components/sdlutil/sdlinputwrapper.hpp>
 #include <components/sdlutil/sdlmappings.hpp>
 #include <components/settings/values.hpp>
@@ -81,6 +82,14 @@ namespace MWInput
 
         input->setJoystickLastUsed(false);
         input->resetIdleTime();
+        // Isowind: the menus become the mouse's (when they can: see WindowManager); not for a stray pixel of motion
+        // the window system sends by itself
+        if (std::abs(arg.xrel) > 1 || std::abs(arg.yrel) > 1)
+        {
+            if (Settings::gui().mControllerMenus)
+                Log(Debug::Verbose) << "Mouse used: moved " << arg.xrel << ", " << arg.yrel;
+            winMgr->onInputDeviceUsed(false);
+        }
 
         if (mGuiCursorEnabled)
         {
@@ -176,6 +185,7 @@ namespace MWInput
         }
 
         input->setJoystickLastUsed(false);
+        MWBase::Environment::get().getWindowManager()->onInputDeviceUsed(false);
         MWBase::Environment::get().getLuaManager()->inputEvent({ MWBase::LuaManager::InputEvent::MouseWheel,
             MWBase::LuaManager::InputEvent::WheelChange{ arg.x, arg.y } });
     }
@@ -184,6 +194,7 @@ namespace MWInput
     {
         MWBase::InputManager* input = MWBase::Environment::get().getInputManager();
         input->setJoystickLastUsed(false);
+        MWBase::Environment::get().getWindowManager()->onInputDeviceUsed(false);
         bool guiMode = false;
 
         if (id == SDL_BUTTON_LEFT || id == SDL_BUTTON_RIGHT) // MyGUI only uses these mouse events

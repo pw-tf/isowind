@@ -177,21 +177,7 @@ namespace MWGui
         };
         mPrevTabButton = makeArrow("<", &ContainerWindow::onPrevTabClicked);
         mNextTabButton = makeArrow(">", &ContainerWindow::onNextTabClicked);
-        if (Settings::gui().mControllerMenus)
-        {
-            // The triggers, as for the inventory's tabs (Isowind: the bumpers switch windows)
-            auto makeImage = [&](SDL_GameControllerAxis axis) {
-                MyGUI::ImageBox* image = mTabBar->createWidget<MyGUI::ImageBox>(
-                    "ImageBox", MyGUI::IntCoord(0, 0, sTabHeight, sTabHeight), MyGUI::Align::Left | MyGUI::Align::Top);
-                image->setImageTexture(MWBase::Environment::get().getInputManager()->getControllerAxisIcon(axis));
-                image->setColour(MyGUI::Colour::parse("#ccb589"));
-                image->setAlpha(0.7f);
-                image->setNeedMouseFocus(false);
-                return image;
-            };
-            mPrevTabImage = makeImage(SDL_CONTROLLER_AXIS_TRIGGERLEFT);
-            mNextTabImage = makeImage(SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
-        }
+        onControllerMenusChanged();
         mMainWidget->castType<MyGUI::Window>()->eventWindowChangeCoord
             += MyGUI::newDelegate(this, &ContainerWindow::onWindowResize);
 
@@ -207,6 +193,35 @@ namespace MWGui
         mControllerButtons.mX = "#{Interface:TakeAll}";
         mControllerButtons.mR3 = "#{Interface:Info}";
         mControllerButtons.mL2 = "#{Interface:Inventory}";
+    }
+
+    void ContainerWindow::onControllerMenusChanged()
+    {
+        // With a controller, the triggers at either end of the tabs, as for the inventory's (Isowind: the bumpers switch
+        // windows); the tabs' layout takes them as there or not
+        const bool controller = Settings::gui().mControllerMenus;
+        if (controller && mPrevTabImage == nullptr)
+        {
+            auto makeImage = [&](SDL_GameControllerAxis axis) {
+                MyGUI::ImageBox* image = mTabBar->createWidget<MyGUI::ImageBox>(
+                    "ImageBox", MyGUI::IntCoord(0, 0, sTabHeight, sTabHeight), MyGUI::Align::Left | MyGUI::Align::Top);
+                image->setImageTexture(MWBase::Environment::get().getInputManager()->getControllerAxisIcon(axis));
+                image->setColour(MyGUI::Colour::parse("#ccb589"));
+                image->setAlpha(0.7f);
+                image->setNeedMouseFocus(false);
+                return image;
+            };
+            mPrevTabImage = makeImage(SDL_CONTROLLER_AXIS_TRIGGERLEFT);
+            mNextTabImage = makeImage(SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
+        }
+        else if (!controller && mPrevTabImage != nullptr)
+        {
+            MyGUI::Gui::getInstance().destroyWidget(mPrevTabImage);
+            MyGUI::Gui::getInstance().destroyWidget(mNextTabImage);
+            mPrevTabImage = nullptr;
+            mNextTabImage = nullptr;
+        }
+        WindowBase::onControllerMenusChanged();
     }
 
     void ContainerWindow::onItemSelected(int index)

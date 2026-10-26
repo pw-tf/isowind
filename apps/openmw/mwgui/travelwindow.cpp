@@ -41,12 +41,9 @@ namespace MWGui
 
         mCancelButton->eventMouseButtonClick += MyGUI::newDelegate(this, &TravelWindow::onCancelButtonClicked);
 
-        if (Settings::gui().mControllerMenus)
-        {
-            mDisableGamepadCursor = true;
-            mControllerButtons.mA = "#{Interface:Travel}";
-            mControllerButtons.mB = "#{Interface:Cancel}";
-        }
+        mDisableGamepadCursor = true;
+        mControllerButtons.mA = "#{Interface:Travel}";
+        mControllerButtons.mB = "#{Interface:Cancel}";
     }
 
     void TravelWindow::addDestination(const ESM::RefId& name, const ESM::Position& pos, bool interior)

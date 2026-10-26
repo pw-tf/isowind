@@ -66,13 +66,10 @@ namespace MWGui
         // Isowind: the inventory screen's windows are pages, and only the map can be pinned
         setPinButtonVisible(false);
 
-        if (Settings::gui().mControllerMenus)
-        {
-            mControllerButtons.mA = "#{Interface:Select}";
-            mControllerButtons.mB = "#{Interface:Back}";
-            mControllerButtons.mY = "#{sQuickMenuTitle}";
-            mControllerButtons.mR3 = "#{Interface:Info}";
-        }
+        mControllerButtons.mA = "#{Interface:Select}";
+        mControllerButtons.mB = "#{Interface:Back}";
+        mControllerButtons.mY = "#{sQuickMenuTitle}";
+        mControllerButtons.mR3 = "#{Interface:Info}";
     }
 
     void SpellWindow::onPinToggled()

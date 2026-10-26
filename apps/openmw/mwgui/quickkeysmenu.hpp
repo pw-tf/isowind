@@ -40,6 +40,7 @@ namespace MWGui
         void onAssignMagicCancel();
         void onOpen() override;
         void onClose() override;
+        void onControllerMenusChanged() override;
 
         void activateQuickKey(int index);
         /// Isowind: uses the next (1) or previous (-1) key that holds something, counting from the current one

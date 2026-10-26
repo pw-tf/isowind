@@ -14,6 +14,7 @@ namespace MWGui
         LevelupDialog();
 
         void onOpen() override;
+        void onControllerMenusChanged() override;
 
         std::string_view getWindowIdForLua() const override { return "LevelUpDialog"; }
 

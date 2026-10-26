@@ -40,12 +40,9 @@ namespace MWGui
         mTimeAdvancer.eventProgressChanged += MyGUI::newDelegate(this, &TrainingWindow::onTrainingProgressChanged);
         mTimeAdvancer.eventFinished += MyGUI::newDelegate(this, &TrainingWindow::onTrainingFinished);
 
-        if (Settings::gui().mControllerMenus)
-        {
-            mDisableGamepadCursor = true;
-            mControllerButtons.mA = "#{Interface:Buy}";
-            mControllerButtons.mB = "#{Interface:Cancel}";
-        }
+        mDisableGamepadCursor = true;
+        mControllerButtons.mA = "#{Interface:Buy}";
+        mControllerButtons.mB = "#{Interface:Cancel}";
     }
 
     void TrainingWindow::onOpen()

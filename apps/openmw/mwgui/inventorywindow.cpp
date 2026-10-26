@@ -140,26 +140,28 @@ namespace MWGui
         // Isowind: the inventory screen's windows are pages, and only the map can be pinned
         setPinButtonVisible(false);
 
-        if (Settings::gui().mControllerMenus)
-        {
-            // Show the buttons for the tabs next to them: the triggers (Isowind: the bumpers switch windows)
-            MyGUI::ImageBox* image;
-            getWidget(image, "BtnL1Image");
-            image->setVisible(true);
-            image->setUserString("Hidden", "false");
-            image->setImageTexture(MWBase::Environment::get().getInputManager()->getControllerAxisIcon(
-                SDL_CONTROLLER_AXIS_TRIGGERLEFT));
-
-            getWidget(image, "BtnR1Image");
-            image->setVisible(true);
-            image->setUserString("Hidden", "false");
-            image->setImageTexture(MWBase::Environment::get().getInputManager()->getControllerAxisIcon(
-                SDL_CONTROLLER_AXIS_TRIGGERRIGHT));
-
-            mControllerButtons.mR3 = "#{Interface:Info}";
-        }
+        mControllerButtons.mR3 = "#{Interface:Info}";
+        onControllerMenusChanged();
 
         adjustPanes();
+    }
+
+    void InventoryWindow::onControllerMenusChanged()
+    {
+        // With a controller, the buttons for the tabs next to them: the triggers (Isowind: the bumpers switch windows)
+        const bool controller = Settings::gui().mControllerMenus;
+        const std::pair<const char*, SDL_GameControllerAxis> images[]
+            = { { "BtnL1Image", SDL_CONTROLLER_AXIS_TRIGGERLEFT }, { "BtnR1Image", SDL_CONTROLLER_AXIS_TRIGGERRIGHT } };
+        for (const auto& [name, axis] : images)
+        {
+            MyGUI::ImageBox* image;
+            getWidget(image, name);
+            image->setVisible(controller);
+            image->setUserString("Hidden", controller ? "false" : "true");
+            if (controller)
+                image->setImageTexture(MWBase::Environment::get().getInputManager()->getControllerAxisIcon(axis));
+        }
+        WindowPinnableBase::onControllerMenusChanged();
     }
 
     void InventoryWindow::adjustPanes()

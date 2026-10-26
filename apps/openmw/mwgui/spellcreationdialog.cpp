@@ -99,12 +99,9 @@ namespace MWGui
         mDurationSlider->eventScrollChangePosition += MyGUI::newDelegate(this, &EditEffectDialog::onDurationChanged);
         mAreaSlider->eventScrollChangePosition += MyGUI::newDelegate(this, &EditEffectDialog::onAreaChanged);
 
-        if (Settings::gui().mControllerMenus)
-        {
-            mControllerButtons.mA = "#{Interface:Select}";
-            mControllerButtons.mB = "#{Interface:Cancel}";
-            mControllerButtons.mX = "#{Interface:OK}";
-        }
+        mControllerButtons.mA = "#{Interface:Select}";
+        mControllerButtons.mB = "#{Interface:Cancel}";
+        mControllerButtons.mX = "#{Interface:OK}";
     }
 
     void EditEffectDialog::setConstantEffect(bool constant)

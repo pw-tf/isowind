@@ -63,11 +63,8 @@ namespace MWGui
         mSaveList->eventKeyButtonPressed += MyGUI::newDelegate(this, &SaveGameDialog::onKeyButtonPressed);
         mSaveNameEdit->eventEditSelectAccept += MyGUI::newDelegate(this, &SaveGameDialog::onEditSelectAccept);
         mSaveNameEdit->eventEditTextChange += MyGUI::newDelegate(this, &SaveGameDialog::onSaveNameChanged);
-        if (Settings::gui().mControllerMenus)
-        {
-            mSaveNameEdit->eventKeySetFocus += MyGUI::newDelegate(this, &SaveGameDialog::onSaveNameFocus);
-            mSaveNameEdit->eventKeyLostFocus += MyGUI::newDelegate(this, &SaveGameDialog::onSaveNameFocusLost);
-        }
+        mSaveNameEdit->eventKeySetFocus += MyGUI::newDelegate(this, &SaveGameDialog::onSaveNameFocus);
+        mSaveNameEdit->eventKeyLostFocus += MyGUI::newDelegate(this, &SaveGameDialog::onSaveNameFocusLost);
 
         // To avoid accidental deletions
         mDeleteButton->setNeedKeyFocus(false);
@@ -534,7 +531,9 @@ namespace MWGui
 
     void SaveGameDialog::onSaveNameFocus(MyGUI::Widget* /*sender*/, MyGUI::Widget* /*other*/)
     {
-        setTextFieldSelected(mSaveNameEdit, true);
+        // (Lit for the controller)
+        if (Settings::gui().mControllerMenus)
+            setTextFieldSelected(mSaveNameEdit, true);
     }
 
     void SaveGameDialog::onSaveNameFocusLost(MyGUI::Widget* /*sender*/, MyGUI::Widget* /*other*/)

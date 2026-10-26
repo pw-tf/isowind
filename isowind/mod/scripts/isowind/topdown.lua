@@ -32,7 +32,7 @@
 -- onto the nearest hostile creature in front (X still uses what is nearest, not that creature); with no hostile one
 -- there the ring and label stay on what X uses (friendly people, doors, containers and their locks), but the aim
 -- never locks onto those. A lockpick or probe never locks on, and looks for doors and containers first.
--- The menus are the engine's controller menus ('controller menus' in the profile's settings.cfg): D-pad and A / B,
+-- The menus are the engine's controller menus while a controller is used (the engine switches): D-pad and A / B,
 -- the bumpers switch the inventory screen's pages and the triggers the tabs inside a window, Y puts an item or spell
 -- on a quick key, and X on a text field (moved onto with the D-pad) brings up a keyboard on the screen to type with;
 -- it never comes up by itself. The inventory screen's map, inventory, magic and stats are pages, one at a time under a

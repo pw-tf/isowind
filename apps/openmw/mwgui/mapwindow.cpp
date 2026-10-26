@@ -891,7 +891,7 @@ namespace MWGui
         mEditNoteDialog.eventOkClicked += MyGUI::newDelegate(this, &MapWindow::onNoteEditOk);
         mEditNoteDialog.eventDeleteClicked += MyGUI::newDelegate(this, &MapWindow::onNoteEditDelete);
 
-        mBigMarkers = Settings::gui().mControllerMenus;
+        mBigMarkers = Settings::gui().mControllerMenus; // (onControllerMenusChanged)
         setCoord(500, 0, 320, 300);
 
         getWidget(mLocalMap, "LocalMap");
@@ -940,14 +940,11 @@ namespace MWGui
         mGlobalMap->setVisible(global);
         mLocalMap->setVisible(!global);
 
-        if (Settings::gui().mControllerMenus)
-        {
-            mControllerButtons.mB = "#{Interface:Back}";
-            mControllerButtons.mX = global ? "#{Interface:Local}" : "#{Interface:World}";
-            mControllerButtons.mY = "#{Interface:Center}";
-            if (!Settings::map().mAllowZooming)
-                mControllerButtons.mDpad = "#{Interface:Move}";
-        }
+        mControllerButtons.mB = "#{Interface:Back}";
+        mControllerButtons.mX = global ? "#{Interface:Local}" : "#{Interface:World}";
+        mControllerButtons.mY = "#{Interface:Center}";
+        if (!Settings::map().mAllowZooming)
+            mControllerButtons.mDpad = "#{Interface:Move}";
     }
 
     void MapWindow::onNoteEditOk()
@@ -1401,6 +1398,15 @@ namespace MWGui
             MWBase::Environment::get().getWindowManager()->toggleVisible(GW_Map);
     }
 
+    void MapWindow::onControllerMenusChanged()
+    {
+        // Bigger markers with a controller, so its pointer lands on them
+        mBigMarkers = Settings::gui().mControllerMenus;
+        if (mActiveCell != nullptr)
+            updateLocalMap();
+        WindowPinnableBase::onControllerMenusChanged();
+    }
+
     void MapWindow::onOpen()
     {
         ensureGlobalMapLoaded();
@@ -1625,11 +1631,8 @@ namespace MWGui
         mOkButton->eventMouseButtonClick += MyGUI::newDelegate(this, &EditNoteDialog::onOkButtonClicked);
         mDeleteButton->eventMouseButtonClick += MyGUI::newDelegate(this, &EditNoteDialog::onDeleteButtonClicked);
 
-        if (Settings::gui().mControllerMenus)
-        {
-            mControllerButtons.mA = "#{Interface:OK}";
-            mControllerButtons.mB = "#{Interface:Cancel}";
-        }
+        mControllerButtons.mA = "#{Interface:OK}";
+        mControllerButtons.mB = "#{Interface:Cancel}";
     }
 
     void EditNoteDialog::showDeleteButton(bool show)

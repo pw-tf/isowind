@@ -4,7 +4,6 @@ isowind.sh gui opens it, as does isowind.sh started from a file manager. Playing
 beside it (it sets Morrowind up the first time and builds the pixel art textures); hosting writes the server's
 settings and starts the server, as Isowind.exe's "Host a server" does."""
 
-import glob
 import os
 import re
 import shutil
@@ -60,10 +59,6 @@ def morrowind_configured():
             return any(line.strip().lower() == 'content=morrowind.esm' for line in f)
     except OSError:
         return False
-
-
-def controller_plugged_in():
-    return bool(glob.glob('/dev/input/js*'))
 
 
 # "host", "host:port": the address and port to connect to, or None if it doesn't look like one (Isowind.cs)
@@ -284,7 +279,7 @@ def centre(window, width, height):
 
 
 class Launcher(tk.Tk, Styled):
-    WIDTH, HEIGHT = 460, 558  # Isowind.exe's 460 x 530, plus the controller line in the Look panel
+    WIDTH, HEIGHT = 460, 532
 
     def __init__(self):
         tk.Tk.__init__(self)
@@ -300,26 +295,23 @@ class Launcher(tk.Tk, Styled):
             pass
 
         self.look = tk.StringVar(value='normal' if read_file(MODE_FILE) == 'normal' else 'pixelart')
-        self.controller = tk.BooleanVar(value=controller_plugged_in())
         self.address = tk.StringVar(value=read_file(ADDRESS_FILE))
         self.status = tk.StringVar(value='')
 
         self.label(self, 'ISOWIND', 0, 18, 460, 54, fg=GOLD, font=self.title_font, anchor='center')
         self.label(self, 'Morrowind, seen from above', 0, 72, 460, 22, fg=DIM, anchor='center')
 
-        look = self.panel(self, 30, 110, 400, 146)
+        look = self.panel(self, 30, 110, 400, 120)
         self.label(look, 'Look', 14, 8, 300, 22, fg=GOLD)
         self.pixel_art = self.radio(look, 'Pixel art  -  low resolution, retro textures and lighting', self.look,
                                     'pixelart', 14, 36, 380, 26)
         self.normal = self.radio(look, "Normal  -  Morrowind's usual graphics", self.look, 'normal', 14, 66, 380, 26)
-        self.check(look, 'Controller  -  menus made for a controller rather than a mouse', self.controller,
-                   14, 96, 380, 26)
-        self.label(look, 'The top-down camera works in both. The zoom (or F7) in game switches camera.', 14, 122,
+        self.label(look, 'The top-down camera works in both. The zoom (or F7) in game switches camera.', 14, 96,
                    380, 18, fg=DIM, font=self.tiny_font)
 
-        self.play = self.button(self, 'Play', 30, 272, 400, 52, self.on_play, font=self.play_font)
+        self.play = self.button(self, 'Play', 30, 246, 400, 52, self.on_play, font=self.play_font)
 
-        multiplayer = self.panel(self, 30, 336, 400, 122)
+        multiplayer = self.panel(self, 30, 310, 400, 122)
         self.label(multiplayer, 'Multiplayer', 14, 8, 300, 22, fg=GOLD)
         self.label(multiplayer, 'Server address', 14, 38, 110, 22)
         entry = self.entry(multiplayer, self.address, 126, 37, 160, 24)
@@ -329,16 +321,16 @@ class Launcher(tk.Tk, Styled):
         self.label(multiplayer, f'Friends need UDP port {DEFAULT_PORT}\nforwarded to you, or a shared VPN', 162, 72,
                    230, 34, fg=DIM, font=self.tiny_font)
 
-        self.morrowind = self.button(self, 'Morrowind folder  (where Morrowind is installed)', 30, 470, 300, 34,
+        self.morrowind = self.button(self, 'Morrowind folder  (where Morrowind is installed)', 30, 444, 300, 34,
                                      self.on_morrowind_folder, font=self.small_font)
-        self.button(self, 'Licenses', 340, 470, 90, 34, self.show_licenses, font=self.small_font)
+        self.button(self, 'Licenses', 340, 444, 90, 34, self.show_licenses, font=self.small_font)
 
         style = ttk.Style(self)
         style.theme_use('default')
         style.configure('Isowind.Horizontal.TProgressbar', troughcolor=PANEL, background=GOLD, bordercolor=PANEL,
                         lightcolor=GOLD, darkcolor=GOLD)
         self.progress = ttk.Progressbar(self, style='Isowind.Horizontal.TProgressbar', mode='indeterminate')
-        self.label(self, '', 30, 528, 400, 22, fg=DIM, font=self.small_font).configure(textvariable=self.status)
+        self.label(self, '', 30, 502, 400, 22, fg=DIM, font=self.small_font).configure(textvariable=self.status)
 
         if not os.path.exists(SERVER) or not os.path.isdir(SERVER_DIR):
             self.host.configure(state='disabled')
@@ -357,7 +349,7 @@ class Launcher(tk.Tk, Styled):
         folder = read_file(MORROWIND_FILE)
         if folder:
             env['MORROWIND'] = folder
-        args = [SCRIPT] + arguments + [look, '--controller' if self.controller.get() else '--no-controller']
+        args = [SCRIPT] + arguments + [look]
         try:
             log = open(LOG, 'w', encoding='utf-8')
             process = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
@@ -367,7 +359,7 @@ class Launcher(tk.Tk, Styled):
             return
         for widget in (self.play, self.join, self.host, self.pixel_art, self.normal, self.morrowind):
             widget.configure(state='disabled')
-        self.progress.place(x=30, y=512, width=400, height=12)
+        self.progress.place(x=30, y=486, width=400, height=12)
         self.progress.start(12)
         first = not morrowind_configured()
         textures = look == 'pixelart' and not os.path.exists(os.path.join(ROOT, 'pixelart', 'textures',

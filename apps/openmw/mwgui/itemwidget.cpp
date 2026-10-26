@@ -83,12 +83,9 @@ namespace MWGui
         assignWidget(mText, "Text");
         if (mText)
             mText->setNeedMouseFocus(false);
-        if (Settings::gui().mControllerMenus)
-        {
-            assignWidget(mControllerBorder, "ControllerBorder");
-            if (mControllerBorder)
-                mControllerBorder->setNeedMouseFocus(false);
-        }
+        assignWidget(mControllerBorder, "ControllerBorder");
+        if (mControllerBorder)
+            mControllerBorder->setNeedMouseFocus(false);
 
         Base::initialiseOverride();
     }

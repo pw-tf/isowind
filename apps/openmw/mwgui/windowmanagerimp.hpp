@@ -8,6 +8,7 @@
 **/
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <osg/ref_ptr>
@@ -335,6 +336,7 @@ namespace MWGui
 
         /// Call when mouse cursor or buttons are used.
         void setCursorActive(bool active) override;
+        void onInputDeviceUsed(bool controller) override;
 
         /// Clear all savegame-specific data
         void clear() override;
@@ -508,6 +510,9 @@ namespace MWGui
         bool mHudEnabled;
         bool mCursorVisible;
         bool mCursorActive;
+        /// Isowind: the menus to switch to (made for a controller, or the mouse's) when it can be done
+        std::optional<bool> mWantedControllerMenus;
+        void applyWantedControllerMenus();
 
         int mPlayerBounty;
 

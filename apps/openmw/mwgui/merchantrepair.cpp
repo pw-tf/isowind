@@ -32,12 +32,9 @@ namespace MWGui
 
         mOkButton->eventMouseButtonClick += MyGUI::newDelegate(this, &MerchantRepair::onOkButtonClick);
 
-        if (Settings::gui().mControllerMenus)
-        {
-            mDisableGamepadCursor = true;
-            mControllerButtons.mA = "#{Interface:Repair}";
-            mControllerButtons.mB = "#{Interface:Cancel}";
-        }
+        mDisableGamepadCursor = true;
+        mControllerButtons.mA = "#{Interface:Repair}";
+        mControllerButtons.mB = "#{Interface:Cancel}";
     }
 
     void MerchantRepair::setPtr(const MWWorld::Ptr& actor)

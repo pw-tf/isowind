@@ -3,6 +3,7 @@
 #include <MyGUI_Button.h>
 #include <MyGUI_EditBox.h>
 #include <MyGUI_ImageBox.h>
+#include <MyGUI_LanguageManager.h>
 #include <MyGUI_ScrollView.h>
 #include <MyGUI_TextBox.h>
 #include <MyGUI_UString.h>
@@ -91,14 +92,10 @@ namespace MWGui
             mCoins.push_back(image);
         }
 
-        if (Settings::gui().mControllerMenus)
-        {
-            mDisableGamepadCursor = true;
-            mControllerButtons.mA = "#{Interface:Select}";
-            mControllerButtons.mX = "#{Interface:Done}";
-            mOkButton->setCaption(
-                MyGUI::UString(MWBase::Environment::get().getWindowManager()->getGameSettingString("sDone", {})));
-        }
+        mDisableGamepadCursor = true;
+        mControllerButtons.mA = "#{Interface:Select}";
+        mControllerButtons.mX = "#{Interface:Done}";
+        onControllerMenusChanged();
 
         center();
     }
@@ -166,6 +163,14 @@ namespace MWGui
         }
 
         setAttributeValues();
+    }
+
+    void LevelupDialog::onControllerMenusChanged()
+    {
+        mOkButton->setCaption(Settings::gui().mControllerMenus
+                ? MyGUI::UString(MWBase::Environment::get().getWindowManager()->getGameSettingString("sDone", {}))
+                : MyGUI::LanguageManager::getInstance().replaceTags("#{Interface:OK}"));
+        WindowBase::onControllerMenusChanged();
     }
 
     void LevelupDialog::onOpen()

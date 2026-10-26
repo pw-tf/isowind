@@ -201,6 +201,8 @@ namespace MWBase
         virtual void clearConsolePtr() = 0;
         virtual void executeCommandInConsole(const std::string& command) = 0;
         virtual void setCursorActive(bool active) = 0;
+        /// Isowind: a controller (true) or the mouse (false) was used; the menus become the ones made for it
+        virtual void onInputDeviceUsed(bool controller) = 0;
         virtual void getMousePosition(int& x, int& y) = 0;
         virtual void getMousePosition(float& x, float& y) = 0;
         virtual void setDragDrop(bool dragDrop) = 0;

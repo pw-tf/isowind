@@ -38,22 +38,26 @@ namespace MWGui
         image->setImageTexture(MWBase::Environment::get().getInputManager()->getControllerButtonIcon(
             SDL_CONTROLLER_BUTTON_RIGHTSHOULDER));
 
-        // Isowind: and the keyboard's Q and E, which are shown without a controller (the bar is for the mouse and
-        // keyboard too)
-        if (!Settings::gui().mControllerMenus)
-        {
-            const auto show = [this](std::string_view id, bool shown) {
-                MyGUI::Widget* widget;
-                getWidget(widget, id);
-                widget->setVisible(shown);
-                widget->setUserString("Hidden", shown ? "false" : "true");
-            };
-            show("BtnL2Image", false);
-            show("BtnR2Image", false);
-            show("KeyPrevText", true);
-            show("KeyNextText", true);
-            mTabBox->notifyChildrenSizeChanged();
-        }
+        onControllerMenusChanged();
+    }
+
+    void InventoryTabsOverlay::onControllerMenusChanged()
+    {
+        // Isowind: the controller's bumpers, or the keyboard's Q and E without a controller (the bar is for the mouse
+        // and keyboard too)
+        const bool controller = Settings::gui().mControllerMenus;
+        const auto show = [this](std::string_view id, bool shown) {
+            MyGUI::Widget* widget;
+            getWidget(widget, id);
+            widget->setVisible(shown);
+            widget->setUserString("Hidden", shown ? "false" : "true");
+        };
+        show("BtnL2Image", controller);
+        show("BtnR2Image", controller);
+        show("KeyPrevText", !controller);
+        show("KeyNextText", !controller);
+        mTabBox->notifyChildrenSizeChanged();
+        WindowBase::onControllerMenusChanged();
     }
 
     int InventoryTabsOverlay::getHeight()

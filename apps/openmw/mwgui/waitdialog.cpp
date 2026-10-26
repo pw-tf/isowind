@@ -84,7 +84,7 @@ namespace MWGui
         mTimeAdvancer.eventFinished += MyGUI::newDelegate(this, &WaitDialog::onWaitingFinished);
 
         mControllerButtons.mB = "#{Interface:Cancel}";
-        mDisableGamepadCursor = Settings::gui().mControllerMenus;
+        mDisableGamepadCursor = true;
     }
 
     void WaitDialog::setPtr(const MWWorld::Ptr& ptr)

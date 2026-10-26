@@ -91,7 +91,7 @@ namespace MWGui
         mBribe100Button->eventMouseButtonClick += MyGUI::newDelegate(this, &PersuasionDialog::onPersuade);
         mBribe1000Button->eventMouseButtonClick += MyGUI::newDelegate(this, &PersuasionDialog::onPersuade);
 
-        mDisableGamepadCursor = Settings::gui().mControllerMenus;
+        mDisableGamepadCursor = true;
         mControllerButtons.mA = "#{Interface:Select}";
         mControllerButtons.mB = "#{Interface:Cancel}";
     }

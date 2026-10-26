@@ -35,6 +35,22 @@ void WindowBase::setActiveControllerWindow(bool active)
     }
 }
 
+bool WindowBase::isGamepadCursorAllowed() const
+{
+    return !(mDisableGamepadCursor && Settings::gui().mControllerMenus);
+}
+
+void WindowBase::onControllerMenusChanged()
+{
+    // Back from the menus made for a controller: no window stays dimmed (setActiveControllerWindow)
+    if (!Settings::gui().mControllerMenus && mMainWidget)
+    {
+        mMainWidget->setAlpha(1.f);
+        if (NoDrop* noDrop = dynamic_cast<NoDrop*>(this))
+            noDrop->setRestAlpha(1.f);
+    }
+}
+
 size_t MWGui::wrap(size_t index, size_t max, int delta)
 {
     if (max == 0)

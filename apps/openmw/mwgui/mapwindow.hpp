@@ -280,6 +280,7 @@ namespace MWGui
         void ensureGlobalMapLoaded();
 
         void onOpen() override;
+        void onControllerMenusChanged() override;
 
         void onFrame(float dt) override;
 

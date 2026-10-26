@@ -81,6 +81,7 @@ namespace MWGui
         void onTitleDoubleClicked() override;
         bool onControllerButtonEvent(const SDL_ControllerButtonEvent& arg) override;
         void setActiveControllerWindow(bool active) override;
+        void onControllerMenusChanged() override;
         void setInventoryPage(bool shown) override;
         bool stepTab(int delta) override;
 

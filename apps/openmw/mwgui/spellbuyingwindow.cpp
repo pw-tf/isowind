@@ -39,13 +39,10 @@ namespace MWGui
 
         mCancelButton->eventMouseButtonClick += MyGUI::newDelegate(this, &SpellBuyingWindow::onCancelButtonClicked);
 
-        if (Settings::gui().mControllerMenus)
-        {
-            mDisableGamepadCursor = true;
-            mControllerButtons.mA = "#{Interface:Buy}";
-            mControllerButtons.mB = "#{Interface:Cancel}";
-            mControllerButtons.mR3 = "#{Interface:Info}";
-        }
+        mDisableGamepadCursor = true;
+        mControllerButtons.mA = "#{Interface:Buy}";
+        mControllerButtons.mB = "#{Interface:Cancel}";
+        mControllerButtons.mR3 = "#{Interface:Info}";
     }
 
     bool SpellBuyingWindow::sortSpells(const ESM::Spell* left, const ESM::Spell* right)
