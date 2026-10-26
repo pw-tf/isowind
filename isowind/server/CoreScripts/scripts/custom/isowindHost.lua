@@ -115,3 +115,19 @@ customEventHooks.registerHandler("OnServerPostInit", function(eventStatus)
     unlockTimer = tes3mp.CreateTimer("IsowindUnlockCorpses", time.seconds(2))
     tes3mp.StartTimer(unlockTimer)
 end)
+
+-- The world's startup scripts (config.worldStartupScripts, what /runstartup runs: some actors and objects start out
+-- wrong without them) run by themselves, through the first player in the world: after they log in, or after a new
+-- character's creation. Again after the cells are reset (IsowindHost.ResetStartupScripts).
+customEventHooks.registerHandler("OnPlayerAuthentified", function(eventStatus, pid)
+    if WorldInstance == nil or WorldInstance:HasRunStartupScripts() then
+        return
+    end
+    for _, scriptName in pairs(config.worldStartupScripts) do
+        logicHandler.RunConsoleCommandOnPlayer(pid, "startscript " .. scriptName, false)
+    end
+    WorldInstance.coreVariables.hasRunStartupScripts = true
+    WorldInstance:QuicksaveToDrive()
+    tes3mp.LogMessage(enumerations.log.INFO, "[Isowind] Ran the world's startup scripts through " ..
+        logicHandler.GetChatName(pid))
+end)

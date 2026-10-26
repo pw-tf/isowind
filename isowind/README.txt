@@ -25,9 +25,6 @@ On Linux, unpack the folder and use isowind.sh instead of Isowind.exe, from a te
    ./isowind.sh join ADDRESS    play on a server
    ./isowind.sh host            run a server in that terminal (it asks its settings first)
    ./isowind.sh gui             a launcher window like Isowind.exe (also what a file manager opens)
-   Add --controller (or --no-controller) to get the menus made for a controller (or Morrowind's own)
-   whatever is plugged in; without it, isowind.sh picks by what is. A controller that comes with a
-   stream, as Moonlight's does, wants --controller.
    The first time it finds Morrowind in Steam's usual places and sets up OpenMW for it; otherwise run it as
    MORROWIND=/path/to/Morrowind ./isowind.sh (the folder with "Data Files" in it). The pixel art look
    needs Python 3; it fetches Pillow for itself if your system doesn't have it.
@@ -62,7 +59,16 @@ Hosting a server
      Quests that count kills (like the Fighters Guild's rats) count the kills you made yourself,
      or your party made; someone else killing them first doesn't take them from you, they come back.
    - PvP (whether players can hurt each other), difficulty and how fast the time of day goes.
-   Then a server window opens; close it to stop the server.
+   Then the server's window opens; it runs the server, and closing it stops the server (saved). It shows:
+   - The players in the world, their staff rank, ping, level and cell. Pick one to change their staff rank
+     (Player, Moderator, Admin, Server owner: at once), kick or ban them, send them a message, teleport them to
+     another player or set the weather where they are.
+   - Log: what the server says, and a box to send a message to everyone.
+   - Bans: the banned accounts and addresses, to lift a ban or ban an account or IP address.
+   - World: the time of day, resetting a cell (everything in it back as at the start), and Morrowind's startup
+     scripts. Those put some actors and objects in place: they run by themselves when the first player logs in
+     (no one has to type /runstartup), and again after a cell is reset.
+   - Save now, Restart and Stop.
 2. Press Join (the address is set to this computer) to play on it yourself.
 3. Friends need to reach your computer, one of two ways:
    - Port forwarding: in your router, forward the server's UDP port (25565) to this computer, and
@@ -154,9 +160,9 @@ works it, on the Scripts tab's pages too; the mouse pointer stays away until the
 there. To type something (your name, a server's password, a save's, potion's, spell's or class's name, a map
 note), move onto the box with the D-pad - up from the top of the list or the buttons under it - and press X:
 a keyboard comes up on the screen (never by itself). Start or Back puts it away when you are done; in a box
-of its own (your name, a password, a save's name) Start also confirms it. Whether you get these menus or
-Morrowind's own is decided as the game starts, from whether a controller is plugged in (Isowind.exe's
-launcher and isowind.sh's --controller flag decide too); the mouse works in them as well.
+of its own (your name, a password, a save's name) Start also confirms it. These menus come as soon as the
+controller is used, and Morrowind's own as soon as the mouse is (a menu already open stays as it is until it
+closes, but for the main menu); the mouse works in these as well.
 
 The minimap turns so that up on it is up on the screen, and shows other players in multiplayer (as
 does the map). Zoom it with the mouse wheel over it while a menu is open, or in Options > Interface,

@@ -776,10 +776,8 @@ eventHandler.OnGUIAction = function(pid, idGui, data)
                     else
                         Players[pid]:FinishLogin()
                         Players[pid]:Message("You have successfully logged in.\n" .. config.chatWindowInstructions)
-
-                        if WorldInstance:HasRunStartupScripts() == false then
-                            Players[pid]:Message(config.startupScriptsInstructions)
-                        end
+                        -- Isowind: no request to run /runstartup; the startup scripts run by themselves
+                        -- (custom/isowindHost.lua)
                     end
                 elseif idGui == guiHelper.ID.REGISTER then
                     if Players[pid]:HasAccount() then
@@ -796,10 +794,6 @@ eventHandler.OnGUIAction = function(pid, idGui, data)
                     end
                     Players[pid]:Register(data)
                     Players[pid]:Message("You have successfully registered.\n" .. config.chatWindowInstructions)
-
-                    if WorldInstance:HasRunStartupScripts() == false then
-                        Players[pid]:Message(config.startupScriptsInstructions)
-                    end
                 end
             end
         end

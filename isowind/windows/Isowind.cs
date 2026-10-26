@@ -61,13 +61,13 @@ class LauncherForm : Form
     readonly string root = AppDomain.CurrentDomain.BaseDirectory;
     readonly RadioButton pixelArt;
     readonly RadioButton normal;
-    readonly CheckBox controller;
     readonly Button play;
     readonly Button openmwLauncher;
     readonly TextBox serverAddress;
     readonly Button join;
     readonly Button host;
     readonly Label status;
+    ServerForm serverForm;
     readonly ProgressBar progress;
 
     string EngineDir { get { return Path.Combine(root, "engine"); } }
@@ -93,7 +93,7 @@ class LauncherForm : Form
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(460, 580);
+        ClientSize = new Size(460, 554);
         BackColor = Back;
         ForeColor = Sand;
         Font = new Font("Segoe UI", 10f);
@@ -124,7 +124,7 @@ class LauncherForm : Form
             };
         }
 
-        var look = new Panel { BackColor = Panel, Bounds = new Rectangle(30, 132, 400, 146) };
+        var look = new Panel { BackColor = Panel, Bounds = new Rectangle(30, 132, 400, 120) };
         var lookTitle = new Label { Text = "Look", ForeColor = Gold, Bounds = new Rectangle(14, 8, 300, 22) };
         pixelArt = new RadioButton
         {
@@ -138,28 +138,20 @@ class LauncherForm : Form
             Bounds = new Rectangle(14, 66, 380, 26),
             ForeColor = Sand,
         };
-        // Menus made for a controller or Morrowind's own: ticked when one is plugged in (ControllerConnected), and
-        // the player's to change, as in the Linux launcher window
-        controller = new CheckBox
-        {
-            Text = "Controller  -  menus made for a controller rather than a mouse",
-            Bounds = new Rectangle(14, 96, 380, 26),
-            ForeColor = Sand,
-        };
         var hint = new Label
         {
             Text = "The top-down camera works in both. The zoom (or F7) in game switches camera.",
             ForeColor = Dim,
             Font = new Font("Segoe UI", 8.5f),
-            Bounds = new Rectangle(14, 122, 380, 18),
+            Bounds = new Rectangle(14, 96, 380, 18),
         };
-        look.Controls.AddRange(new Control[] { lookTitle, pixelArt, normal, controller, hint });
+        look.Controls.AddRange(new Control[] { lookTitle, pixelArt, normal, hint });
 
-        play = MakeButton("Play", new Rectangle(30, 294, 400, 52), 16f);
+        play = MakeButton("Play", new Rectangle(30, 268, 400, 52), 16f);
         play.Click += delegate { Launch(null); };
 
         // Multiplayer: join a server by its address, or host one on this computer
-        var multiplayer = new Panel { BackColor = Panel, Bounds = new Rectangle(30, 358, 400, 122) };
+        var multiplayer = new Panel { BackColor = Panel, Bounds = new Rectangle(30, 332, 400, 122) };
         var multiplayerTitle = new Label { Text = "Multiplayer", ForeColor = Gold, Bounds = new Rectangle(14, 8, 300, 22) };
         var addressLabel = new Label
         {
@@ -197,13 +189,13 @@ class LauncherForm : Form
         };
 
         openmwLauncher = MakeButton("OpenMW Launcher  (Morrowind, mods, options)",
-            new Rectangle(30, 492, 300, 34), 9f);
+            new Rectangle(30, 466, 300, 34), 9f);
         openmwLauncher.Click += delegate { StartOpenMWLauncher(); };
-        var licenses = MakeButton("Licenses", new Rectangle(340, 492, 90, 34), 9.5f);
+        var licenses = MakeButton("Licenses", new Rectangle(340, 466, 90, 34), 9.5f);
         licenses.Click += delegate { ShowLicenses(); };
 
-        progress = new ProgressBar { Bounds = new Rectangle(30, 534, 400, 12), Visible = false };
-        status = new Label { ForeColor = Dim, Bounds = new Rectangle(30, 550, 400, 22), Font = new Font("Segoe UI", 9f) };
+        progress = new ProgressBar { Bounds = new Rectangle(30, 508, 400, 12), Visible = false };
+        status = new Label { ForeColor = Dim, Bounds = new Rectangle(30, 524, 400, 22), Font = new Font("Segoe UI", 9f) };
 
         Controls.AddRange(new Control[] { title, look, play, multiplayer, openmwLauncher, licenses, progress,
             status });
@@ -221,7 +213,6 @@ class LauncherForm : Form
         try { normalMode = File.Exists(ModeFile) && File.ReadAllText(ModeFile).Trim() == "normal"; } catch { }
         pixelArt.Checked = !normalMode;
         normal.Checked = normalMode;
-        controller.Checked = ControllerConnected();
 
         if (!File.Exists(Path.Combine(EngineDir, "openmw.exe")))
             status.Text = "engine\\openmw.exe is missing - unpack the whole Isowind folder.";
@@ -406,6 +397,11 @@ class LauncherForm : Form
 
     void OnHost()
     {
+        if (serverForm != null)
+        {
+            serverForm.Activate();
+            return;
+        }
         if (Process.GetProcessesByName("tes3mp-server").Length > 0)
         {
             MessageBox.Show(this, "A server is already running on this computer.", "Isowind - multiplayer",
@@ -419,19 +415,19 @@ class LauncherForm : Form
                 return;
             port = form.Port;
         }
-        if (!Start(Path.Combine(EngineDir, "tes3mp-server.exe"), "", ServerDir, true))
+        serverForm = new ServerForm(EngineDir, ServerDir);
+        serverForm.FormClosed += delegate
+        {
+            serverForm = null;
+            // The game was started with the server running: the launcher only waited for the server to stop
+            if (!Visible)
+                Close();
+        };
+        serverForm.Show();
+        if (!serverForm.StartServer())
             return;
         serverAddress.Text = port == DefaultPort ? "127.0.0.1" : "127.0.0.1:" + port;
         status.Text = "Server started (its window shows what happens). Press Join to play on it.";
-        MessageBox.Show(this,
-            "The server is running in its own window; close that window to stop it.\n\n" +
-            "To play on it yourself, press Join (the address is set to this computer).\n\n" +
-            "Friends join with this computer's internet address (search \"what is my IP\")" +
-            (port == DefaultPort ? "" : ":" + port) + ", which needs UDP port " + port + " forwarded to this " +
-            "computer in your router. Or all of you join the same VPN (e.g. Tailscale, ZeroTier, Radmin VPN) and " +
-            "friends use this computer's VPN address.\n\n" +
-            "Everyone needs Morrowind with Tribunal and Bloodmoon, and no other mods turned on.",
-            "Isowind - hosting", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     async void Launch(string connectArgument)
@@ -452,62 +448,41 @@ class LauncherForm : Form
 
         if (mode == "pixelart" && !File.Exists(TexturesMarker))
         {
-            play.Enabled = openmwLauncher.Enabled = pixelArt.Enabled = normal.Enabled = controller.Enabled = join.Enabled = false;
+            play.Enabled = openmwLauncher.Enabled = pixelArt.Enabled = normal.Enabled = join.Enabled = false;
             progress.Visible = true;
             bool ok = await Task.Run(() => GenerateTextures());
             progress.Visible = false;
-            play.Enabled = openmwLauncher.Enabled = pixelArt.Enabled = normal.Enabled = controller.Enabled = join.Enabled = true;
+            play.Enabled = openmwLauncher.Enabled = pixelArt.Enabled = normal.Enabled = join.Enabled = true;
             if (!ok)
                 return;
         }
 
         string profile = Path.Combine(root, "profiles", mode);
-        SetControllerMenus(Path.Combine(profile, "settings.cfg"), controller.Checked);
         string arguments = "--config \"" + profile + "\"";
         if (connectArgument != null)
             arguments += " " + connectArgument;
         if (Start(Path.Combine(EngineDir, "openmw.exe"), arguments))
+            CloseOrHide();
+    }
+
+    // Closing the launcher with the server's window open would stop the server: it hides until that window closes
+    void CloseOrHide()
+    {
+        if (serverForm != null)
+            Hide();
+        else
             Close();
     }
 
-    // Menus made for a controller (bumpers switch windows, buttons pick items) or Morrowind's own (drag and drop):
-    // the tick box, ticked to begin with when a controller is plugged in at launch.
-    [System.Runtime.InteropServices.DllImport("xinput1_4.dll")]
-    static extern int XInputGetState(int userIndex, byte[] state);
-    [System.Runtime.InteropServices.DllImport("winmm.dll")]
-    static extern int joyGetNumDevs();
-    [System.Runtime.InteropServices.DllImport("winmm.dll")]
-    static extern int joyGetPosEx(int id, int[] info);
-
-    static bool ControllerConnected()
+    protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        try
+        if (serverForm != null && e.CloseReason == CloseReason.UserClosing)
         {
-            var state = new byte[16];
-            for (int i = 0; i < 4; i++)
-                if (XInputGetState(i, state) == 0)
-                    return true;
+            e.Cancel = true;
+            Hide();
+            return;
         }
-        catch { }
-        try
-        {
-            // JOYINFOEX: 13 ints, the first its size, the second what to return (JOY_RETURNALL)
-            for (int id = 0; id < joyGetNumDevs(); id++)
-            {
-                var info = new int[13];
-                info[0] = 13 * 4;
-                info[1] = 0xFF;
-                if (joyGetPosEx(id, info) == 0)
-                    return true;
-            }
-        }
-        catch { }
-        return false;
-    }
-
-    static void SetControllerMenus(string settingsFile, bool on)
-    {
-        try { SetConfigValue(settingsFile, "GUI", "controller menus", on ? "true" : "false"); } catch { }
+        base.OnFormClosing(e);
     }
 
     // Sets key = value in [section] of a settings file (OpenMW's settings.cfg, the server's tes3mp-server.cfg),
@@ -730,7 +705,7 @@ class HostForm : Form
         y += 16;
     }
 
-    static ComboBox MakeChoice(string[] items)
+    internal static ComboBox MakeChoice(string[] items)
     {
         // Drawn here: Windows draws a drop-down list white whatever its colours
         var box = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat,
@@ -808,6 +783,686 @@ class HostForm : Form
             return;
         }
         DialogResult = DialogResult.OK;
+    }
+}
+
+// The server's window: runs engine\tes3mp-server.exe in it (its log shown here, no console of its own) and talks to
+// its scripts (server\CoreScripts\scripts\custom\isowindAdmin.lua) through two files in the server's folder: a status
+// it writes every second (the players, the bans, the time, the results of what was asked) and commands appended here.
+// Closing it stops the server, saved.
+class ServerForm : Form
+{
+    const string StatusFile = "isowind-admin-status.txt";
+    const string CommandsFile = "isowind-admin-commands.txt";
+    static readonly string[] RankNames = { "Player", "Moderator", "Admin", "Server owner" };
+    static readonly string[] WeatherNames = { "Clear", "Cloudy", "Foggy", "Overcast", "Rain", "Thunder", "Ash",
+        "Blight", "Snow", "Blizzard" };
+
+    class Player
+    {
+        public int Pid;
+        public string Name, Ip, Cell, Region, Level;
+        public int Rank, Ping;
+    }
+
+    readonly string engineDir;
+    readonly string serverDir;
+    readonly string serverName;
+    readonly int port;
+    readonly int maxPlayers;
+
+    Process process;
+    bool restarting;
+    bool stopping;
+    int nextCommandId = 1;
+    int lastResultShown;
+    long lastStatusTime;
+    DateTime lastStatusChange = DateTime.MinValue;
+    List<Player> players = new List<Player>();
+    bool updatingSelection;
+
+    readonly Label summary;
+    readonly ListView playerList;
+    readonly Panel playerActions;
+    readonly ComboBox rank;
+    readonly TextBox tellText;
+    readonly ComboBox teleportTarget;
+    readonly ComboBox weather;
+    readonly TextBox log;
+    readonly TextBox sayText;
+    readonly ListBox bannedNames;
+    readonly ListBox bannedIps;
+    readonly TextBox banText;
+    readonly NumericUpDown hour;
+    readonly TextBox cellText;
+    readonly Panel[] pages;
+    readonly Button[] pageButtons;
+    readonly Button stopButton;
+    readonly Button restartButton;
+    readonly System.Windows.Forms.Timer refresh;
+
+    public ServerForm(string engineDir, string serverDir)
+    {
+        this.engineDir = engineDir;
+        this.serverDir = serverDir;
+        var values = LauncherForm.ReadConfig(Path.Combine(serverDir, "tes3mp-server-default.cfg"),
+            Path.Combine(serverDir, "tes3mp-server.cfg"));
+        string value;
+        serverName = values.TryGetValue("General/hostname", out value) && value.Length > 0 ? value : "Isowind server";
+        if (!values.TryGetValue("General/port", out value) || !int.TryParse(value, out port))
+            port = LauncherForm.DefaultPort;
+        if (!values.TryGetValue("General/maximumPlayers", out value) || !int.TryParse(value, out maxPlayers))
+            maxPlayers = 16;
+
+        Text = "Isowind server - " + serverName;
+        StartPosition = FormStartPosition.CenterScreen;
+        ClientSize = new Size(940, 640);
+        MinimumSize = new Size(956, 679);
+        BackColor = LauncherForm.Back;
+        ForeColor = LauncherForm.Sand;
+        Font = new Font("Segoe UI", 9.5f);
+        try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
+
+        summary = new Label { ForeColor = LauncherForm.Gold, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
+            Bounds = new Rectangle(16, 12, 908, 24), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+        Controls.Add(summary);
+
+        // The players, and what can be done to the one picked
+        Controls.Add(new Label { Text = "Players", ForeColor = LauncherForm.Gold, Bounds = new Rectangle(16, 44, 300,
+            20) });
+        playerList = new ListView { View = View.Details, FullRowSelect = true, MultiSelect = false, HideSelection = false,
+            BackColor = LauncherForm.Panel, ForeColor = LauncherForm.Sand, BorderStyle = BorderStyle.FixedSingle,
+            Bounds = new Rectangle(16, 66, 520, 330), OwnerDraw = true,
+            Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left };
+        playerList.Columns.Add("Name", 150);
+        playerList.Columns.Add("Staff rank", 100);
+        playerList.Columns.Add("Ping", 50);
+        playerList.Columns.Add("Level", 50);
+        playerList.Columns.Add("Cell", 166);
+        // The last column to the list's right edge, so no white header shows past it
+        playerList.HandleCreated += delegate { playerList.Columns[4].Width = -2; };
+        playerList.DrawColumnHeader += delegate(object sender, DrawListViewColumnHeaderEventArgs e)
+        {
+            using (var back = new SolidBrush(LauncherForm.Back))
+                e.Graphics.FillRectangle(back, e.Bounds);
+            TextRenderer.DrawText(e.Graphics, e.Header.Text, playerList.Font, e.Bounds, LauncherForm.Gold,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
+        };
+        playerList.DrawItem += delegate(object sender, DrawListViewItemEventArgs e) { e.DrawDefault = true; };
+        playerList.DrawSubItem += delegate(object sender, DrawListViewSubItemEventArgs e) { e.DrawDefault = true; };
+        playerList.SelectedIndexChanged += delegate
+        {
+            if (!updatingSelection)
+                ShowSelectedPlayer();
+        };
+        Controls.Add(playerList);
+
+        playerActions = new Panel { BackColor = LauncherForm.Panel, Bounds = new Rectangle(16, 406, 520, 168),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        rank = HostFormChoice(RankNames);
+        rank.Bounds = new Rectangle(120, 12, 150, 24);
+        rank.SelectedIndexChanged += delegate
+        {
+            Player player = SelectedPlayer();
+            if (!updatingSelection && player != null && rank.SelectedIndex >= 0 && rank.SelectedIndex != player.Rank)
+                Send("rank", player.Pid.ToString(), rank.SelectedIndex.ToString());
+        };
+        var kick = LauncherForm.MakeButton("Kick", new Rectangle(290, 10, 100, 28), 9.5f);
+        kick.Click += delegate { OnPlayerAction("kick", "Kick {0} from the server?"); };
+        var ban = LauncherForm.MakeButton("Ban", new Rectangle(400, 10, 100, 28), 9.5f);
+        ban.Click += delegate
+        {
+            OnPlayerAction("banplayer", "Ban {0}? Their account and the addresses they played from are banned.");
+        };
+        tellText = MakeTextBox(new Rectangle(120, 52, 270, 24));
+        var tell = LauncherForm.MakeButton("Tell", new Rectangle(400, 50, 100, 28), 9.5f);
+        tell.Click += delegate { OnTell(); };
+        teleportTarget = HostFormChoice(new string[0]);
+        teleportTarget.Bounds = new Rectangle(120, 92, 270, 24);
+        var teleport = LauncherForm.MakeButton("Teleport", new Rectangle(400, 90, 100, 28), 9.5f);
+        teleport.Click += delegate { OnTeleport(); };
+        weather = HostFormChoice(WeatherNames);
+        weather.Bounds = new Rectangle(120, 132, 270, 24);
+        weather.SelectedIndex = 0;
+        var setWeather = LauncherForm.MakeButton("Set", new Rectangle(400, 130, 100, 28), 9.5f);
+        setWeather.Click += delegate
+        {
+            Player player = SelectedPlayer();
+            if (player != null && weather.SelectedIndex >= 0)
+                Send("weather", player.Pid.ToString(), weather.SelectedIndex.ToString());
+        };
+        playerActions.Controls.AddRange(new Control[] {
+            ActionLabel("Staff rank", 14), rank, kick, ban,
+            ActionLabel("Message", 54), tellText, tell,
+            ActionLabel("Teleport to", 94), teleportTarget, teleport,
+            ActionLabel("Weather here", 134), weather, setWeather });
+        Controls.Add(playerActions);
+
+        // On the right: the server's log, the bans and the world, a page at a time
+        string[] pageNames = { "Log", "Bans", "World" };
+        pages = new Panel[pageNames.Length];
+        pageButtons = new Button[pageNames.Length];
+        for (int i = 0; i < pageNames.Length; i++)
+        {
+            int page = i;
+            pageButtons[i] = LauncherForm.MakeButton(pageNames[i], new Rectangle(552 + i * 102, 40, 96, 28), 9.5f);
+            pageButtons[i].Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            pageButtons[i].Click += delegate { ShowPage(page); };
+            pages[i] = new Panel { Bounds = new Rectangle(552, 76, 372, 498), BackColor = LauncherForm.Back,
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Right };
+            Controls.Add(pageButtons[i]);
+            Controls.Add(pages[i]);
+        }
+
+        log = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, WordWrap = true,
+            BackColor = LauncherForm.Panel, ForeColor = LauncherForm.Sand, BorderStyle = BorderStyle.FixedSingle,
+            Font = new Font("Consolas", 8.5f), Bounds = new Rectangle(0, 0, 372, 456),
+            Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right };
+        sayText = MakeTextBox(new Rectangle(0, 470, 262, 24));
+        sayText.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+        sayText.KeyDown += delegate(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; OnSay(); }
+        };
+        var say = LauncherForm.MakeButton("To everyone", new Rectangle(270, 468, 102, 28), 9f);
+        say.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+        say.Click += delegate { OnSay(); };
+        pages[0].Controls.AddRange(new Control[] { log, sayText, say });
+
+        bannedNames = MakeList(new Rectangle(0, 22, 372, 150));
+        var unbanName = LauncherForm.MakeButton("Unban", new Rectangle(272, 178, 100, 28), 9.5f);
+        unbanName.Click += delegate
+        {
+            if (bannedNames.SelectedItem != null)
+                Send("unbanname", bannedNames.SelectedItem.ToString());
+        };
+        bannedIps = MakeList(new Rectangle(0, 236, 372, 120));
+        var unbanIp = LauncherForm.MakeButton("Unban", new Rectangle(272, 362, 100, 28), 9.5f);
+        unbanIp.Click += delegate
+        {
+            if (bannedIps.SelectedItem != null)
+                Send("unbanip", bannedIps.SelectedItem.ToString());
+        };
+        banText = MakeTextBox(new Rectangle(0, 432, 372, 24));
+        var banName = LauncherForm.MakeButton("Ban account", new Rectangle(0, 464, 140, 28), 9.5f);
+        banName.Click += delegate { OnBan("banname"); };
+        var banIp = LauncherForm.MakeButton("Ban address", new Rectangle(150, 464, 140, 28), 9.5f);
+        banIp.Click += delegate { OnBan("banip"); };
+        pages[1].Controls.AddRange(new Control[] {
+            PageLabel("Banned accounts", 0), bannedNames, unbanName,
+            PageLabel("Banned addresses", 214), bannedIps, unbanIp,
+            PageLabel("Ban an account (its name) or an IP address", 410), banText, banName, banIp });
+
+        hour = new NumericUpDown { Minimum = 0, Maximum = 23, Bounds = new Rectangle(0, 24, 80, 24),
+            BackColor = LauncherForm.Panel, ForeColor = LauncherForm.Sand };
+        var setHour = LauncherForm.MakeButton("Set the time", new Rectangle(92, 22, 130, 28), 9.5f);
+        setHour.Click += delegate { Send("hour", ((int)hour.Value).ToString()); };
+        cellText = MakeTextBox(new Rectangle(0, 106, 372, 24));
+        var pickedCell = LauncherForm.MakeButton("The picked player's", new Rectangle(0, 138, 180, 28), 9f);
+        pickedCell.Click += delegate
+        {
+            Player player = SelectedPlayer();
+            if (player != null)
+                cellText.Text = player.Cell;
+        };
+        var resetCell = LauncherForm.MakeButton("Reset the cell", new Rectangle(232, 138, 140, 28), 9.5f);
+        resetCell.Click += delegate { OnResetCell(); };
+        var startup = LauncherForm.MakeButton("Run the startup scripts again", new Rectangle(0, 230, 260, 28), 9.5f);
+        startup.Click += delegate { Send("startup"); };
+        pages[2].Controls.AddRange(new Control[] {
+            PageLabel("Time of day (hour)", 0), hour, setHour,
+            PageLabel("Reset a cell: everything in it back as at the start (like Seyda Neen, Census and Excise " +
+                "Office)", 66, 40), cellText, pickedCell, resetCell,
+            PageLabel("Morrowind's startup scripts put some actors and objects in place. They run by themselves " +
+                "when the first player logs in; again after a cell is reset.", 182, 44), startup });
+
+        // At the bottom: save, restart, stop
+        var save = LauncherForm.MakeButton("Save now", new Rectangle(16, 592, 120, 32), 9.5f);
+        save.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+        save.Click += delegate { Send("save"); };
+        restartButton = LauncherForm.MakeButton("Restart", new Rectangle(686, 592, 110, 32), 9.5f);
+        restartButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+        restartButton.Click += delegate { OnRestart(); };
+        stopButton = LauncherForm.MakeButton("Stop", new Rectangle(808, 592, 116, 32), 9.5f);
+        stopButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+        stopButton.Click += delegate { OnStop(); };
+        Controls.AddRange(new Control[] { save, restartButton, stopButton });
+
+        ShowPage(0);
+        ShowSelectedPlayer();
+
+        refresh = new System.Windows.Forms.Timer { Interval = 1000 };
+        refresh.Tick += delegate { ReadStatus(); };
+        refresh.Start();
+        FormClosing += OnClosing;
+        FormClosed += delegate { refresh.Stop(); refresh.Dispose(); };
+    }
+
+    public bool IsRunning { get { return process != null && !process.HasExited; } }
+
+    // Starts the server; false (and why, in the log) if it can't be
+    public bool StartServer()
+    {
+        try { File.Delete(Path.Combine(serverDir, CommandsFile)); } catch { }
+        try { File.Delete(Path.Combine(serverDir, StatusFile)); } catch { }
+        players = new List<Player>();
+        lastStatusTime = 0;
+        try
+        {
+            var info = new ProcessStartInfo(Path.Combine(engineDir, "tes3mp-server.exe"))
+            {
+                WorkingDirectory = serverDir,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
+            };
+            process = new Process { StartInfo = info, EnableRaisingEvents = true };
+            process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e) { AddLog(e.Data); };
+            process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e) { AddLog(e.Data); };
+            process.Exited += delegate { BeginInvoke(new Action(OnExited)); };
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+        }
+        catch (Exception e)
+        {
+            AddLog("Could not start the server: " + e.Message);
+            process = null;
+            return false;
+        }
+        AddLog("--- Server started on port " + port + ". To play on it yourself, press Join in Isowind (the address " +
+            "is set to this computer). Friends join with this computer's internet address, which needs UDP port " +
+            port + " forwarded to it, or a shared VPN (see README.txt).");
+        UpdateSummary();
+        return true;
+    }
+
+    void OnExited()
+    {
+        AddLog("--- The server has stopped" + (process != null ? " (exit code " + process.ExitCode + ")" : "") + ".");
+        players = new List<Player>();
+        FillPlayers();
+        UpdateSummary();
+        if (restarting)
+        {
+            restarting = false;
+            StartServer();
+        }
+        else if (stopping)
+            Close();
+    }
+
+    // A command for the server's scripts, one line in the commands file
+    void Send(string verb, params string[] arguments)
+    {
+        if (!IsRunning)
+        {
+            AddLog("The server isn't running.");
+            return;
+        }
+        var line = new StringBuilder();
+        line.Append(nextCommandId++).Append('\t').Append(verb);
+        foreach (string argument in arguments)
+            line.Append('\t').Append(Regex.Replace(argument ?? "", @"[\t\r\n]", " "));
+        line.Append('\n');
+        try
+        {
+            File.AppendAllText(Path.Combine(serverDir, CommandsFile), line.ToString(), new UTF8Encoding(false));
+        }
+        catch (Exception e)
+        {
+            AddLog("Could not send that to the server: " + e.Message);
+        }
+    }
+
+    void ReadStatus()
+    {
+        if (!IsRunning)
+            return;
+        string[] lines;
+        try
+        {
+            using (var stream = new FileStream(Path.Combine(serverDir, StatusFile), FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete))
+            using (var reader = new StreamReader(stream, Encoding.UTF8))
+                lines = reader.ReadToEnd().Split('\n');
+        }
+        catch (IOException)
+        {
+            UpdateSummary();
+            return;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        var newPlayers = new List<Player>();
+        var names = new List<string>();
+        var ips = new List<string>();
+        long statusTime = 0;
+        string uptime = null, worldHour = null;
+        foreach (string raw in lines)
+        {
+            string[] f = raw.TrimEnd('\r').Split('\t');
+            switch (f[0])
+            {
+                case "time":
+                    long.TryParse(f[1], out statusTime);
+                    break;
+                case "uptime":
+                    uptime = f[1];
+                    break;
+                case "world":
+                    worldHour = f[1];
+                    break;
+                case "player":
+                    if (f.Length >= 9)
+                    {
+                        var player = new Player { Name = f[2], Ip = f[5], Cell = f[6], Region = f[7], Level = f[8] };
+                        int.TryParse(f[1], out player.Pid);
+                        int.TryParse(f[3], out player.Rank);
+                        int.TryParse(f[4], out player.Ping);
+                        newPlayers.Add(player);
+                    }
+                    break;
+                case "banname":
+                    names.Add(f[1]);
+                    break;
+                case "banip":
+                    ips.Add(f[1]);
+                    break;
+                case "result":
+                    int id;
+                    if (f.Length >= 4 && int.TryParse(f[1], out id) && id > lastResultShown)
+                    {
+                        lastResultShown = id;
+                        AddLog((f[2] == "1" ? "Done: " : "Not done: ") + f[3]);
+                    }
+                    break;
+            }
+        }
+        if (statusTime != lastStatusTime)
+        {
+            lastStatusTime = statusTime;
+            lastStatusChange = DateTime.Now;
+        }
+        players = newPlayers;
+        FillPlayers();
+        FillList(bannedNames, names);
+        FillList(bannedIps, ips);
+        UpdateSummary(uptime, worldHour);
+    }
+
+    void UpdateSummary(string uptime = null, string worldHour = null)
+    {
+        string state;
+        if (!IsRunning)
+            state = "stopped";
+        else if (DateTime.Now - lastStatusChange > TimeSpan.FromSeconds(5))
+            state = "starting up";
+        else
+            state = "running";
+        var text = new StringBuilder(serverName + "  -  port " + port + "  -  " + state);
+        if (IsRunning && state == "running")
+        {
+            text.Append("  -  " + players.Count + " / " + maxPlayers + " players");
+            int seconds;
+            if (uptime != null && int.TryParse(uptime, out seconds))
+                text.Append("  -  up " + TimeSpan.FromSeconds(seconds).ToString(@"h\:mm\:ss"));
+            double gameHour;
+            if (worldHour != null && double.TryParse(worldHour, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out gameHour))
+                text.Append(string.Format("  -  {0:00}:{1:00} in the game", Math.Floor(gameHour),
+                    Math.Floor(gameHour % 1 * 60)));
+        }
+        summary.Text = text.ToString();
+        stopButton.Text = IsRunning ? "Stop" : "Start";
+        restartButton.Enabled = IsRunning;
+    }
+
+    // The player list, updated in place (a row per player, the one picked stays picked)
+    void FillPlayers()
+    {
+        updatingSelection = true;
+        playerList.BeginUpdate();
+        for (int i = playerList.Items.Count - 1; i >= 0; i--)
+        {
+            var shown = (Player)playerList.Items[i].Tag;
+            if (!players.Any(p => p.Pid == shown.Pid && p.Name == shown.Name))
+                playerList.Items.RemoveAt(i);
+        }
+        foreach (Player player in players)
+        {
+            string[] texts = { player.Name, RankName(player.Rank), player.Ping.ToString(), player.Level, player.Cell };
+            ListViewItem item = playerList.Items.Cast<ListViewItem>().FirstOrDefault(
+                row => ((Player)row.Tag).Pid == player.Pid);
+            if (item == null)
+            {
+                playerList.Items.Add(new ListViewItem(texts) { Tag = player });
+                continue;
+            }
+            item.Tag = player;
+            for (int column = 0; column < texts.Length; column++)
+                if (item.SubItems[column].Text != texts[column])
+                    item.SubItems[column].Text = texts[column];
+        }
+        playerList.EndUpdate();
+        updatingSelection = false;
+        ShowSelectedPlayer();
+    }
+
+    static void FillList(ListBox list, List<string> items)
+    {
+        if (list.Items.Cast<string>().SequenceEqual(items))
+            return;
+        object picked = list.SelectedItem;
+        list.Items.Clear();
+        list.Items.AddRange(items.ToArray());
+        if (picked != null && items.Contains((string)picked))
+            list.SelectedItem = picked;
+    }
+
+    Player SelectedPlayer()
+    {
+        return playerList.SelectedItems.Count > 0 ? (Player)playerList.SelectedItems[0].Tag : null;
+    }
+
+    // What the actions show for the player picked; left alone while a drop-down is open, and only changed when it
+    // differs (the list refreshes every second)
+    void ShowSelectedPlayer()
+    {
+        // (The actions stay enabled, as Windows draws a disabled drop-down white; without a player picked they do
+        // nothing)
+        Player player = SelectedPlayer();
+        updatingSelection = true;
+        int rankIndex = player != null ? Math.Max(0, Math.Min(3, player.Rank)) : -1;
+        if (!rank.DroppedDown && rank.SelectedIndex != rankIndex)
+            rank.SelectedIndex = rankIndex;
+        var others = player == null ? new List<string>() :
+            players.Where(p => p.Pid != player.Pid).Select(p => p.Name).ToList();
+        if (!teleportTarget.DroppedDown && !teleportTarget.Items.Cast<string>().SequenceEqual(others))
+        {
+            object target = teleportTarget.SelectedItem;
+            teleportTarget.Items.Clear();
+            teleportTarget.Items.AddRange(others.ToArray());
+            if (target != null && others.Contains((string)target))
+                teleportTarget.SelectedItem = target;
+        }
+        updatingSelection = false;
+    }
+
+    static string RankName(int rank)
+    {
+        return rank >= 0 && rank < RankNames.Length ? RankNames[rank] : rank.ToString();
+    }
+
+    void OnPlayerAction(string verb, string question)
+    {
+        Player player = SelectedPlayer();
+        if (player != null && MessageBox.Show(this, string.Format(question, player.Name), Text,
+            MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+            Send(verb, player.Pid.ToString());
+    }
+
+    void OnTell()
+    {
+        Player player = SelectedPlayer();
+        if (player == null || tellText.Text.Trim().Length == 0)
+            return;
+        Send("tell", player.Pid.ToString(), tellText.Text.Trim());
+        tellText.Clear();
+    }
+
+    void OnTeleport()
+    {
+        Player player = SelectedPlayer();
+        if (player == null || teleportTarget.SelectedItem == null)
+            return;
+        Player target = players.FirstOrDefault(p => p.Name == (string)teleportTarget.SelectedItem);
+        if (target != null)
+            Send("teleport", player.Pid.ToString(), target.Pid.ToString());
+    }
+
+    void OnSay()
+    {
+        if (sayText.Text.Trim().Length == 0)
+            return;
+        Send("say", sayText.Text.Trim());
+        sayText.Clear();
+    }
+
+    void OnBan(string verb)
+    {
+        string what = banText.Text.Trim();
+        if (what.Length == 0)
+            return;
+        Send(verb, what);
+        banText.Clear();
+    }
+
+    void OnResetCell()
+    {
+        string cell = cellText.Text.Trim();
+        if (cell.Length > 0 && MessageBox.Show(this, "Reset " + cell + "? Everything in it goes back to how it " +
+            "was at the start.", Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+            Send("resetcell", cell);
+    }
+
+    void OnRestart()
+    {
+        if (!IsRunning || !ConfirmWithPlayers("Restart the server?"))
+            return;
+        restarting = true;
+        Send("stop");
+    }
+
+    void OnStop()
+    {
+        if (!IsRunning)
+        {
+            StartServer();
+            return;
+        }
+        if (ConfirmWithPlayers("Stop the server?"))
+            Send("stop");
+    }
+
+    bool ConfirmWithPlayers(string question)
+    {
+        if (players.Count == 0)
+            return true;
+        return MessageBox.Show(this, question + " " + players.Count + (players.Count == 1 ? " player is" :
+            " players are") + " in the world.", Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) ==
+            DialogResult.Yes;
+    }
+
+    // Closing stops the server, saved; it closes when the server has
+    void OnClosing(object sender, FormClosingEventArgs e)
+    {
+        if (!IsRunning)
+            return;
+        if (stopping)
+        {
+            // Asked to stop and still running: the scripts didn't answer, so it goes
+            if (DateTime.Now - lastStatusChange > TimeSpan.FromSeconds(10))
+                try { process.Kill(); } catch { }
+            else
+                e.Cancel = true;
+            return;
+        }
+        if (!ConfirmWithPlayers("Close the window and stop the server?"))
+        {
+            e.Cancel = true;
+            return;
+        }
+        e.Cancel = true;
+        stopping = true;
+        Send("stop");
+        AddLog("--- Stopping the server...");
+        // If the scripts don't stop it, it is stopped anyway
+        var force = new System.Windows.Forms.Timer { Interval = 15000 };
+        force.Tick += delegate
+        {
+            force.Stop();
+            if (IsRunning)
+                try { process.Kill(); } catch { }
+        };
+        force.Start();
+    }
+
+    void AddLog(string line)
+    {
+        if (line == null)
+            return;
+        if (InvokeRequired)
+        {
+            try { BeginInvoke(new Action<string>(AddLog), line); } catch (InvalidOperationException) { }
+            return;
+        }
+        // The log keeps its last 3000 lines
+        if (log.Lines.Length > 3000)
+            log.Lines = log.Lines.Skip(1000).ToArray();
+        log.AppendText(line + Environment.NewLine);
+    }
+
+    void ShowPage(int page)
+    {
+        for (int i = 0; i < pages.Length; i++)
+        {
+            pages[i].Visible = i == page;
+            pageButtons[i].ForeColor = i == page ? LauncherForm.Gold : LauncherForm.Dim;
+        }
+    }
+
+    static Label ActionLabel(string text, int y)
+    {
+        return new Label { Text = text, ForeColor = LauncherForm.Gold, Bounds = new Rectangle(12, y, 104, 22) };
+    }
+
+    static Label PageLabel(string text, int y, int height = 20)
+    {
+        return new Label { Text = text, ForeColor = LauncherForm.Gold, Bounds = new Rectangle(0, y, 372, height) };
+    }
+
+    static TextBox MakeTextBox(Rectangle bounds)
+    {
+        return new TextBox { Bounds = bounds, BackColor = LauncherForm.Panel, ForeColor = LauncherForm.Sand,
+            BorderStyle = BorderStyle.FixedSingle };
+    }
+
+    static ListBox MakeList(Rectangle bounds)
+    {
+        return new ListBox { Bounds = bounds, BackColor = LauncherForm.Panel, ForeColor = LauncherForm.Sand,
+            BorderStyle = BorderStyle.FixedSingle, IntegralHeight = false };
+    }
+
+    static ComboBox HostFormChoice(string[] items)
+    {
+        return HostForm.MakeChoice(items);
     }
 }
 
