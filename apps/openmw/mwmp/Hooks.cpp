@@ -287,7 +287,10 @@ namespace mwmp::hooks
 
     void updatePtr(const MWWorld::Ptr& oldPtr, const MWWorld::Ptr& newPtr)
     {
-        if (!isMultiplayer() || oldPtr == newPtr)
+        // Not skipped when the two compare equal: a Ptr compares only its reference, which an object moved to
+        // another cell keeps (CellStore::moveTo), so the new Ptr differs only in its cell, which is what's tracked
+        // (an actor's cell change is seen by its Ptr's cell: mwmp::Cell::updateLocal)
+        if (!isMultiplayer())
             return;
         CellController* cellController = Main::get().getCellController();
         if (cellController->isLocalActor(oldPtr))

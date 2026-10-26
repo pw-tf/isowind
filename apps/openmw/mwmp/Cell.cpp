@@ -520,8 +520,10 @@ void Cell::initializeLocalActors()
 
         std::string mapIndex = Main::get().getCellController()->generateMapIndex(ptr);
 
-        // Only initialize this actor if it isn't already initialized
-        if (localActors.count(mapIndex) == 0)
+        // Only initialize this actor if it isn't already initialized, here or in another cell: one that walked in
+        // from another cell is handed over by that cell's updateLocal, which tells the server of its cell change (a
+        // second LocalActor here would leave the first one behind, its cell change never sent)
+        if (localActors.count(mapIndex) == 0 && !Main::get().getCellController()->isLocalActor(ptr))
             initializeLocalActor(ptr);
     }
 
