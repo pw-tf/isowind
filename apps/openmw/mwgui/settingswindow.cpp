@@ -1367,11 +1367,11 @@ namespace MWGui
         const MyGUI::IntCoord coord = target->getAbsoluteCoord();
         MyGUI::InputManager::getInstance().injectMouseMove(
             coord.left + coord.width / 2, coord.top + static_cast<int>(coord.height * yFraction), 0);
-        // The frame (frameControl) is the pointer: the mouse cursor stays hidden, as in the other menus made for the
-        // controller, until the mouse itself moves. The setting's description still shows, at the frame.
+        // The pointer shows and is live on the control, besides the frame (frameControl): stepping finds the control
+        // it is on by the GUI's mouse focus, which a hidden pointer doesn't keep (the D-pad would stay on one control)
         MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
-        winMgr->setCursorVisible(false);
-        winMgr->setControllerTooltipVisible(Settings::gui().mControllerTooltips);
+        winMgr->setCursorVisible(true);
+        winMgr->setCursorActive(true);
         frameControl(control);
     }
 
