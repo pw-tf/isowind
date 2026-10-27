@@ -63,6 +63,8 @@ namespace mwmp
         // them and ignoring what others send (a one-off event's people, each player's own: "isowind local" from the
         // server, see MechanicsHelper::runClientLocalCommand). They stay so for the session.
         void setClientLocalActor(int refNum, int mpNum);
+        /// Run as any other again (a private follower sent back to its post)
+        void unsetClientLocalActor(int refNum, int mpNum);
         /// No longer a LocalActor or DedicatedActor here (it's gone, or now run otherwise)
         void forgetActor(int refNum, int mpNum);
         bool isClientLocalActor(const MWWorld::Ptr& ptr);

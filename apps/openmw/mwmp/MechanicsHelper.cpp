@@ -567,12 +567,39 @@ bool MechanicsHelper::runPrivateFollowerCommand(const std::string& command, MWWo
     const bool stay = !own && !follow && takeCommand(command, "isowind stay", rest);
     const bool take = !own && !follow && !stay && takeCommand(command, "isowind take", rest);
     const bool release = !own && !follow && !stay && !take && takeCommand(command, "isowind release", rest);
-    if (!own && !follow && !stay && !take && !release)
+    const bool dismiss
+        = !own && !follow && !stay && !take && !release && takeCommand(command, "isowind dismiss", rest);
+    if (!own && !follow && !stay && !take && !release && !dismiss)
         return false;
 
     const std::string index = followerIndex(refNum, mpNum);
     auto known = privateFollowers.find(index);
     const bool wasPrivate = known != privateFollowers.end();
+
+    // The player sent it away (/dismiss): back at its post as the game's files have it, the world's again
+    if (dismiss)
+    {
+        if (!wasPrivate)
+            return true;
+        MWWorld::Ptr ptr = findPrivateFollower(known->second);
+        privateFollowers.erase(known);
+        CellController* cellController = Main::get().getCellController();
+        cellController->unsetClientLocalActor(refNum, mpNum);
+        if (!ptr.isEmpty())
+        {
+            MWWorld::CellStore* post = ptr.getCell()->getOriginCell(ptr);
+            if (!ptr.getRefData().isEnabled())
+                MWBase::Environment::get().getWorld()->enable(ptr);
+            ptr.getClass().getCreatureStats(ptr).getAiSequence().clear();
+            respawnActor(ptr);
+            // Run by whoever has authority over its cell again
+            if (post != nullptr && !post->getCell()->isEsm4()
+                && cellController->isInitializedCell(post->getCell()->getEsm3()))
+                cellController->getCell(post->getCell()->getEsm3())->shouldInitializeActors = true;
+        }
+        LOG_MESSAGE_SIMPLE(TimedLog::LOG_INFO, "%s %s was sent back to its post", refIdString.c_str(), index.c_str());
+        return true;
+    }
 
     // It went to another member of the player's party: out of this game (they have it; this player sees its copy)
     if (release)

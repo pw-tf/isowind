@@ -395,6 +395,11 @@ void CellController::setClientLocalActor(int refNum, int mpNum)
     forgetActor(refNum, mpNum);
 }
 
+void CellController::unsetClientLocalActor(int refNum, int mpNum)
+{
+    clientLocalActors.erase(generateMapIndex(refNum, mpNum));
+}
+
 void CellController::forgetActor(int refNum, int mpNum)
 {
     std::string actorIndex = generateMapIndex(refNum, mpNum);

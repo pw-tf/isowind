@@ -11,6 +11,9 @@
 -- * Following: after logging in, it's at their side again ("isowind follow").
 -- * Staying (it stopped following): it stays where it stopped, for them ("isowind stay <x> <y> <z> <cell>").
 -- * Dead: for them only, and it doesn't come back; its body lies where it fell ("isowind stay dead ...").
+-- The player can send it away: /companions lists theirs, /dismiss <number or all> sends one back to its post, the
+-- world's again for them ("isowind dismiss"), and /follow <number> asks one to follow them again where it is (at its
+-- post if sent back, or where it stayed).
 --
 -- While it follows, the other players see it with them: their games make a look-alike of it ("isowind copy <x> <y>
 -- <z>", "isowind uncopy" once it no longer follows) that can't be talked to or hurt, moved by what the owner's game
@@ -101,7 +104,7 @@ end
 -- The others' games are told of a player's follower's copy: where it is ("isowind copy"), or that it's gone
 local function sendCopy(ownerPid, uniqueIndex, follower, toPids, gone)
     local mpNum = copyMpNum(ownerPid, uniqueIndex)
-    if mpNum == nil or follower.cell == nil then
+    if mpNum == nil or follower.cell == nil or follower.refId == nil or follower.refId == "" then
         return
     end
     local command = gone and "isowind uncopy" or string.format("isowind copy %.2f %.2f %.2f", follower.posX or 0,
@@ -243,6 +246,10 @@ local function onActorAI(eventStatus, pid, cellDescription)
             tes3mp.GetActorAITargetPid(index) == pid then
             local uniqueIndex = tes3mp.GetActorRefNum(index) .. "-" .. mpNum
             local refId = tes3mp.GetActorRefId(index)
+            if refId == "" and LoadedCells[cellDescription] ~= nil then
+                local objectData = LoadedCells[cellDescription].data.objectData[uniqueIndex]
+                refId = objectData ~= nil and objectData.refId or ""
+            end
             -- One of each for a party: another member's comes to this one (the one they told to follow, in their game)
             local holder = holderOf(playerKey(pid), uniqueIndex)
             if holder ~= nil and holder ~= playerKey(pid) and followers[uniqueIndex] == nil then
@@ -306,6 +313,10 @@ local function onClientScriptLocal(eventStatus, pid, cellDescription, objects)
                     " " .. uniqueIndex .. " from " .. playerKey(pid) .. ": not their follower")
             else
                 local wasFollowing = follower.state == state.FOLLOWING
+                -- (The follow order didn't say who it is; the game says it here)
+                if (follower.refId == nil or follower.refId == "") and object.refId ~= nil and object.refId ~= "" then
+                    follower.refId = object.refId
+                end
                 -- Dead stays dead (its body can still be moved)
                 if follower.state ~= state.DEAD then
                     if newState ~= follower.state then
@@ -521,6 +532,169 @@ local function onCellLoad(eventStatus, pid, cellDescription)
         end
     end
 end
+
+-- --- /companions and /dismiss --------------------------------------------------------------------------------------
+
+-- The ones a player sent back to their post (/dismiss): { uniqueIndex = { refId, postCell } }, theirs to ask again
+local function dismissedOf(pid)
+    local data = Players[pid].data
+    data.customVariables = data.customVariables or {}
+    data.customVariables.isowindDismissed = data.customVariables.isowindDismissed or {}
+    return data.customVariables.isowindDismissed
+end
+
+-- A player's companions, numbered: their followers, then the ones they sent back
+local function companionList(pid)
+    local followers, dismissed = {}, {}
+    for uniqueIndex, follower in pairs(followersOf(pid)) do
+        table.insert(followers, { uniqueIndex = uniqueIndex, follower = follower })
+    end
+    for uniqueIndex, record in pairs(dismissedOf(pid)) do
+        table.insert(dismissed, { uniqueIndex = uniqueIndex, follower = record, dismissed = true })
+    end
+    local byIndex = function(a, b) return a.uniqueIndex < b.uniqueIndex end
+    table.sort(followers, byIndex)
+    table.sort(dismissed, byIndex)
+    for _, entry in ipairs(dismissed) do
+        table.insert(followers, entry)
+    end
+    return followers
+end
+
+local function nameOfCompanion(entry)
+    local refId = entry.follower.refId
+    return refId ~= nil and refId ~= "" and refId or entry.uniqueIndex
+end
+
+-- Whether a player is where a companion is: the same cell, or next to it outdoors
+local function isNear(pid, cellDescription)
+    local here = tes3mp.GetCell(pid)
+    if here == cellDescription then
+        return true
+    end
+    local x, y = here:match("^(%-?%d+), (%-?%d+)$")
+    local otherX, otherY = cellDescription:match("^(%-?%d+), (%-?%d+)$")
+    return x ~= nil and otherX ~= nil and math.abs(tonumber(x) - tonumber(otherX)) <= 1 and
+        math.abs(tonumber(y) - tonumber(otherY)) <= 1
+end
+
+local stateNames = { [state.FOLLOWING] = "following you", [state.STAYING] = "staying", [state.DEAD] = "dead" }
+
+local function companionsCommand(pid, cmd)
+    local list = companionList(pid)
+    if #list == 0 then
+        tes3mp.SendMessage(pid, color.White .. "You have no companions.\n", false)
+        return
+    end
+    local lines = {}
+    for number, entry in ipairs(list) do
+        local follower = entry.follower
+        local where
+        if entry.dismissed then
+            where = "sent back, in " .. tostring(follower.postCell)
+        else
+            where = (stateNames[follower.state] or "?") ..
+                (follower.state ~= state.FOLLOWING and follower.cell and (", in " .. follower.cell) or "")
+        end
+        table.insert(lines, number .. ". " .. nameOfCompanion(entry) .. " - " .. where)
+    end
+    tes3mp.SendMessage(pid, color.White .. "Your companions:\n" .. table.concat(lines, "\n") .. "\n" .. color.Yellow ..
+        "/follow <number>" .. color.White .. " asks one to follow you (go where they are), " .. color.Yellow ..
+        "/dismiss <number>" .. color.White .. " (or " .. color.Yellow .. "/dismiss all" .. color.White ..
+        ") sends one back where it came from.\n", false)
+end
+
+local function dismissCommand(pid, cmd)
+    local list = {}
+    for _, entry in ipairs(companionList(pid)) do
+        if not entry.dismissed then
+            table.insert(list, entry)
+        end
+    end
+    local which = cmd[2] and string.lower(cmd[2]) or ""
+    local chosen = {}
+    if which == "all" then
+        chosen = list
+    elseif tonumber(which) ~= nil and companionList(pid)[tonumber(which)] ~= nil and
+        not companionList(pid)[tonumber(which)].dismissed then
+        chosen = { companionList(pid)[tonumber(which)] }
+    else
+        companionsCommand(pid, cmd)
+        return
+    end
+    local followers = followersOf(pid)
+    local dismissed = dismissedOf(pid)
+    for _, entry in ipairs(chosen) do
+        local uniqueIndex, follower = entry.uniqueIndex, entry.follower
+        if follower.state == state.FOLLOWING then
+            sendCopy(pid, uniqueIndex, follower, otherPids(pid), true)
+        end
+        sendCommand(pid, follower.cell or follower.postCell, "isowind dismiss", uniqueIndex, follower.refId or "")
+        followers[uniqueIndex] = nil
+        -- (a dead one is gone for good)
+        if follower.state ~= state.DEAD then
+            dismissed[uniqueIndex] = { refId = follower.refId, postCell = follower.postCell }
+        end
+        if holderOf(playerKey(pid), uniqueIndex) == playerKey(pid) then
+            setHolder(playerKey(pid), uniqueIndex, nil)
+        end
+        tes3mp.LogMessage(enumerations.log.INFO, "[Isowind] " .. playerKey(pid) .. " dismissed " ..
+            tostring(follower.refId) .. " " .. uniqueIndex)
+        tes3mp.SendMessage(pid, color.White .. nameOfCompanion(entry) .. " goes back to " .. follower.postCell ..
+            ". " .. color.Yellow .. "/follow" .. color.White .. " there asks them to come along again.\n", false)
+    end
+    Players[pid]:QuicksaveToDrive()
+end
+
+-- A companion of theirs follows the player again, if they're where it is: one sent back (at its post) or one that
+-- stayed somewhere
+local function followCommand(pid, cmd)
+    local list = companionList(pid)
+    local entry = tonumber(cmd[2] or "") ~= nil and list[tonumber(cmd[2])] or nil
+    if entry == nil then
+        companionsCommand(pid, cmd)
+        return
+    end
+    local uniqueIndex, follower = entry.uniqueIndex, entry.follower
+    local name = nameOfCompanion(entry)
+    if not entry.dismissed and follower.state == state.FOLLOWING then
+        tes3mp.SendMessage(pid, color.White .. name .. " already follows you.\n", false)
+        return
+    elseif not entry.dismissed and follower.state == state.DEAD then
+        tes3mp.SendMessage(pid, color.White .. name .. " is dead.\n", false)
+        return
+    end
+    local holder = holderOf(playerKey(pid), uniqueIndex)
+    if holder ~= nil and holder ~= playerKey(pid) then
+        tes3mp.SendMessage(pid, color.White .. name .. " is with " .. holder .. ".\n", false)
+        return
+    end
+    local where = entry.dismissed and follower.postCell or follower.cell or follower.postCell
+    if not isNear(pid, where) then
+        tes3mp.SendMessage(pid, color.White .. name .. " is in " .. where .. ": go there to ask them.\n", false)
+        return
+    end
+
+    local followers = followersOf(pid)
+    if entry.dismissed then
+        dismissedOf(pid)[uniqueIndex] = nil
+        follower = { refId = follower.refId, postCell = follower.postCell }
+        followers[uniqueIndex] = follower
+    end
+    follower.state = state.FOLLOWING
+    follower.cell = tes3mp.GetCell(pid)
+    setHolder(playerKey(pid), uniqueIndex, playerKey(pid))
+    sendCommand(pid, follower.postCell, withCopyNumber("isowind follow", pid, uniqueIndex), uniqueIndex,
+        follower.refId or "")
+    Players[pid]:QuicksaveToDrive()
+    tes3mp.LogMessage(enumerations.log.INFO, "[Isowind] " .. tostring(follower.refId) .. " " .. uniqueIndex ..
+        " follows " .. playerKey(pid) .. " again")
+    tes3mp.SendMessage(pid, color.White .. name .. " follows you.\n", false)
+end
+
+customCommandHooks.registerCommand("companions", companionsCommand)
+customCommandHooks.registerCommand("dismiss", dismissCommand)
+customCommandHooks.registerCommand("follow", followCommand)
 
 -- Before isowindMmo.lua's (required after this), whose OnClientScriptLocal takes the rest of the gameplay ones
 customEventHooks.registerHandler("OnServerPostInit", function(eventStatus)

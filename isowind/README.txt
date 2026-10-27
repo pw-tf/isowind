@@ -62,7 +62,9 @@ Hosting a server
      post for everyone else, who can each take them along too. Others see yours walking and
      fighting with you, but can't talk to it or hurt it. Log out while they follow and they're at
      your side when you're back; once they stop following they stay where they stopped, for you.
-     If they die, they're dead for you only.
+     If they die, they're dead for you only. /companions lists yours; /dismiss <number> (or
+     /dismiss all) sends one back where it came from, and /follow <number>, said where they are,
+     has one follow you again.
    - PvP (whether players can hurt each other), difficulty and how fast the time of day goes.
    Then the server's window opens; it runs the server, and closing it stops the server (saved). It shows:
    - The players in the world, their staff rank, ping, level and cell. Pick one to change their staff rank
