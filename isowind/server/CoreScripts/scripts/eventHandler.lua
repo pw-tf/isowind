@@ -1168,9 +1168,20 @@ eventHandler.OnPlayerItemUse = function(pid)
 end
 
 eventHandler.OnPlayerMiscellaneous = function(pid)
-    if Players[pid] ~= nil and Players[pid]:IsLoggedIn() then
-        local changeType = tes3mp.GetMiscellaneousChangeType(pid)
+    if Players[pid] == nil then
+        return
+    end
+    local changeType = tes3mp.GetMiscellaneousChangeType(pid)
 
+    -- Isowind: a character from single-player is sent before its player logs in (custom/isowindPortable.lua)
+    if changeType == enumerations.miscellaneous.PORTABLE_CHARACTER or
+        changeType == enumerations.miscellaneous.PORTABLE_DATA then
+        customEventHooks.triggerHandlers("OnPlayerPortableCharacter", customEventHooks.makeEventStatus(true, true),
+            {pid, changeType})
+        return
+    end
+
+    if Players[pid]:IsLoggedIn() then
         if changeType == enumerations.miscellaneous.MARK_LOCATION then
             local eventStatus = customEventHooks.triggerValidators("OnPlayerMarkLocation", {pid})
             if eventStatus.validDefaultHandler then

@@ -2,6 +2,8 @@
 #define OPENMW_PROCESSORPLAYERMISCELLANEOUS_HPP
 
 
+#include "apps/openmw/mwmp/PortableCharacter.hpp"
+
 #include "../PlayerProcessor.hpp"
 
 namespace mwmp
@@ -28,6 +30,10 @@ namespace mwmp
                     localPlayer.setMarkLocation();
                 else if (player->miscellaneousChangeType == mwmp::MISCELLANEOUS_CHANGE_TYPE::SELECTED_SPELL)
                     localPlayer.setSelectedSpell();
+                else if (player->miscellaneousChangeType == mwmp::MISCELLANEOUS_CHANGE_TYPE::PORTABLE_REQUEST)
+                    PortableCharacter::send(localPlayer);
+                else if (player->miscellaneousChangeType == mwmp::MISCELLANEOUS_CHANGE_TYPE::PORTABLE_LINKED)
+                    PortableCharacter::setLinked(localPlayer);
             }
         }
     };

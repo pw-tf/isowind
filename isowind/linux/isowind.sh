@@ -3,7 +3,11 @@
 #
 #   ./isowind.sh                  play (pixel art look, or the look you used last)
 #   ./isowind.sh normal           play with the normal look (or: pixelart)
-#   ./isowind.sh join ADDRESS     play on a server, e.g. ./isowind.sh join 203.0.113.7:25565 (look optional after it)
+#   ./isowind.sh join ADDRESS     play on a server, e.g. ./isowind.sh join 203.0.113.7:25565 (look optional after it;
+#                                 a save after it brings that single-player character, if the server takes them)
+#   ./isowind.sh load SAVE        play a single-player save (an .omwsave file; look optional after it)
+#   ./isowind.sh new              start a new character, without the main menu (look optional after it)
+#   ./isowind.sh server-character FOLDER   play offline a character made on a server (its saves folder, look optional)
 #   ./isowind.sh host             run a server here, in this terminal, after asking its settings (others join
 #                                 with this computer's address)
 #   ./isowind.sh gui              the launcher window (look, join, host), like Isowind.exe; also what
@@ -132,6 +136,11 @@ ask_host_settings() {
     ask "Can players hurt each other (PvP)? (yes or no)" "$PVP" 'yes|no'
     [ "$REPLY" = yes ] && REPLY=true || REPLY=false
     set_setting "$FILE" Isowind pvp "$REPLY"
+    PORTABLE=$(get_server_setting Isowind portableCharacters false)
+    [ "$PORTABLE" = true ] && PORTABLE=yes || PORTABLE=no
+    ask "Can players bring their single-player characters (as their saves have them)? (yes or no)" "$PORTABLE" 'yes|no'
+    [ "$REPLY" = yes ] && REPLY=true || REPLY=false
+    set_setting "$FILE" Isowind portableCharacters "$REPLY"
     ask "Difficulty, -100 (very easy) to 100 (very hard), 0 is Morrowind's normal" \
         "$(get_server_setting Isowind difficulty 0)" '-?[0-9]{1,3}'
     set_setting "$FILE" Isowind difficulty "$REPLY"
@@ -154,7 +163,8 @@ play() {
     # Xbox controllers through the kernel's driver, not SDL's own: SDL's skips one it can't open (a Bluetooth one,
     # whose hidraw only root reads) when it has another with the same ids (Sunshine's virtual one, left after a stream)
     export SDL_JOYSTICK_HIDAPI_XBOX=${SDL_JOYSTICK_HIDAPI_XBOX:-0}
-    exec "$ENGINE/openmw" --config "$ROOT/profiles/$LOOK" $CONNECT
+    # shellcheck disable=SC2086
+    exec "$ENGINE/openmw" --config "$ROOT/profiles/$LOOK" $CONNECT $SKIP_MENU ${SAVE:+"--load-savegame=$SAVE"}         ${CHARACTER:+"--character=$CHARACTER"} ${SERVER_CHARACTER:+"--server-character=$SERVER_CHARACTER"}
 }
 
 launcher() {
@@ -164,17 +174,15 @@ launcher() {
     exec python3 "$ROOT/isowind-launcher.py"
 }
 
-# --controller / --no-controller, from before the game picked the menus by itself: taken and ignored (none of the
-# other arguments has spaces in it)
-ARGS=""
+# --controller / --no-controller, from before the game picked the menus by itself: taken and ignored (the others
+# kept as they are, a save's path with spaces in it too)
 for arg in "$@"; do
+    shift
     case $arg in
         --controller | --no-controller) ;;
-        *) ARGS="$ARGS $arg" ;;
+        *) set -- "$@" "$arg" ;;
     esac
 done
-# shellcheck disable=SC2086
-set -- $ARGS
 
 case $1 in
     host)
@@ -187,6 +195,28 @@ case $1 in
     join)
         [ -n "$2" ] || die "join needs the server's address, e.g. $0 join 203.0.113.7"
         CONNECT="--connect=$2"
+        # The look and a single-player character's save, in either order
+        LOOK=""
+        shift 2
+        for arg in "$@"; do
+            case $arg in
+                *.omwsave | *isowind-server-progress.dat) CHARACTER=$arg ;;
+                *) LOOK=$arg ;;
+            esac
+        done
+        play "$LOOK" ;;
+    load)
+        [ -f "$2" ] || die "load needs a save file, e.g. $0 load ~/.local/share/openmw/saves/Name/Quicksave.omwsave"
+        SAVE=$2
+        SKIP_MENU=--skip-menu
+        play "$3" ;;
+    new)
+        SKIP_MENU="--skip-menu --new-game"
+        play "$2" ;;
+    server-character)
+        [ -d "$2" ] || die "server-character needs the character's saves folder"
+        SERVER_CHARACTER=$2
+        SKIP_MENU=--skip-menu
         play "$3" ;;
     gui)
         launcher ;;
@@ -197,6 +227,6 @@ case $1 in
     pixelart|normal)
         play "$1" ;;
     *)
-        sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
         exit 1 ;;
 esac

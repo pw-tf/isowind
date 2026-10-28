@@ -1,6 +1,7 @@
 #ifndef OPENMW_MWMP_MAIN
 #define OPENMW_MWMP_MAIN
 
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -40,6 +41,18 @@ namespace mwmp
         static const Main &get();
         static void frame(float dt);
 
+        // The single-player save of the character the player joined with (--character), or empty: see
+        // PortableCharacter.hpp
+        static const std::string &getCharacterSave();
+
+        // Single-player: the saves folder of a character made on a server, to play offline for the first time
+        // (--server-character), or empty
+        static const std::string &getServerCharacter();
+
+        // Where the single-player characters' saves are (the engine sets it)
+        static void setSavesPath(const std::filesystem::path &path);
+        static const std::filesystem::path &getSavesPath();
+
         static bool isValidPacketScript(const std::string &scriptId);
         static bool isValidPacketGlobal(const std::string &globalId);
 
@@ -54,6 +67,9 @@ namespace mwmp
     private:
         static std::string address;
         static std::string serverPassword;
+        static std::string characterSave;
+        static std::string serverCharacter;
+        static std::filesystem::path savesPath;
         Main (const Main&) = delete;
         Main& operator= (const Main&) = delete;
         static Main *pMain;

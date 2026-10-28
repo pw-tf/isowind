@@ -2,6 +2,7 @@
 
 #include "mwmp/GUIController.hpp"
 #include "mwmp/Main.hpp"
+#include "mwmp/PortableCharacter.hpp"
 
 #include "mwmp/Hooks.hpp"
 
@@ -40,6 +41,7 @@
 #include <components/sceneutil/workqueue.hpp>
 
 #include <components/files/configurationmanager.hpp>
+#include <components/files/conversion.hpp>
 
 #include <components/version/version.hpp>
 
@@ -418,6 +420,8 @@ OMW::Engine::~Engine()
     // Isowind multiplayer
     if (mwmp::Main::isInitialized())
     {
+        // A character from single-player takes what it gained back with it, while the world is still there
+        mwmp::PortableCharacter::finish(*mwmp::Main::get().getLocalPlayer());
         mwmp::Main::get().getGUIController()->cleanUp();
         mwmp::Main::destroy();
     }
@@ -747,6 +751,7 @@ void OMW::Engine::setWindowIcon()
 void OMW::Engine::prepareEngine()
 {
     mStateManager = std::make_unique<MWState::StateManager>(mCfgMgr.getUserDataPath() / "saves", mContentFiles);
+    mwmp::Main::setSavesPath(mCfgMgr.getUserDataPath() / "saves");
     mEnvironment.setStateManager(*mStateManager);
 
     const bool stereoEnabled = Settings::stereo().mStereoEnabled || osg::DisplaySettings::instance().get()->getStereo();
@@ -1031,6 +1036,11 @@ void OMW::Engine::go()
     else if (!mSaveGameFile.empty())
     {
         mStateManager->loadGame(mSaveGameFile);
+    }
+    else if (!mwmp::Main::getServerCharacter().empty())
+    {
+        // Isowind: a character made on a multiplayer server, played offline for the first time
+        mStateManager->startServerCharacter(Files::pathFromUnicodeString(mwmp::Main::getServerCharacter()));
     }
     else if (!mSkipMenu)
     {

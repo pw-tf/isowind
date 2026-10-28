@@ -54,6 +54,16 @@ void MWState::CharacterManager::deleteSlot(const MWState::Slot* slot, const MWSt
     }
 }
 
+MWState::Character* MWState::CharacterManager::adoptCharacter(const std::filesystem::path& path)
+{
+    for (Character& character : mCharacters)
+    {
+        if (character.getPath() == path)
+            return &character;
+    }
+    return &mCharacters.emplace_front(path, mGame);
+}
+
 MWState::Character* MWState::CharacterManager::createCharacter(const std::string& name)
 {
     std::ostringstream stream;

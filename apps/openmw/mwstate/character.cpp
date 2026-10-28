@@ -106,6 +106,9 @@ MWState::Character::Character(const std::filesystem::path& saves, const std::str
     {
         for (const auto& iter : std::filesystem::directory_iterator(mPath))
         {
+            // Isowind keeps a character's multiplayer id beside its saves (mwmp/PortableCharacter.hpp)
+            if (iter.path().extension() != ".omwsave")
+                continue;
             try
             {
                 addSlot(iter, game);

@@ -1,4 +1,5 @@
 #include "../mwmp/Main.hpp"
+#include "../mwmp/PortableCharacter.hpp"
 #include "statemanagerimp.hpp"
 
 #include <filesystem>
@@ -614,6 +615,11 @@ void MWState::StateManager::loadGame(const Character* character, const std::file
         actorIdConverter.apply();
         MWBase::Environment::get().getWorld()->setupPlayer();
         MWBase::Environment::get().getWorld()->renderPlayer();
+        // Isowind: what the character gained on a multiplayer server since this save goes on it (and is saved)
+        mServerProgressToSave = std::nullopt;
+        mServerProgressWait = 0;
+        if (character && mwmp::PortableCharacter::applyServerProgress(character->getPath(), filepath))
+            mServerProgressToSave = character->getPath();
         MWBase::Environment::get().getWindowManager()->updatePlayer();
         MWBase::Environment::get().getMechanicsManager()->playerLoaded();
         MWBase::Environment::get().getWorld()->toggleVanityMode(false);
@@ -691,6 +697,13 @@ void MWState::StateManager::loadGame(const Character* character, const std::file
         std::string error = "#{OMWEngine:LoadingFailed}: " + std::string(e.what());
         printSavegameFormatError(e.what(), error);
     }
+}
+
+void MWState::StateManager::startServerCharacter(const std::filesystem::path& characterFolder)
+{
+    newGame(true);
+    mServerCharacterToStart = characterFolder;
+    mServerCharacterSetUp = false;
 }
 
 void MWState::StateManager::printSavegameFormatError(
@@ -793,6 +806,44 @@ void MWState::StateManager::update(float duration)
             character = getCurrentCharacter();
         loadGame(character, mLoadRequest->second);
         mLoadRequest = std::nullopt;
+    }
+
+    // Isowind: a character made on a server put on the new game: their race, class and the like, then (the next frame,
+    // the game having made the player from those) their stats, things, journal, and where they were
+    if (mServerCharacterToStart && mState == State_Running)
+    {
+        std::filesystem::path characterFolder = *mServerCharacterToStart;
+        if (!mServerCharacterSetUp)
+        {
+            mServerCharacterSetUp = true;
+            if (!mwmp::PortableCharacter::setUpServerCharacter(characterFolder))
+                mServerCharacterToStart = std::nullopt;
+        }
+        else
+        {
+            mServerCharacterToStart = std::nullopt;
+            if (mwmp::PortableCharacter::finishServerCharacter(characterFolder))
+            {
+                // Saved into the folder they came in
+                mCharacterManager.setCurrentCharacter(mCharacterManager.adoptCharacter(characterFolder));
+                mServerProgressToSave = characterFolder;
+                mServerProgressWait = 0;
+            }
+        }
+    }
+
+    // Isowind: progress from a multiplayer server put on the character loaded, saved once the game has run a moment
+    // (so the save's picture is of the game, not the loading screen)
+    if (mServerProgressToSave && mState == State_Running)
+    {
+        mServerProgressWait += duration;
+        if (mServerProgressWait >= 1)
+        {
+            std::filesystem::path characterFolder = *mServerProgressToSave;
+            mServerProgressToSave = std::nullopt;
+            saveGame("Back from multiplayer", nullptr);
+            mwmp::PortableCharacter::clearServerProgress(characterFolder);
+        }
     }
 }
 

@@ -6,10 +6,11 @@
 --   difficulty    -100 to 100, 0 is Morrowind's normal
 --   respawnSpeed  MMO: how much faster than normal enemies come back (0.5 to 4)
 --   timeSpeed     how much faster than Morrowind's the time of day goes (0.5 to 4)
+--   portableCharacters  whether players can bring their single-player characters (custom/isowindPortable.lua)
 --
 -- Players are told the mode and PvP with the game settings sent at login ("isowind mode", "isowind pvp").
 
-IsowindHost = { mode = "coop", pvp = false, difficulty = 0, respawnSpeed = 1, timeSpeed = 1 }
+IsowindHost = { mode = "coop", pvp = false, difficulty = 0, respawnSpeed = 1, timeSpeed = 1, portableCharacters = false }
 
 local function readSettings(path, values)
     local file = io.open(path, "r")
@@ -51,6 +52,7 @@ IsowindHost.pvp = string.lower(values.pvp or "false") == "true"
 IsowindHost.difficulty = math.floor(clamp(values.difficulty, -500, 500, 0))
 IsowindHost.respawnSpeed = clamp(values.respawnSpeed, 0.1, 10, 1)
 IsowindHost.timeSpeed = clamp(values.timeSpeed, 0.1, 10, 1)
+IsowindHost.portableCharacters = string.lower(values.portableCharacters or "false") == "true"
 
 function IsowindHost.IsMmo()
     return IsowindHost.mode == "mmo"
@@ -63,7 +65,8 @@ table.insert(config.gameSettings, { name = "isowind pvp", value = IsowindHost.pv
 
 tes3mp.LogMessage(enumerations.log.INFO, "[Isowind] " .. config.gameMode .. ", PvP " ..
     (IsowindHost.pvp and "on" or "off") .. ", difficulty " .. IsowindHost.difficulty .. ", respawns x" ..
-    IsowindHost.respawnSpeed .. ", time x" .. IsowindHost.timeSpeed)
+    IsowindHost.respawnSpeed .. ", time x" .. IsowindHost.timeSpeed .. ", single-player characters " ..
+    (IsowindHost.portableCharacters and "allowed" or "not allowed"))
 
 -- Morrowind's time of day goes 30 times (40 at night) faster than real time; the host's speed scales both
 customEventHooks.registerHandler("OnServerInit", function(eventStatus)

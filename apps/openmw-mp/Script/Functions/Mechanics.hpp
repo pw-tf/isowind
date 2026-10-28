@@ -15,6 +15,11 @@
     {"GetMarkRotX",                 MechanicsFunctions::GetMarkRotX},\
     {"GetMarkRotZ",                 MechanicsFunctions::GetMarkRotZ},\
     {"GetSelectedSpellId",          MechanicsFunctions::GetSelectedSpellId},\
+    {"GetPortableCharacterId",      MechanicsFunctions::GetPortableCharacterId},\
+    {"GetPortableCharacterPlayed",  MechanicsFunctions::GetPortableCharacterPlayed},\
+    {"GetPortableDataChunk",        MechanicsFunctions::GetPortableDataChunk},\
+    {"GetPortableDataChunkCount",   MechanicsFunctions::GetPortableDataChunkCount},\
+    {"GetPortableData",             MechanicsFunctions::GetPortableData},\
     \
     {"DoesPlayerHavePlayerKiller",  MechanicsFunctions::DoesPlayerHavePlayerKiller},\
     {"GetPlayerKillerPid",          MechanicsFunctions::GetPlayerKillerPid},\
@@ -35,6 +40,8 @@
     \
     {"SendMarkLocation",            MechanicsFunctions::SendMarkLocation},\
     {"SendSelectedSpell",           MechanicsFunctions::SendSelectedSpell},\
+    {"SendPortableRequest",         MechanicsFunctions::SendPortableRequest},\
+    {"SendPortableLinked",          MechanicsFunctions::SendPortableLinked},\
     {"SendAlliedPlayers",           MechanicsFunctions::SendAlliedPlayers},\
     \
     {"Jail",                        MechanicsFunctions::Jail},\
@@ -118,6 +125,47 @@ public:
     * \return The spell ID.
     */
     static const char *GetSelectedSpellId(unsigned short pid) noexcept;
+
+    /**
+    * \brief Isowind: get the id of the single-player character a player joined with (from a PlayerMiscellaneous
+    * packet of the PORTABLE_CHARACTER type).
+    *
+    * \param pid The player ID.
+    * \return The character's id.
+    */
+    static const char *GetPortableCharacterId(unsigned short pid) noexcept;
+
+    /**
+    * \brief Isowind: get when the single-player character a player joined with was last played.
+    *
+    * \param pid The player ID.
+    * \return Seconds since 1970, by the player's clock.
+    */
+    static double GetPortableCharacterPlayed(unsigned short pid) noexcept;
+
+    /**
+    * \brief Isowind: get which chunk of a single-player character a PORTABLE_DATA packet has (from 0).
+    *
+    * \param pid The player ID.
+    * \return The chunk's index.
+    */
+    static unsigned int GetPortableDataChunk(unsigned short pid) noexcept;
+
+    /**
+    * \brief Isowind: get how many chunks a single-player character is sent in.
+    *
+    * \param pid The player ID.
+    * \return The number of chunks.
+    */
+    static unsigned int GetPortableDataChunkCount(unsigned short pid) noexcept;
+
+    /**
+    * \brief Isowind: get a chunk of a single-player character (JSON, whole once the chunks are joined).
+    *
+    * \param pid The player ID.
+    * \return The chunk.
+    */
+    static const char *GetPortableData(unsigned short pid) noexcept;
 
     /**
     * \brief Check whether the killer of a certain player is also a player.
@@ -254,6 +302,25 @@ public:
     * \return void
     */
     static void SendMarkLocation(unsigned short pid);
+
+    /**
+    * \brief Isowind: ask a player for the single-player character they joined with; it comes back in
+    * PlayerMiscellaneous packets of the PORTABLE_DATA type.
+    *
+    * \param pid The player ID.
+    * \return void
+    */
+    static void SendPortableRequest(unsigned short pid);
+
+    /**
+    * \brief Isowind: tell a player they are logged in as a character that goes to single-player (the one they joined
+    * with, or one made here), so what it gains here is written back there.
+    *
+    * \param pid The player ID.
+    * \param characterId The character's id (the single-player one's, or one made for a character made here).
+    * \return void
+    */
+    static void SendPortableLinked(unsigned short pid, const char *characterId);
 
     /**
     * \brief Send a PlayerMiscellaneous packet with a selected spell ID to a player.

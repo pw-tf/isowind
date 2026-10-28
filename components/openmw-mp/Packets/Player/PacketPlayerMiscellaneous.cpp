@@ -25,4 +25,17 @@ void PacketPlayerMiscellaneous::Packet(RakNet::BitStream *newBitstream, bool sen
     }
     else if (player->miscellaneousChangeType == mwmp::MISCELLANEOUS_CHANGE_TYPE::SELECTED_SPELL)
         RW(player->selectedSpellId, send, true);
+    else if (player->miscellaneousChangeType == mwmp::MISCELLANEOUS_CHANGE_TYPE::PORTABLE_LINKED)
+        RW(player->portableId, send, true);
+    else if (player->miscellaneousChangeType == mwmp::MISCELLANEOUS_CHANGE_TYPE::PORTABLE_CHARACTER)
+    {
+        RW(player->portableId, send, true);
+        RW(player->portablePlayed, send);
+    }
+    else if (player->miscellaneousChangeType == mwmp::MISCELLANEOUS_CHANGE_TYPE::PORTABLE_DATA)
+    {
+        RW(player->portableChunk, send);
+        RW(player->portableChunkCount, send);
+        RW(player->portableData, send);
+    }
 }

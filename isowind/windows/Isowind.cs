@@ -61,6 +61,7 @@ class LauncherForm : Form
     readonly string root = AppDomain.CurrentDomain.BaseDirectory;
     readonly RadioButton pixelArt;
     readonly RadioButton normal;
+    readonly ComboBox character;
     readonly Button play;
     readonly Button openmwLauncher;
     readonly TextBox serverAddress;
@@ -75,6 +76,8 @@ class LauncherForm : Form
     string TexturesMarker { get { return Path.Combine(TexturesDir, "isowind-generated.txt"); } }
     string ModeFile { get { return Path.Combine(root, "profiles", "launcher-mode.txt"); } }
     string ServerFile { get { return Path.Combine(root, "profiles", "launcher-server.txt"); } }
+    // The character picked last: its saves folder's name, or "new"
+    string CharacterFile { get { return Path.Combine(root, "profiles", "launcher-character.txt"); } }
     string ServerDir { get { return Path.Combine(root, "server"); } }
     internal const int DefaultPort = 25565;
 
@@ -93,7 +96,7 @@ class LauncherForm : Form
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(460, 554);
+        ClientSize = new Size(460, 606);
         BackColor = Back;
         ForeColor = Sand;
         Font = new Font("Segoe UI", 10f);
@@ -147,11 +150,26 @@ class LauncherForm : Form
         };
         look.Controls.AddRange(new Control[] { lookTitle, pixelArt, normal, hint });
 
-        play = MakeButton("Play", new Rectangle(30, 268, 400, 52), 16f);
-        play.Click += delegate { Launch(null); };
+        // Who Play plays: a character with saves (their newest one), or a new one
+        var characterPanel = new Panel { BackColor = Panel, Bounds = new Rectangle(30, 264, 400, 44) };
+        var characterTitle = new Label
+        {
+            Text = "Character",
+            ForeColor = Gold,
+            Bounds = new Rectangle(14, 11, 80, 22),
+            TextAlign = ContentAlignment.MiddleLeft,
+        };
+        character = HostForm.MakeChoice(new string[0]);
+        character.Bounds = new Rectangle(94, 10, 292, 24);
+        character.DropDownWidth = 420;
+        characterPanel.Controls.AddRange(new Control[] { characterTitle, character });
+        FillCharacters();
+
+        play = MakeButton("Play", new Rectangle(30, 320, 400, 52), 16f);
+        play.Click += delegate { OnPlay(); };
 
         // Multiplayer: join a server by its address, or host one on this computer
-        var multiplayer = new Panel { BackColor = Panel, Bounds = new Rectangle(30, 332, 400, 122) };
+        var multiplayer = new Panel { BackColor = Panel, Bounds = new Rectangle(30, 384, 400, 122) };
         var multiplayerTitle = new Label { Text = "Multiplayer", ForeColor = Gold, Bounds = new Rectangle(14, 8, 300, 22) };
         var addressLabel = new Label
         {
@@ -189,16 +207,16 @@ class LauncherForm : Form
         };
 
         openmwLauncher = MakeButton("OpenMW Launcher  (Morrowind, mods, options)",
-            new Rectangle(30, 466, 300, 34), 9f);
+            new Rectangle(30, 518, 300, 34), 9f);
         openmwLauncher.Click += delegate { StartOpenMWLauncher(); };
-        var licenses = MakeButton("Licenses", new Rectangle(340, 466, 90, 34), 9.5f);
+        var licenses = MakeButton("Licenses", new Rectangle(340, 518, 90, 34), 9.5f);
         licenses.Click += delegate { ShowLicenses(); };
 
-        progress = new ProgressBar { Bounds = new Rectangle(30, 508, 400, 12), Visible = false };
-        status = new Label { ForeColor = Dim, Bounds = new Rectangle(30, 524, 400, 22), Font = new Font("Segoe UI", 9f) };
+        progress = new ProgressBar { Bounds = new Rectangle(30, 560, 400, 12), Visible = false };
+        status = new Label { ForeColor = Dim, Bounds = new Rectangle(30, 576, 400, 22), Font = new Font("Segoe UI", 9f) };
 
-        Controls.AddRange(new Control[] { title, look, play, multiplayer, openmwLauncher, licenses, progress,
-            status });
+        Controls.AddRange(new Control[] { title, look, characterPanel, play, multiplayer, openmwLauncher, licenses,
+            progress, status });
 
         try
         {
@@ -379,6 +397,49 @@ class LauncherForm : Form
         return address + ":" + port;
     }
 
+    // The characters in OpenMW's saves folder, the last played first, then "New character"; the one picked last is
+    // picked again (the last played if none was)
+    void FillCharacters()
+    {
+        string picked = null;
+        try { picked = File.Exists(CharacterFile) ? File.ReadAllText(CharacterFile).Trim() : null; } catch { }
+        character.Items.Clear();
+        foreach (var each in Character.ReadAll())
+            character.Items.Add(each);
+        character.Items.Add(new Character());
+        character.SelectedIndex = 0;
+        for (int i = 0; i < character.Items.Count; i++)
+        {
+            string folder = ((Character)character.Items[i]).Folder;
+            if (picked != null && picked.Equals(folder == null ? "new" : Path.GetFileName(folder),
+                    StringComparison.OrdinalIgnoreCase))
+                character.SelectedIndex = i;
+        }
+    }
+
+    // The character picked, remembered for next time
+    Character RememberPick()
+    {
+        var picked = (Character)character.SelectedItem;
+        try
+        {
+            File.WriteAllText(CharacterFile, picked.Folder == null ? "new" : Path.GetFileName(picked.Folder));
+        }
+        catch { }
+        return picked;
+    }
+
+    void OnPlay()
+    {
+        var picked = RememberPick();
+        if (picked.Folder == null)
+            Launch("--skip-menu --new-game");
+        else if (picked.FromServer)
+            Launch("--skip-menu --server-character \"" + picked.Folder + "\"");
+        else
+            Launch("--skip-menu --load-savegame \"" + picked.NewestSave + "\"");
+    }
+
     void OnJoin()
     {
         string address = ParseServerAddress(serverAddress.Text);
@@ -392,7 +453,12 @@ class LauncherForm : Form
             return;
         }
         try { File.WriteAllText(ServerFile, serverAddress.Text.Trim()); } catch { }
-        Launch("--connect=" + address);
+        // The character picked comes along, if the server takes characters from single-player
+        var picked = RememberPick();
+        if (picked.Folder == null)
+            Launch("--connect=" + address);
+        else
+            Launch("--connect=" + address + " --character \"" + picked.NewestSave + "\"");
     }
 
     void OnHost()
@@ -430,7 +496,8 @@ class LauncherForm : Form
         status.Text = "Server started (its window shows what happens). Press Join to play on it.";
     }
 
-    async void Launch(string connectArgument)
+    // Starts the game with the look picked; extraArguments: what to play (a save, a new game or a server)
+    async void Launch(string extraArguments)
     {
         string mode = pixelArt.Checked ? "pixelart" : "normal";
         try { File.WriteAllText(ModeFile, mode); } catch { }
@@ -448,19 +515,21 @@ class LauncherForm : Form
 
         if (mode == "pixelart" && !File.Exists(TexturesMarker))
         {
-            play.Enabled = openmwLauncher.Enabled = pixelArt.Enabled = normal.Enabled = join.Enabled = false;
+            play.Enabled = openmwLauncher.Enabled = pixelArt.Enabled = normal.Enabled = join.Enabled =
+                character.Enabled = false;
             progress.Visible = true;
             bool ok = await Task.Run(() => GenerateTextures());
             progress.Visible = false;
-            play.Enabled = openmwLauncher.Enabled = pixelArt.Enabled = normal.Enabled = join.Enabled = true;
+            play.Enabled = openmwLauncher.Enabled = pixelArt.Enabled = normal.Enabled = join.Enabled =
+                character.Enabled = true;
             if (!ok)
                 return;
         }
 
         string profile = Path.Combine(root, "profiles", mode);
         string arguments = "--config \"" + profile + "\"";
-        if (connectArgument != null)
-            arguments += " " + connectArgument;
+        if (extraArguments != null)
+            arguments += " " + extraArguments;
         if (Start(Path.Combine(EngineDir, "openmw.exe"), arguments))
             CloseOrHide();
     }
@@ -575,6 +644,170 @@ class LauncherForm : Form
     }
 }
 
+// A single-player character: a folder in OpenMW's saves folder, as its newest save has them (the character folder
+// with no saves, Folder null: "New character")
+class Character
+{
+    public string Folder;
+    public string NewestSave;
+    public DateTime LastPlayed;
+    public string Name = "";
+    public int Level = 1;
+    public string ClassName = "";
+    public string Cell = "";
+    // Made on a multiplayer server and never played offline: NewestSave is what the server wrote back
+    public bool FromServer;
+
+    // Save format versions up to this one have record ids as plain strings (ESM::MaxStringRefIdFormatVersion)
+    const uint MaxStringRefIdFormatVersion = 23;
+    // What a multiplayer server writes back beside a character's saves (apps/openmw/mwmp/PortableCharacter.hpp)
+    const string ServerProgressFile = "isowind-server-progress.dat";
+
+    static string SavesDir { get { return Path.Combine(LauncherForm.UserConfigDir, "saves"); } }
+
+    public override string ToString()
+    {
+        if (Folder == null)
+            return "New character";
+        string text = Name + (FromServer ? " (from multiplayer)" : "") + "  -  level " + Level;
+        if (ClassName.Length > 0)
+            text += " " + ClassName;
+        text += "  -  " + LastPlayed.ToString("d MMM");
+        if (Cell.Length > 0)
+            text += ", " + Cell;
+        return text;
+    }
+
+    // The characters that have saves, the last played first
+    internal static List<Character> ReadAll()
+    {
+        var characters = new List<Character>();
+        try
+        {
+            if (!Directory.Exists(SavesDir))
+                return characters;
+            foreach (string folder in Directory.GetDirectories(SavesDir))
+            {
+                // The newest save it can read (OpenMW's own order: the files' times)
+                Character found = null;
+                foreach (var save in new DirectoryInfo(folder).GetFiles("*.omwsave")
+                    .OrderByDescending(f => f.LastWriteTimeUtc))
+                {
+                    found = ReadSave(save.FullName);
+                    if (found == null)
+                        continue;
+                    found.NewestSave = save.FullName;
+                    found.LastPlayed = save.LastWriteTime;
+                    break;
+                }
+
+                // What a multiplayer server wrote back (the game puts it on the character when it's next loaded; one
+                // made on a server has only that): shown when it's newer
+                var progressFile = new FileInfo(Path.Combine(folder, ServerProgressFile));
+                if (progressFile.Exists && (found == null || progressFile.LastWriteTime > found.LastPlayed))
+                {
+                    var fromServer = ReadSave(progressFile.FullName);
+                    if (fromServer != null)
+                    {
+                        fromServer.NewestSave = found != null ? found.NewestSave : progressFile.FullName;
+                        fromServer.FromServer = found == null;
+                        fromServer.LastPlayed = progressFile.LastWriteTime;
+                        found = fromServer;
+                    }
+                }
+                if (found == null)
+                    continue;
+                found.Folder = folder;
+                characters.Add(found);
+            }
+        }
+        catch { }
+        return characters.OrderByDescending(c => c.LastPlayed).ToList();
+    }
+
+    // A save's name, level, class and cell, from its SAVE record (after the TES3 header; the screenshot follows
+    // them), or null if it isn't a save
+    static Character ReadSave(string path)
+    {
+        try
+        {
+            byte[] data;
+            using (var file = File.OpenRead(path))
+            {
+                data = new byte[Math.Min(file.Length, 1 << 18)];
+                int read = 0, count;
+                while (read < data.Length && (count = file.Read(data, read, data.Length - read)) > 0)
+                    read += count;
+            }
+            if (data.Length < 16 || Ascii(data, 0) != "TES3")
+                return null;
+            int headerEnd = 16 + (int)BitConverter.ToUInt32(data, 4);
+            uint format = 0;
+            for (int pos = 16; pos + 8 <= headerEnd && pos + 12 <= data.Length;
+                pos += 8 + (int)BitConverter.ToUInt32(data, pos + 4))
+            {
+                if (Ascii(data, pos) == "FORM")
+                    format = BitConverter.ToUInt32(data, pos + 8);
+            }
+            if (headerEnd + 16 > data.Length || Ascii(data, headerEnd) != "SAVE")
+                return null;
+
+            var fields = new Dictionary<string, byte[]>();
+            long end = Math.Min(data.Length, headerEnd + 16L + BitConverter.ToUInt32(data, headerEnd + 4));
+            for (int pos = headerEnd + 16; pos + 8 <= end;)
+            {
+                string name = Ascii(data, pos);
+                int size = (int)BitConverter.ToUInt32(data, pos + 4);
+                if (name == "SCRN" || pos + 8L + size > end)
+                    break;
+                if (!fields.ContainsKey(name))
+                {
+                    var value = new byte[size];
+                    Array.Copy(data, pos + 8, value, 0, size);
+                    fields[name] = value;
+                }
+                pos += 8 + size;
+            }
+            if (!fields.ContainsKey("PLNA"))
+                return null;
+
+            var character = new Character { Name = Text(fields["PLNA"], 0) };
+            if (fields.ContainsKey("PLLE") && fields["PLLE"].Length >= 4)
+                character.Level = BitConverter.ToInt32(fields["PLLE"], 0);
+            if (fields.ContainsKey("PLCL"))
+            {
+                byte[] id = fields["PLCL"];
+                if (format <= MaxStringRefIdFormatVersion)
+                    character.ClassName = Text(id, 0);
+                else if (id.Length > 0 && id[0] == 2) // an unsized string id
+                    character.ClassName = Text(id, 1);
+                else if (id.Length > 5 && id[0] == 1) // a sized one: its length, then the string
+                    character.ClassName = Text(id, 5);
+            }
+            else if (fields.ContainsKey("PLCN"))
+                character.ClassName = Text(fields["PLCN"], 0);
+            if (fields.ContainsKey("PLCE"))
+                character.Cell = Text(fields["PLCE"], 0);
+            return character;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    static string Ascii(byte[] data, int offset)
+    {
+        return Encoding.ASCII.GetString(data, offset, 4);
+    }
+
+    // Saves keep text in Morrowind's own encoding (Windows-1252 for the English game)
+    static string Text(byte[] value, int offset)
+    {
+        return Encoding.GetEncoding(1252).GetString(value, offset, value.Length - offset).TrimEnd('\0');
+    }
+}
+
 // "Host a server": the server's settings, kept in server\tes3mp-server.cfg (over tes3mp-server-default.cfg). The
 // [Isowind] ones are read by the server's CoreScripts (scripts\custom\isowindHost.lua).
 class HostForm : Form
@@ -591,6 +824,7 @@ class HostForm : Form
     readonly RadioButton coop;
     readonly RadioButton mmo;
     readonly CheckBox pvp;
+    readonly CheckBox portableCharacters;
     readonly ComboBox difficulty;
     readonly ComboBox respawnSpeed;
     readonly ComboBox timeSpeed;
@@ -607,7 +841,7 @@ class HostForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(460, 450);
+        ClientSize = new Size(460, 490);
         BackColor = LauncherForm.Back;
         ForeColor = LauncherForm.Sand;
         Font = new Font("Segoe UI", 9.5f);
@@ -648,6 +882,11 @@ class HostForm : Form
         pvp = new CheckBox { Text = "Players can hurt each other (PvP)", AutoSize = true,
             Checked = get("Isowind/pvp", "false").Equals("true", StringComparison.OrdinalIgnoreCase) };
         AddRow("", pvp, ref y);
+
+        portableCharacters = new CheckBox { Text = "Players can bring their single-player characters", AutoSize = true,
+            Checked = get("Isowind/portableCharacters", "false").Equals("true", StringComparison.OrdinalIgnoreCase) };
+        AddRow("", portableCharacters, ref y);
+        AddHint("Taken as their saves have them: no checks on what they bring.", ref y);
 
         difficulty = MakeChoice(DifficultyNames);
         int savedDifficulty = ParseInt(get("Isowind/difficulty", "0"), 0, -500, 500);
@@ -720,7 +959,8 @@ class HostForm : Form
             if (e.Index >= 0)
                 TextRenderer.DrawText(e.Graphics, box.Items[e.Index].ToString(), box.Font, e.Bounds,
                     box.Enabled ? LauncherForm.Sand : LauncherForm.Dim,
-                    TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPrefix);
+                    TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPrefix |
+                    TextFormatFlags.EndEllipsis);
         };
         return box;
     }
@@ -771,6 +1011,8 @@ class HostForm : Form
             LauncherForm.SetConfigValue(file, "General", "password", password.Text.Trim());
             LauncherForm.SetConfigValue(file, "Isowind", "mode", mmo.Checked ? "mmo" : "coop");
             LauncherForm.SetConfigValue(file, "Isowind", "pvp", pvp.Checked ? "true" : "false");
+            LauncherForm.SetConfigValue(file, "Isowind", "portableCharacters",
+                portableCharacters.Checked ? "true" : "false");
             LauncherForm.SetConfigValue(file, "Isowind", "difficulty",
                 DifficultyValues[difficulty.SelectedIndex].ToString());
             LauncherForm.SetConfigValue(file, "Isowind", "respawnSpeed", SpeedValues[respawnSpeed.SelectedIndex]);

@@ -136,6 +136,46 @@ const char *MechanicsFunctions::GetSelectedSpellId(unsigned short pid) noexcept
     return player->selectedSpellId.c_str();
 }
 
+const char *MechanicsFunctions::GetPortableCharacterId(unsigned short pid) noexcept
+{
+    Player *player;
+    GET_PLAYER(pid, player, "");
+
+    return player->portableId.c_str();
+}
+
+double MechanicsFunctions::GetPortableCharacterPlayed(unsigned short pid) noexcept
+{
+    Player *player;
+    GET_PLAYER(pid, player, 0);
+
+    return player->portablePlayed;
+}
+
+unsigned int MechanicsFunctions::GetPortableDataChunk(unsigned short pid) noexcept
+{
+    Player *player;
+    GET_PLAYER(pid, player, 0);
+
+    return player->portableChunk;
+}
+
+unsigned int MechanicsFunctions::GetPortableDataChunkCount(unsigned short pid) noexcept
+{
+    Player *player;
+    GET_PLAYER(pid, player, 0);
+
+    return player->portableChunkCount;
+}
+
+const char *MechanicsFunctions::GetPortableData(unsigned short pid) noexcept
+{
+    Player *player;
+    GET_PLAYER(pid, player, "");
+
+    return player->portableData.c_str();
+}
+
 unsigned int MechanicsFunctions::GetDrawState(unsigned short pid) noexcept
 {
     Player *player;
@@ -222,6 +262,33 @@ void MechanicsFunctions::SendSelectedSpell(unsigned short pid)
     mwmp::PlayerPacket *packet = mwmp::Networking::get().getPlayerPacketController()->GetPacket(ID_PLAYER_MISCELLANEOUS);
     packet->setPlayer(player);
     
+    packet->Send(false);
+}
+
+void MechanicsFunctions::SendPortableRequest(unsigned short pid)
+{
+    Player *player;
+    GET_PLAYER(pid, player, );
+
+    player->miscellaneousChangeType = mwmp::MISCELLANEOUS_CHANGE_TYPE::PORTABLE_REQUEST;
+
+    mwmp::PlayerPacket *packet = mwmp::Networking::get().getPlayerPacketController()->GetPacket(ID_PLAYER_MISCELLANEOUS);
+    packet->setPlayer(player);
+
+    packet->Send(false);
+}
+
+void MechanicsFunctions::SendPortableLinked(unsigned short pid, const char *characterId)
+{
+    Player *player;
+    GET_PLAYER(pid, player, );
+
+    player->miscellaneousChangeType = mwmp::MISCELLANEOUS_CHANGE_TYPE::PORTABLE_LINKED;
+    player->portableId = characterId;
+
+    mwmp::PlayerPacket *packet = mwmp::Networking::get().getPlayerPacketController()->GetPacket(ID_PLAYER_MISCELLANEOUS);
+    packet->setPlayer(player);
+
     packet->Send(false);
 }
 

@@ -137,7 +137,15 @@ namespace mwmp
     enum MISCELLANEOUS_CHANGE_TYPE
     {
         MARK_LOCATION = 0,
-        SELECTED_SPELL
+        SELECTED_SPELL,
+        // Isowind: a character brought from single-player. The client says which one it is (its id and when it was
+        // last played), the server asks for it, and the client sends it (JSON, in chunks). Logged in as it (or as a
+        // character made on the server), the server says so with the character's id, and what the character gains
+        // there is written back to single-player
+        PORTABLE_CHARACTER,
+        PORTABLE_REQUEST,
+        PORTABLE_DATA,
+        PORTABLE_LINKED
     };
 
     class BasePlayer
@@ -283,6 +291,12 @@ namespace mwmp
         ESM::Cell markCell;
         ESM::Position markPosition;
         std::string selectedSpellId;
+
+        std::string portableId;
+        double portablePlayed = 0; // seconds since 1970
+        std::string portableData;
+        unsigned int portableChunk = 0;
+        unsigned int portableChunkCount = 0;
 
         mwmp::Item usedItem;
         bool usingItemMagic;

@@ -7,8 +7,10 @@ settings and starts the server, as Isowind.exe's "Host a server" does."""
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter import font as tkfont
@@ -21,11 +23,18 @@ SERVER = os.path.join(ENGINE, 'tes3mp-server')
 LOOK_FILE = os.path.join(ROOT, 'look.txt')
 MODE_FILE = os.path.join(ROOT, 'profiles', 'launcher-mode.txt')  # as Isowind.exe keeps it
 ADDRESS_FILE = os.path.join(ROOT, 'profiles', 'launcher-server.txt')
+CHARACTER_FILE = os.path.join(ROOT, 'profiles', 'launcher-character.txt')  # its saves folder's name, or "new"
 MORROWIND_FILE = os.path.join(ROOT, 'morrowind-folder.txt')
 LOG = os.path.join(ROOT, 'launcher.log')
 USER_CFG = os.path.join(os.environ.get('XDG_CONFIG_HOME') or os.path.join(os.path.expanduser('~'), '.config'),
                         'openmw', 'openmw.cfg')
+SAVES_DIR = os.path.join(os.environ.get('XDG_DATA_HOME') or os.path.join(os.path.expanduser('~'), '.local', 'share'),
+                         'openmw', 'saves')
 DEFAULT_PORT = 25565
+# Save format versions up to this one have record ids as plain strings (ESM::MaxStringRefIdFormatVersion)
+MAX_STRING_REFID_FORMAT_VERSION = 23
+# What a multiplayer server writes back beside a character's saves (apps/openmw/mwmp/PortableCharacter.hpp)
+SERVER_PROGRESS_FILE = 'isowind-server-progress.dat'
 
 # Isowind.exe's colours
 BACK = '#181512'
@@ -75,6 +84,102 @@ def parse_server_address(text):
     if not address or ' ' in address:
         return None
     return f'{address}:{port}'
+
+
+# A save's name, level, class and cell, from its SAVE record (after the TES3 header; the screenshot follows them), or
+# None if it isn't a save (Isowind.cs)
+def read_save(path):
+    try:
+        with open(path, 'rb') as f:
+            data = f.read(1 << 18)
+        if data[:4] != b'TES3':
+            return None
+        header_end = 16 + struct.unpack_from('<I', data, 4)[0]
+        form = 0
+        pos = 16
+        while pos + 8 <= header_end and pos + 12 <= len(data):
+            if data[pos:pos + 4] == b'FORM':
+                form = struct.unpack_from('<I', data, pos + 8)[0]
+            pos += 8 + struct.unpack_from('<I', data, pos + 4)[0]
+        if data[header_end:header_end + 4] != b'SAVE':
+            return None
+        fields = {}
+        end = min(len(data), header_end + 16 + struct.unpack_from('<I', data, header_end + 4)[0])
+        pos = header_end + 16
+        while pos + 8 <= end:
+            name, size = data[pos:pos + 4], struct.unpack_from('<I', data, pos + 4)[0]
+            if name == b'SCRN' or pos + 8 + size > end:
+                break
+            fields.setdefault(name, data[pos + 8:pos + 8 + size])
+            pos += 8 + size
+    except (OSError, struct.error):
+        return None
+    if b'PLNA' not in fields:
+        return None
+
+    # Saves keep text in Morrowind's own encoding (Windows-1252 for the English game)
+    def text(value):
+        return value.decode('cp1252', errors='replace').rstrip('\0')
+
+    level = struct.unpack('<i', fields[b'PLLE'][:4])[0] if len(fields.get(b'PLLE', b'')) >= 4 else 1
+    class_name = ''
+    if b'PLCL' in fields:
+        value = fields[b'PLCL']
+        if form <= MAX_STRING_REFID_FORMAT_VERSION:
+            class_name = text(value)
+        elif value[:1] == b'\x02':  # an unsized string id
+            class_name = text(value[1:])
+        elif value[:1] == b'\x01':  # a sized one: its length, then the string
+            class_name = text(value[5:])
+    elif b'PLCN' in fields:
+        class_name = text(fields[b'PLCN'])
+    return {'name': text(fields[b'PLNA']), 'level': level, 'class': class_name,
+            'cell': text(fields.get(b'PLCE', b''))}
+
+
+# The characters that have saves, the last played first: each one's folder, newest save and what it says
+def read_characters():
+    characters = []
+    try:
+        folders = [os.path.join(SAVES_DIR, name) for name in os.listdir(SAVES_DIR)]
+    except OSError:
+        return characters
+    for folder in folders:
+        try:
+            saves = [os.path.join(folder, name) for name in os.listdir(folder) if name.endswith('.omwsave')]
+        except OSError:
+            continue
+        # The newest save it can read (OpenMW's own order: the files' times)
+        found = None
+        for save in sorted(saves, key=os.path.getmtime, reverse=True):
+            found = read_save(save)
+            if found:
+                found.update(save=save, played=os.path.getmtime(save), from_server=False)
+                break
+        # What a multiplayer server wrote back (the game puts it on the character when it's next loaded; one made on
+        # a server has only that): shown when it's newer
+        progress = os.path.join(folder, SERVER_PROGRESS_FILE)
+        if os.path.exists(progress) and (not found or os.path.getmtime(progress) > found['played']):
+            from_server = read_save(progress)
+            if from_server:
+                from_server.update(save=found['save'] if found else progress, played=os.path.getmtime(progress),
+                                   from_server=not found)
+                found = from_server
+        if found:
+            found['folder'] = folder
+            characters.append(found)
+    return sorted(characters, key=lambda c: c['played'], reverse=True)
+
+
+def character_label(character):
+    text = f"{character['name']}{' (from multiplayer)' if character['from_server'] else ''}  -  level {character['level']}"
+    if character['class']:
+        text += ' ' + character['class']
+    day = time.localtime(character['played'])
+    text += f"  -  {day.tm_mday} {time.strftime('%b', day)}"
+    if character['cell']:
+        text += ', ' + character['cell']
+    return text
 
 
 # The server's settings: tes3mp-server.cfg's over tes3mp-server-default.cfg's, as isowind.sh host keeps them
@@ -279,7 +384,7 @@ def centre(window, width, height):
 
 
 class Launcher(tk.Tk, Styled):
-    WIDTH, HEIGHT = 460, 532
+    WIDTH, HEIGHT = 460, 584
 
     def __init__(self):
         tk.Tk.__init__(self)
@@ -309,9 +414,28 @@ class Launcher(tk.Tk, Styled):
         self.label(look, 'The top-down camera works in both. The zoom (or F7) in game switches camera.', 14, 96,
                    380, 18, fg=DIM, font=self.tiny_font)
 
-        self.play = self.button(self, 'Play', 30, 246, 400, 52, self.on_play, font=self.play_font)
+        # Who Play plays: a character with saves (their newest one), or a new one; the one picked last is picked
+        # again (the last played if none was)
+        self.characters = {character_label(c): c for c in read_characters()}
+        self.characters['New character'] = None
+        picked = read_file(CHARACTER_FILE)
+        labels = list(self.characters)
+        self.character = tk.StringVar(value=labels[0])
+        for label, character in self.characters.items():
+            if picked == (os.path.basename(character['folder']) if character else 'new'):
+                self.character.set(label)
+        character_panel = self.panel(self, 30, 242, 400, 44)
+        self.label(character_panel, 'Character', 14, 11, 80, 22, fg=GOLD)
+        self.character_menu = tk.OptionMenu(character_panel, self.character, *labels)
+        self.character_menu.configure(bg=BACK, fg=SAND, activebackground=HOVER, activeforeground=SAND,
+                                      relief='flat', highlightthickness=1, highlightbackground=DIM,
+                                      font=self.small_font, bd=0, indicatoron=False, cursor='hand2', anchor='w')
+        self.character_menu['menu'].configure(bg=PANEL, fg=SAND, activebackground=HOVER, activeforeground=SAND)
+        self.character_menu.place(x=94, y=9, width=292, height=26)
 
-        multiplayer = self.panel(self, 30, 310, 400, 122)
+        self.play = self.button(self, 'Play', 30, 298, 400, 52, self.on_play, font=self.play_font)
+
+        multiplayer = self.panel(self, 30, 362, 400, 122)
         self.label(multiplayer, 'Multiplayer', 14, 8, 300, 22, fg=GOLD)
         self.label(multiplayer, 'Server address', 14, 38, 110, 22)
         entry = self.entry(multiplayer, self.address, 126, 37, 160, 24)
@@ -321,16 +445,16 @@ class Launcher(tk.Tk, Styled):
         self.label(multiplayer, f'Friends need UDP port {DEFAULT_PORT}\nforwarded to you, or a shared VPN', 162, 72,
                    230, 34, fg=DIM, font=self.tiny_font)
 
-        self.morrowind = self.button(self, 'Morrowind folder  (where Morrowind is installed)', 30, 444, 300, 34,
+        self.morrowind = self.button(self, 'Morrowind folder  (where Morrowind is installed)', 30, 496, 300, 34,
                                      self.on_morrowind_folder, font=self.small_font)
-        self.button(self, 'Licenses', 340, 444, 90, 34, self.show_licenses, font=self.small_font)
+        self.button(self, 'Licenses', 340, 496, 90, 34, self.show_licenses, font=self.small_font)
 
         style = ttk.Style(self)
         style.theme_use('default')
         style.configure('Isowind.Horizontal.TProgressbar', troughcolor=PANEL, background=GOLD, bordercolor=PANEL,
                         lightcolor=GOLD, darkcolor=GOLD)
         self.progress = ttk.Progressbar(self, style='Isowind.Horizontal.TProgressbar', mode='indeterminate')
-        self.label(self, '', 30, 502, 400, 22, fg=DIM, font=self.small_font).configure(textvariable=self.status)
+        self.label(self, '', 30, 554, 400, 22, fg=DIM, font=self.small_font).configure(textvariable=self.status)
 
         if not os.path.exists(SERVER) or not os.path.isdir(SERVER_DIR):
             self.host.configure(state='disabled')
@@ -357,9 +481,10 @@ class Launcher(tk.Tk, Styled):
         except OSError as e:
             messagebox.showerror('Isowind', f"Could not start {os.path.basename(SCRIPT)}:\n{e}", parent=self)
             return
-        for widget in (self.play, self.join, self.host, self.pixel_art, self.normal, self.morrowind):
+        for widget in (self.play, self.join, self.host, self.pixel_art, self.normal, self.morrowind,
+                       self.character_menu):
             widget.configure(state='disabled')
-        self.progress.place(x=30, y=486, width=400, height=12)
+        self.progress.place(x=30, y=538, width=400, height=12)
         self.progress.start(12)
         first = not morrowind_configured()
         textures = look == 'pixelart' and not os.path.exists(os.path.join(ROOT, 'pixelart', 'textures',
@@ -384,7 +509,8 @@ class Launcher(tk.Tk, Styled):
             return
         self.progress.stop()
         self.progress.place_forget()
-        for widget in (self.play, self.join, self.host, self.pixel_art, self.normal, self.morrowind):
+        for widget in (self.play, self.join, self.host, self.pixel_art, self.normal, self.morrowind,
+                       self.character_menu):
             widget.configure(state='normal')
         if not os.path.exists(SERVER):
             self.host.configure(state='disabled')
@@ -395,8 +521,20 @@ class Launcher(tk.Tk, Styled):
         output = read_file(LOG, 'It stopped without saying why.')
         messagebox.showerror('Isowind', output[-1500:], parent=self)
 
+    # The character picked (None: a new one), remembered for next time
+    def remember_pick(self):
+        character = self.characters.get(self.character.get())
+        write_file(CHARACTER_FILE, os.path.basename(character['folder']) if character else 'new')
+        return character
+
     def on_play(self):
-        self.launch([])
+        character = self.remember_pick()
+        if not character:
+            self.launch(['new'])
+        elif character['from_server']:
+            self.launch(['server-character', character['folder']])
+        else:
+            self.launch(['load', character['save']])
 
     def on_join(self):
         address = parse_server_address(self.address.get())
@@ -407,7 +545,9 @@ class Launcher(tk.Tk, Styled):
                                 'To join a server on this computer, use 127.0.0.1.', parent=self)
             return
         write_file(ADDRESS_FILE, self.address.get().strip())
-        self.launch(['join', address])
+        # The character picked comes along, if the server takes characters from single-player
+        character = self.remember_pick()
+        self.launch(['join', address] + ([character['save']] if character else []))
 
     # The Morrowind folder, for when it isn't where isowind.sh looks (Steam's usual places)
     def on_morrowind_folder(self):
@@ -481,10 +621,10 @@ class HostDialog(tk.Toplevel, Styled):
         self.configure(bg=BACK)
         self.resizable(False, False)
         self.transient(parent)
-        centre(self, 460, 468)
+        centre(self, 460, 498)
 
         self.label(self, 'Host a server', 0, 14, 460, 30, fg=GOLD, font=self.play_font, anchor='center')
-        panel = self.panel(self, 30, 56, 400, 332)
+        panel = self.panel(self, 30, 56, 400, 362)
         self.fields = {}
         rows = [
             ('Server name', 'General', 'hostname', 'Isowind server', None),
@@ -514,12 +654,15 @@ class HostDialog(tk.Toplevel, Styled):
         self.pvp = tk.BooleanVar(value=server_setting('Isowind', 'pvp', 'false') == 'true')
         self.check(panel, 'Players can hurt each other (PvP)', self.pvp, 14, y, 370, 26)
         y += 30
+        self.portable = tk.BooleanVar(value=server_setting('Isowind', 'portableCharacters', 'false') == 'true')
+        self.check(panel, 'Players can bring their single-player characters', self.portable, 14, y, 370, 26)
+        y += 30
         self.label(panel, 'Co-op: one shared world, as in single player. MMO: everyone loots and quests for\n'
                    'themselves, and enemies come back. Keep the same game for a world.', 14, y, 370, 34, fg=DIM,
                    font=self.tiny_font)
 
-        self.button(self, 'Start the server', 30, 404, 180, 40, self.start, font=self.text_font)
-        self.button(self, 'Cancel', 330, 404, 100, 40, self.destroy, font=self.text_font)
+        self.button(self, 'Start the server', 30, 434, 180, 40, self.start, font=self.text_font)
+        self.button(self, 'Cancel', 330, 434, 100, 40, self.destroy, font=self.text_font)
 
     def start(self):
         values = {key: var.get().strip() for key, var in self.fields.items()}
@@ -541,6 +684,7 @@ class HostDialog(tk.Toplevel, Styled):
         for (section, key), value in values.items():
             set_server_setting(section, key, value)
         set_server_setting('Isowind', 'pvp', 'true' if self.pvp.get() else 'false')
+        set_server_setting('Isowind', 'portableCharacters', 'true' if self.portable.get() else 'false')
 
         terminals = [('x-terminal-emulator', ['-e']), ('foot', []), ('alacritty', ['-e']), ('kitty', []),
                      ('ghostty', ['-e']), ('gnome-terminal', ['--']), ('konsole', ['-e']),

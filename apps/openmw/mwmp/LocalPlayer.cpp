@@ -57,7 +57,9 @@
 #include "CellController.hpp"
 #include "GUIController.hpp"
 #include "MechanicsHelper.hpp"
+#include "RecordHelper.hpp"
 #include "Ids.hpp"
+#include "PortableCharacter.hpp"
 
 using namespace mwmp;
 
@@ -163,8 +165,21 @@ bool LocalPlayer::processCharGen()
         switch (charGenState.currentStage)
         {
         case 0:
+        {
+            // A character from single-player keeps its name: no asking for one
+            if (!Main::getCharacterSave().empty())
+            {
+                std::string name = PortableCharacter::readName(Main::getCharacterSave());
+                if (!name.empty())
+                {
+                    MWBase::Environment::get().getMechanicsManager()->setPlayerName(name.substr(0, 31));
+                    charGenState.currentStage = 1;
+                    return false;
+                }
+            }
             windowManager->pushGuiMode(MWGui::GM_Name);
             break;
+        }
         case 1:
             windowManager->pushGuiMode(MWGui::GM_Race);
             break;
@@ -219,6 +234,21 @@ bool LocalPlayer::processCharGen()
     }
 
     return true;
+}
+
+void LocalPlayer::waitInVoid()
+{
+    MWBase::World *world = MWBase::Environment::get().getWorld();
+    ESM::Position pos;
+    pos.pos[0] = pos.pos[1] = pos.pos[2] = 0;
+    pos.rot[0] = pos.rot[1] = pos.rot[2] = 0;
+    world->getPlayer().setTeleported(true);
+    world->changeToInteriorCell(RecordHelper::getPlaceholderInteriorCellName(), pos, false);
+    // Collision off: nothing to stand on there, so no falling either
+    if (!world->toggleCollisionMode())
+        waitingInVoid = true;
+    else
+        world->toggleCollisionMode();
 }
 
 bool LocalPlayer::isLoggedIn()
@@ -1146,6 +1176,16 @@ void LocalPlayer::setCell()
 
     // To avoid crashes, close container windows this player may be in
     closeInventoryWindows();
+
+    // Placed for the first time: out of the void, falling as everyone does
+    if (waitingInVoid)
+    {
+        waitingInVoid = false;
+        if (!world->toggleCollisionMode())
+            world->toggleCollisionMode();
+    }
+    MWWorld::Ptr ptrPlayer = getPlayerPtr();
+    ptrPlayer.getClass().getCreatureStats(ptrPlayer).land(true);
 
     world->getPlayer().setTeleported(true);
 

@@ -36,6 +36,10 @@ namespace MWState
         void deleteSlot(const MWState::Slot* slot, const Character*& character);
 
         Character* createCharacter(const std::string& name);
+
+        /// Isowind: the character whose saves are in this folder, taken on even with no saves yet (a character made
+        /// on a multiplayer server, played offline for the first time)
+        Character* adoptCharacter(const std::filesystem::path& path);
         ///< Create new character within saved game management
         /// \param name Name for the character (does not need to be unique)
 

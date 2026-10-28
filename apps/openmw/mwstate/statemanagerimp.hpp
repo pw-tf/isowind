@@ -17,6 +17,13 @@ namespace MWState
         bool mAskLoadRecent;
         bool mNewGameRequest = false;
         std::optional<std::pair<const Character*, std::filesystem::path>> mLoadRequest;
+        // Isowind: a character loaded with progress from a multiplayer server on it, to save (its saves folder)
+        std::optional<std::filesystem::path> mServerProgressToSave;
+        float mServerProgressWait = 0;
+        // Isowind: a character made on a server being put on a new game (its saves folder), and how far along: its
+        // race, class and so on first, then (once the game has made the player from those) the rest
+        std::optional<std::filesystem::path> mServerCharacterToStart;
+        bool mServerCharacterSetUp = false;
         State mState;
         CharacterManager mCharacterManager;
         double mTimePlayed;
@@ -84,6 +91,10 @@ namespace MWState
 
         void loadGame(const Character* character, const std::filesystem::path& filepath) override;
         ///< Load a saved game file belonging to the given character.
+
+        /// Isowind: starts a new game as a character made on a multiplayer server (from what was written back to its
+        /// saves folder, which has no saves yet), where they were there; the game then saves into that folder.
+        void startServerCharacter(const std::filesystem::path& characterFolder);
 
         Character* getCurrentCharacter() override;
         ///< @note May return null.

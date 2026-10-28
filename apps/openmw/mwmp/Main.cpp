@@ -1,5 +1,7 @@
 #include <cstdlib>
 
+#include <components/files/configurationmanager.hpp>
+#include <components/files/conversion.hpp>
 #include <components/openmw-mp/Utils.hpp>
 #include <components/openmw-mp/TimedLog.hpp>
 #include <components/openmw-mp/Version.hpp>
@@ -44,12 +46,16 @@
 #include "CellController.hpp"
 #include "MechanicsHelper.hpp"
 #include "RecordHelper.hpp"
+#include "PortableCharacter.hpp"
 
 using namespace mwmp;
 
 Main *Main::pMain = 0;
 std::string Main::address = "";
 std::string Main::serverPassword = TES3MP_DEFAULT_PASSW;
+std::string Main::characterSave = "";
+std::string Main::serverCharacter = "";
+std::filesystem::path Main::savesPath;
 
 Main::Main()
 {
@@ -81,7 +87,11 @@ void Main::optionsDesc(boost::program_options::options_description *desc)
             ("connect", bpo::value<std::string>()->default_value(""),
                         "play multiplayer on this server (e.g. --connect=127.0.0.1:25565)")
             ("password", bpo::value<std::string>()->default_value(TES3MP_DEFAULT_PASSW),
-                        "the server's password, if it has one");
+                        "the server's password, if it has one")
+            ("character", bpo::value<Files::MaybeQuotedPath>()->default_value(Files::MaybeQuotedPath(), ""),
+                        "play multiplayer with this single-player character, from its save (if the server takes them)")
+            ("server-character", bpo::value<Files::MaybeQuotedPath>()->default_value(Files::MaybeQuotedPath(), ""),
+                        "play a character made on a multiplayer server offline for the first time (its saves folder)");
 }
 
 void Main::configure(const boost::program_options::variables_map &variables)
@@ -90,6 +100,8 @@ void Main::configure(const boost::program_options::variables_map &variables)
     serverPassword = variables["password"].as<std::string>();
     if (serverPassword.empty())
         serverPassword = TES3MP_DEFAULT_PASSW;
+    characterSave = Files::pathToUnicodeString(variables["character"].as<Files::MaybeQuotedPath>());
+    serverCharacter = Files::pathToUnicodeString(variables["server-character"].as<Files::MaybeQuotedPath>());
     if (isRequested())
         LOG_INIT(TimedLog::LOG_INFO);
 }
@@ -127,6 +139,8 @@ void Main::postInit()
     // Only the client the server makes a region's authority creates its weather; the others follow it
     MWBase::Environment::get().getWorld()->setWeatherCreationState(false);
     RecordHelper::createPlaceholderInteriorCell();
+    // Out of sight until the server places the player (not where a new game starts, which isn't where they are)
+    pMain->mLocalPlayer->waitInVoid();
 }
 
 bool Main::isInitialized()
@@ -169,6 +183,9 @@ void Main::updateWorld(float dt) const
         mNetworking->getPlayerPacket(ID_LOADED)->setPlayer(getLocalPlayer());
         mNetworking->getPlayerPacket(ID_PLAYER_BASEINFO)->Send();
         mNetworking->getPlayerPacket(ID_LOADED)->Send();
+        // A character from single-player: the server asks for it if it takes them
+        if (!characterSave.empty())
+            PortableCharacter::sendInfo(*mLocalPlayer);
         mLocalPlayer->updateStatsDynamic(true);
         get().getGUIController()->setChatVisible(true);
     }
@@ -177,6 +194,7 @@ void Main::updateWorld(float dt) const
         mLocalPlayer->update();
         mCellController->updateLocal(false);
         MechanicsHelper::updatePrivateFollowers(dt);
+        PortableCharacter::update(*mLocalPlayer, dt);
     }
 }
 
@@ -208,6 +226,26 @@ GUIController *Main::getGUIController() const
 CellController *Main::getCellController() const
 {
     return mCellController;
+}
+
+const std::string &Main::getCharacterSave()
+{
+    return characterSave;
+}
+
+const std::string &Main::getServerCharacter()
+{
+    return serverCharacter;
+}
+
+void Main::setSavesPath(const std::filesystem::path &path)
+{
+    savesPath = path;
+}
+
+const std::filesystem::path &Main::getSavesPath()
+{
+    return savesPath;
 }
 
 bool Main::isValidPacketScript(const std::string &scriptId)

@@ -14,7 +14,8 @@ Getting started
    (not Program Files).
 2. Run Isowind.exe.
    Windows may warn that the app is unrecognised: click "More info", then "Run anyway".
-3. Pick a look and press Play.
+3. Pick a look and a character and press Play: a character you have saves for carries on from their newest
+   save, "New character" starts a new game.
    - The very first time, the OpenMW launcher opens instead: follow its wizard and point it at your
      Morrowind installation (it finds Steam/GOG installs), then close it and press Play again.
    - The first time you play the pixel art look, Isowind builds its low-res textures from your own
@@ -23,6 +24,8 @@ Getting started
 On Linux, unpack the folder and use isowind.sh instead of Isowind.exe, from a terminal:
    ./isowind.sh                 play (pixel art; ./isowind.sh normal for the normal look)
    ./isowind.sh join ADDRESS    play on a server
+   ./isowind.sh load SAVE       play a save (an .omwsave file in ~/.local/share/openmw/saves)
+   ./isowind.sh new             start a new character
    ./isowind.sh host            run a server in that terminal (it asks its settings first)
    ./isowind.sh gui             a launcher window like Isowind.exe (also what a file manager opens)
    The first time it finds Morrowind in Steam's usual places and sets up OpenMW for it; otherwise run it as
@@ -46,6 +49,20 @@ Joining a friend's server
    password, which you need to log in as that character again); an existing name logs you in.
 The address is remembered for next time.
 
+Playing a single-player character on a server: pick them under Character before pressing Join. If the
+server takes characters from single-player, the whole character comes as their newest save has them:
+stats, skills, spells, inventory (potions you brewed, items you enchanted and spells you made too), quick
+keys, the map and where they were, and on MMO servers their quests, topics, factions and kills; you only
+choose a password.
+What they gain there comes back: the next time you play them in single-player they have it all,
+quests done on the server included (the game saves it as "Back from multiplayer"), where you left them
+in single-player. Whichever copy was played last wins: join after playing them in single-player and
+the server takes the save; if you played them on the server since, it keeps its own. A name already
+taken there by someone else's character can't be used. A character you make on such a server shows up
+under Character too, "(from multiplayer)": Play starts them offline where they were on the server.
+If the server doesn't take characters, you play the character of that name there (or make a new one)
+as usual, and nothing comes back.
+
 Hosting a server
 1. Press "Host a server" in Isowind.exe and choose its settings:
    - Name, port (25565 unless you change it), most players, and a password (empty: anyone can join).
@@ -66,6 +83,8 @@ Hosting a server
      /dismiss all) sends one back where it came from, and /follow <number>, said where they are,
      has one follow you again.
    - PvP (whether players can hurt each other), difficulty and how fast the time of day goes.
+   - Whether players can bring their single-player characters (see above). The server takes them as their
+     saves have them: anyone can bring a character as strong as they like.
    Then the server's window opens; it runs the server, and closing it stops the server (saved). It shows:
    - The players in the world, their staff rank, ping, level and cell. Pick one to change their staff rank
      (Player, Moderator, Admin, Server owner: at once), kick or ban them, send them a message, teleport them to

@@ -19,6 +19,8 @@ namespace mwmp
 
         time_t deathTime;
         bool receivedCharacter;
+        // Isowind: out of sight until the server places the player (see waitInVoid)
+        bool waitingInVoid = false;
 
         bool isUsingBed;
         bool avoidSendingInventoryPackets;
@@ -71,6 +73,10 @@ namespace mwmp
         void setPosition();
         void setMomentum();
         void setCell();
+
+        // Isowind: until the server places the player (logging in, or after character creation), they wait in the
+        // empty placeholder cell, not falling, instead of standing where a new game puts them
+        void waitInVoid();
         void setClass();
         void setEquipment();
         void setInventory();
