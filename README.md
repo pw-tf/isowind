@@ -338,5 +338,6 @@ Whether the menus are made for a controller is decided as the game starts: `Isow
 or on Linux what is plugged in, which `--controller` or `--no-controller` overrides (a controller that comes with a
 stream, as Moonlight's does, wants `--controller`).
 
+<br>
 
-~ This mod was made in collaboration with AI. ~
+<p align="center"> ~ This mod was made in collaboration with AI. ~ </p>  
