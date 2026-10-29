@@ -3,12 +3,22 @@
 # openmw-launcher, openmw-wizard) and Isowind.exe; build.ps1 beside this script does all of that and then this.
 # Packaging again keeps the test characters in dist\Isowind (the server's data) and backs them up in <root>\backups
 # first; the zip is always clean.
+#
+#   .\make_package.ps1           the package with the bundled mods: dist\Isowind and dist\Isowind.zip
+#   .\make_package.ps1 -NoMods   without them, for a public release (their licences don't all allow passing them on):
+#                                OpenMW's own look with Isowind's on top, the server requiring only Morrowind and its
+#                                expansions (isowind\tools\strip_mods.py, which needs Python 3). Into
+#                                dist\nomods\Isowind and dist\nomods\Isowind.zip, so the usual package and the test
+#                                characters in it stay as they are; bundled-mods isn't needed.
+
+param([switch]$NoMods)
 
 $ErrorActionPreference = 'Stop'
 $src = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path   # the repository
 $root = Split-Path -Parent $src
 $release = Join-Path $src 'MSVC2022_64\Release'
-$dist = Join-Path $root 'dist\Isowind'
+$distRoot = if ($NoMods) { Join-Path $root 'dist\nomods' } else { Join-Path $root 'dist' }
+$dist = Join-Path $distRoot 'Isowind'
 # Isowind's own files (the mod, pixel art shader and palettes, profiles, server scripts, readme), shared with the
 # Linux and Android builds
 $isowind = Join-Path $src 'isowind'
@@ -33,9 +43,13 @@ Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 # there is nothing yet but the server's defaults.
 $backups = Join-Path $root 'backups'
 $serverData = Join-Path $dist 'server\CoreScripts\data'
-$backupFrom = [ordered]@{ 'server/CoreScripts/data' = $serverData }   # folder in the zip = folder here
-$documents = [Environment]::GetFolderPath('MyDocuments')
-if ($documents) { $backupFrom['saves'] = Join-Path $documents 'My Games\OpenMW\saves' }
+$backupFrom = [ordered]@{}   # folder in the zip = folder here
+# (none for the package without the mods: it's for a release, not played from)
+if (-not $NoMods) {
+    $backupFrom['server/CoreScripts/data'] = $serverData
+    $documents = [Environment]::GetFolderPath('MyDocuments')
+    if ($documents) { $backupFrom['saves'] = Join-Path $documents 'My Games\OpenMW\saves' }
+}
 $backup = @()
 foreach ($name in $backupFrom.Keys) {
     if (-not (Test-Path $backupFrom[$name])) { continue }
@@ -45,7 +59,7 @@ foreach ($name in $backupFrom.Keys) {
     })
 }
 $hostSettings = Join-Path $dist 'server\tes3mp-server.cfg'
-if (Test-Path $hostSettings) { $backup += [pscustomobject]@{ File = $hostSettings; Entry = 'server/tes3mp-server.cfg' } }
+if (-not $NoMods -and (Test-Path $hostSettings)) { $backup +=[pscustomobject]@{ File = $hostSettings; Entry = 'server/tes3mp-server.cfg' } }
 $defaults = 'banlist.json', 'requiredDataFiles.json' | ForEach-Object { "server/CoreScripts/data/$_" }
 if ($backup | Where-Object { $_.Entry -notin $defaults -and $_.Entry -notlike '*/.gitkeep' }) {
     New-Item -ItemType Directory -Force $backups | Out-Null
@@ -74,7 +88,7 @@ foreach ($layout in 'openmw_layers.xml', 'openmw_settings_window.layout', 'openm
 Mirror (Join-Path $isowind 'mod') (Join-Path $dist 'mod')
 # Bundled mods (credited in Isowind.exe's Licenses and README.txt) with only the options Isowind uses, kept in
 # bundled-mods (mod\add-mods is where new ones are dropped to look at); the profiles list their data folders.
-Mirror (Join-Path $root 'bundled-mods') (Join-Path $dist 'mods')
+if (-not $NoMods) { Mirror (Join-Path $root 'bundled-mods') (Join-Path $dist 'mods') }
 # Mirrored, so textures built while testing the package (Bethesda-derived) never end up in it.
 Mirror (Join-Path $isowind 'pixelart') (Join-Path $dist 'pixelart')
 
@@ -111,6 +125,15 @@ $launcherExe = @((Join-Path $src 'MSVC2022_64\launcher\Isowind.exe'), (Join-Path
 if (-not $launcherExe) { throw 'No Isowind.exe: build it first (build.ps1)' }
 Copy-Item $launcherExe $dist -Force
 Copy-Item (Join-Path $isowind 'README.txt') $dist -Force
+
+# Without the bundled mods: the profiles, the server's plugin list and the readme made for OpenMW alone
+if ($NoMods) {
+    $python = (Get-Command py -ErrorAction SilentlyContinue), (Get-Command python -ErrorAction SilentlyContinue) |
+        Where-Object { $_ } | Select-Object -First 1
+    if (-not $python) { throw 'Python 3 is needed for the package without the mods (strip_mods.py): install it from python.org' }
+    & $python.Source (Join-Path $isowind 'tools\strip_mods.py') $dist
+    if ($LASTEXITCODE -ne 0) { throw 'strip_mods.py failed (above)' }
+}
 
 # Source: OpenMW is GPL v3, so ship the changes (against the openmw-0.51.0 tag) and this project's own code.
 $source = Join-Path $dist 'source'
@@ -152,7 +175,7 @@ The top-down mod (Lua) and shaders are in the mod and pixelart folders as they a
 # Zip: only what the package is made of, under an Isowind folder (not whatever else ended up in dist\Isowind, such
 # as a copy unzipped there to play, or what playing and hosting from it left: the launcher's last choices in
 # profiles\, the host's tes3mp-server.cfg, crash dumps in server\).
-$zip = Join-Path $root 'dist\Isowind.zip'
+$zip = Join-Path $distRoot 'Isowind.zip'
 if (Test-Path $zip) { Remove-Item $zip -Force }
 # The server's data from the repository as git has it (the empty folders, the ban list, the plugin list), not the
 # package folder's, which has the players, cells and world of whoever tested it
@@ -166,8 +189,10 @@ if ($LASTEXITCODE -ne 0 -or $cleanData.Count -eq 0) {
 }
 $archive = [IO.Compression.ZipFile]::Open($zip, 'Create')
 try {
-    foreach ($item in 'engine', 'licenses', 'mod', 'mods', 'pixelart', 'profiles\pixelart', 'profiles\normal',
-        'server\CoreScripts', 'server\tes3mp-server-default.cfg', 'source', 'Isowind.exe', 'README.txt') {
+    $items = 'engine', 'licenses', 'mod', 'mods', 'pixelart', 'profiles\pixelart', 'profiles\normal',
+        'server\CoreScripts', 'server\tes3mp-server-default.cfg', 'source', 'Isowind.exe', 'README.txt'
+    if ($NoMods) { $items = $items | Where-Object { $_ -ne 'mods' } }
+    foreach ($item in $items) {
         $path = Join-Path $dist $item
         $files = if (Test-Path $path -PathType Container) { Get-ChildItem $path -Recurse -File } else { Get-Item $path }
         foreach ($file in $files) {
@@ -178,7 +203,10 @@ try {
     }
     foreach ($file in $cleanData) {
         $entry = 'Isowind/server/' + $file.Substring('isowind/server/'.Length)
-        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, (Join-Path $src $file), $entry, 'Optimal') | Out-Null
+        $from = Join-Path $src $file
+        # (the plugin list as strip_mods.py made it, without the mods)
+        if ($NoMods -and $file -like '*/requiredDataFiles.json') { $from = Join-Path $serverData 'requiredDataFiles.json' }
+        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $from, $entry, 'Optimal') | Out-Null
     }
 } finally { $archive.Dispose() }
 "Package: $dist"

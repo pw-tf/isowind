@@ -289,7 +289,10 @@ CREDITS = (
     "GNU General Public License v3 (licenses/GPL-3.0.txt). Isowind's changes are under the same license; "
     "the source is in the source folder.\n\n"
     "TES3MP - tes3mp.com - by David Cernat, Stanislav Zhukov and contributors. The multiplayer code in Isowind is "
-    "ported from it, and the server runs its CoreScripts. GNU General Public License v3.\n\n"
+    "ported from it, and the server runs its CoreScripts. GNU General Public License v3.\n\n")
+
+# Listed only when the package has them (make_package.ps1 -NoMods, and package.sh given no mods, make one without)
+MOD_CREDITS = (
     "BUNDLED MODS\n"
     "Rafael's Shader Pack - by Rafael, with Phal, Hrnchamd, Dexter and Wazabear. GNU General Public License v3 "
     "(mods/RafaelsShaderPack/LICENSE). Includes SMAA by Jorge Jimenez, Jose I. Echevarria, Belen Masia, "
@@ -313,7 +316,9 @@ CREDITS = (
     "Pop000100, R-Zero, Remiros, revenorror, RubberMan, Sataniel, Stuporstar, vtastek and Wollibeebee. "
     "Texture atlases for faster drawing (mods/ProjectAtlas).\n\n"
     "Expansion Delay 1.3 - by Half11. Tribunal's assassins and Bloodmoon's rumours wait until later "
-    "(mods/ExpansionDelay).\n\n"
+    "(mods/ExpansionDelay).\n\n")
+
+LIBRARY_CREDITS = (
     "LIBRARIES (used by OpenMW)\n"
     "OpenSceneGraph (OpenSceneGraph Public License), Bullet Physics (zlib), MyGUI (MIT), SDL 2 and SDL_image "
     "(zlib), OpenAL Soft (LGPL 2.1), FFmpeg (LGPL 2.1), LuaJIT (MIT), RakNet (BSD), Recast & Detour (zlib), "
@@ -597,7 +602,8 @@ class Launcher(tk.Tk, Styled):
         centre(dialog, 560, 520)
         text = tk.Text(dialog, wrap='word', bg=PANEL, fg=SAND, relief='flat', bd=0, font=self.small_font,
                        padx=8, pady=8, highlightthickness=0)
-        text.insert('1.0', CREDITS)
+        text.insert('1.0', CREDITS + (MOD_CREDITS if os.path.isdir(os.path.join(ROOT, 'mods')) else '')
+                    + LIBRARY_CREDITS)
         text.configure(state='disabled')
         text.place(x=16, y=16, width=510, height=438)
         scroll = tk.Scrollbar(dialog, command=text.yview, bg=PANEL, troughcolor=BACK, activebackground=HOVER,

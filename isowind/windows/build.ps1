@@ -22,6 +22,8 @@
 #   .\build.ps1 -SkipDependencies  don't check or re-extract OpenMW's dependency downloads (faster once they're there)
 #   .\build.ps1 -SkipLauncher      no Isowind.exe
 #   .\build.ps1 -SkipPackage       no dist\Isowind.zip
+#   .\build.ps1 -NoMods            the package without the bundled mods, for a public release: dist\nomods\Isowind.zip
+#                                  (bundled-mods isn't fetched; see make_package.ps1)
 #   .\build.ps1 -NoLto             no link-time optimisation: the final link takes a minute or two instead of ten to
 #                                  twenty (the game runs a little slower; for working on it, not for a release)
 #   .\build.ps1 -Configuration Debug -VsVersion 2026
@@ -34,6 +36,7 @@ param(
     [switch]$SkipDependencies,
     [switch]$SkipLauncher,
     [switch]$SkipPackage,
+    [switch]$NoMods,
     [switch]$NoLto
 )
 
@@ -180,7 +183,10 @@ if (-not $SkipPackage) {
     else {
         # The bundled mods are third-party and kept out of git: the "bundled-mods" release holds them, as for the Linux CI
         $mods = Join-Path $root 'bundled-mods'
-        if (-not (Test-Path $mods)) {
+        if ($NoMods) {
+            & $package -NoMods
+        }
+        elseif (-not (Test-Path $mods)) {
             $zip = Join-Path $root 'bundled-mods.zip'
             Write-Host "Fetching the bundled mods (bundled-mods.zip from the repository's bundled-mods release)..."
             # (the repository is private, so this needs GitHub's CLI, logged in: gh auth login)
@@ -192,7 +198,7 @@ if (-not $SkipPackage) {
             Expand-Archive -Path $zip -DestinationPath $mods -Force
             Remove-Item $zip -Force
         }
-        & $package
+        if (-not $NoMods) { & $package }
     }
 }
 

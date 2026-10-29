@@ -5,6 +5,9 @@
 #
 #   package.sh BUILD_DIR OUT_DIR [BUNDLED_MODS_DIR]
 #
+# Without BUNDLED_MODS_DIR the package goes without the mods, made for OpenMW alone (isowind/tools/strip_mods.py, as
+# make_package.ps1 -NoMods does), as for a public release.
+#
 # Needs linuxdeploy on PATH (it copies in every library that isn't part of the base system, so the folder runs on
 # other distributions too).
 #
@@ -95,5 +98,7 @@ chmod +x "$OUT/isowind.sh"
 if [ -n "$MODS" ] && [ -d "$MODS" ]; then
     cp -r "$MODS" "$OUT/mods"
 else
-    echo "warning: no bundled mods given; the profiles expect them in mods/, and servers require their plugins" >&2
+    # Without the bundled mods (as for a public release): the profiles, the server's plugin list and the readme made
+    # for OpenMW alone
+    python3 "$I/tools/strip_mods.py" "$OUT"
 fi

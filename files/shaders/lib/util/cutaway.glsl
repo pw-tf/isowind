@@ -198,10 +198,13 @@ vec4 applyCutaway(vec3 viewPos, bool terrain)
     return vec4(covers, covers * (1.0 - around), 0.0, debugTint);
 }
 
-// The ghost's pass draws what it keeps this opaque; anywhere else alpha is what it was
-float applyCutawayAlpha(float alpha)
+// The ghost's pass draws what it keeps this opaque; anywhere else alpha is what it was. A blended surface keeps its
+// own alpha in the ghost too (blended: the clear parts of leaves, black in Morrowind's own textures, would turn solid)
+float applyCutawayAlpha(float alpha, bool blended)
 {
-    return cutawayGhostPass > 0.5 ? cutawayLayerAlpha : alpha;
+    if (cutawayGhostPass < 0.5)
+        return alpha;
+    return blended ? cutawayLayerAlpha * clamp(alpha, 0.0, 1.0) : cutawayLayerAlpha;
 }
 
 vec3 applyCutawayColour(vec3 colour, vec4 cut)

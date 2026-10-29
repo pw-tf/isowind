@@ -164,6 +164,13 @@ vec2 screenCoords = gl_FragCoord.xy / screenRes;
 #endif
 
     gl_FragData[0].a = alphaTest(gl_FragData[0].a, alphaRef);
+#if @alphaToCoverage
+    // The top-down camera's see-through ghost draws with an opacity of its own (applyCutawayAlpha below), which would
+    // make solid what alpha-to-coverage only fades out, the gaps between leaves (black in Morrowind's own textures):
+    // its pass leaves those out instead
+    if (cutawayGhostPass > 0.5 && gl_FragData[0].a < 0.5)
+        discard;
+#endif
 
 #if @normalMap
     vec4 normalTex = texture2D(normalMap, normalMapUV + offset);
@@ -275,7 +282,7 @@ vec2 screenCoords = gl_FragCoord.xy / screenRes;
 #endif
 
     // The top-down camera's see-through ghost (lib/util/cutaway.glsl) keeps its own opacity
-    gl_FragData[0].a = applyCutawayAlpha(gl_FragData[0].a);
+    gl_FragData[0].a = applyCutawayAlpha(gl_FragData[0].a, @alphaBlend == 1);
 
     applyShadowDebugOverlay();
 }

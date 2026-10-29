@@ -624,6 +624,8 @@ namespace Shader
         defineMap["alphaFunc"] = std::to_string(reqs.mAlphaFunc);
 
         defineMap["additiveBlending"] = reqs.mAdditiveBlending ? "1" : "0";
+        // (Isowind: the top-down camera's see-through ghost keeps a blended surface's own alpha, cutaway.glsl)
+        defineMap["alphaBlend"] = reqs.mAlphaBlend ? "1" : "0";
 
         osg::ref_ptr<osg::StateSet> removedState;
         if ((removedState = getRemovedState(*writableStateSet)) && !mAllowedToModifyStateSets)

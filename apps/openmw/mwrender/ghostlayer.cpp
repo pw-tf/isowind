@@ -8,6 +8,7 @@
 
 #include <components/sceneutil/depth.hpp>
 #include <components/sceneutil/nodecallback.hpp>
+#include <components/sceneutil/shadow.hpp>
 
 #include "vismask.hpp"
 
@@ -111,6 +112,10 @@ void main()
         // What can turn see-through (statics and objects; the terrain for the objects merged into it far off, though
         // the ground itself never does), and the lights
         camera->setCullMask(Mask_Scene | Mask_Static | Mask_Object | Mask_Terrain | Mask_Lighting | Mask_Sun);
+        // The shadows are worked out for the main view, above the scene this pass draws: without maps of its own
+        // its shaders would find everything in shadow, lit by the ambient light alone (a dark ring around the
+        // opening). Unshadowed instead, as the water's passes are
+        SceneUtil::ShadowManager::instance().disableShadowsForStateSet(*camera->getOrCreateStateSet());
         camera->getOrCreateStateSet()->merge(*mPassState);
         camera->addChild(mScene);
     }

@@ -1,5 +1,90 @@
+<p align="center"><img src="isowind/windows/logo.png" alt="Isowind" width="380"></p>
+
 Isowind
 =======
+
+Morrowind, seen from above. Isowind is a modified [OpenMW](https://openmw.org) that plays The Elder Scrolls III:
+Morrowind as a top-down, isometric game, with an optional pixel art look and online play with friends. It is the
+whole of Morrowind (Tribunal and Bloodmoon too), your own copy of it. Isowind brings none of the game's files.
+
+What it is
+----------
+
+* **A top-down camera.** You play from above: W is always up the screen, and you aim weapons and spells at the mouse
+  cursor while your legs run the way you move. The mouse wheel zooms; F7 switches to Morrowind's third and first
+  person views and back.
+* **Seeing yourself through walls.** Walls, roofs and trees between you and the camera open up in a soft circle
+  around you. Indoors, rooms are shown like a dollhouse: the near walls stop at waist height, and the ceiling and the
+  floor above are left out.
+* **Two looks.** *Pixel art* draws the world at low resolution, with chunky pixels, retro textures built from
+  your own Morrowind files, banded light and hard shadows. *Normal* is Morrowind's usual graphics.
+* **Made for a mouse or a controller.** The menus switch to suit whichever you are using. A controller gets its own
+  menus, an on-screen keyboard, and quick keys on the bumpers.
+* **Multiplayer.** A port of [TES3MP](https://tes3mp.com). Host a server from the launcher, as co-op (one shared
+  world) or MMO (everyone has their own loot, quests and companions; enemies respawn; there are parties). A
+  character can go between single-player and servers that allow it, and keeps everything gained in both.
+
+How it works
+------------
+
+Isowind is a fork of OpenMW 0.51, with these parts:
+
+* **The engine** (`apps/`, `components/`, `files/shaders/`) adds the top-down camera and the cutaway: shaders cut a
+  circle out of whatever is in front of the player, and a second pass draws what was cut away, see-through, into
+  that circle. It also adds the controller menus, the minimap that turns with the view, and TES3MP's multiplayer
+  client.
+* **The server** (`apps/openmw-mp`) is TES3MP's server, ported to this engine. Its Lua CoreScripts are in
+  `isowind/server`, with Isowind's MMO rules, parties, private companions and portable characters added.
+* **The Isowind mod** (`isowind/mod`, an `.omwscripts` content file) is OpenMW Lua: the controls, aiming, the
+  view switch, the hover rings and the interface tweaks.
+* **The looks** are two OpenMW profiles (`isowind/profiles/pixelart`, `normal`), each with its own `openmw.cfg`,
+  `settings.cfg` and post-processing chain. The pixel art textures are made on your own computer, from your own
+  Morrowind files, the first time you play that look (`isowind/tools/retro_textures.py`).
+* **The launcher** (`Isowind.exe`, or `isowind.sh` on Linux) picks the look and the character, joins or hosts
+  servers, and runs the engine with the right profile.
+
+First time setup
+----------------
+
+**You need** Morrowind (the Game of the Year edition, from Steam or GOG) installed, and 64-bit Windows 10 or 11 or
+64-bit Linux (the Steam Deck works too). Morrowind doesn't need to be run first, or have mods installed.
+
+1. **Download** `Isowind.zip` from the [Releases](https://github.com/pw-tf/isowind/releases) page and unzip the whole folder somewhere you can
+   write to, such as your Desktop or `D:\Games\Isowind` (not Program Files).
+2. **Run `Isowind.exe`.** Windows may warn that the app is unrecognised (it isn't signed): click *More info*, then
+   *Run anyway*.
+3. **Press Play.** The first time, Isowind sees that OpenMW doesn't know where Morrowind is yet. It says so and
+   opens the **OpenMW launcher**, which starts its **first-run wizard**:
+   1. Choose your language and *Next*.
+   2. Choose **Existing installation**. Morrowind is already installed, and the wizard only needs to find it.
+   3. Pick your Morrowind in the list. Steam and GOG installs are usually found. If yours isn't listed, press
+      *Browse...* and select `Morrowind.esm` in Morrowind's `Data Files` folder. On Steam that is usually
+      `C:\Program Files (x86)\Steam\steamapps\common\Morrowind\Data Files`.
+   4. On *Import Settings*, leave **Import Settings From Morrowind.ini** and **Import Add-on and Plugin
+      Selection** ticked. The bitmap fonts option can stay off.
+   5. *Finish*. In the OpenMW launcher, check on the **Data Files** page that `Morrowind.esm`, `Tribunal.esm` and
+      `Bloodmoon.esm` are ticked, and tick any that aren't. If Morrowind has never been run, its `Morrowind.ini`
+      may not list them yet. Then close the launcher. You don't need to press its own Play.
+4. **Back in `Isowind.exe`, pick a look and press Play again.** The first time you play the pixel art look, Isowind
+   builds its low-res textures from your Morrowind files. That takes a minute, and later starts are immediate.
+5. Choose **New character**, or a character you already have, and play.
+
+You can open the OpenMW launcher again at any time with the *OpenMW Launcher* button in `Isowind.exe`, to change
+the Morrowind folder, mods or other options. Your saves are shared with any normal OpenMW you have.
+
+**On Linux**, unpack the folder and run `./isowind.sh` from a terminal (or `./isowind.sh gui` for a launcher
+window). It finds Morrowind in Steam's usual places and sets OpenMW up by itself. If it can't, run it as
+`MORROWIND=/path/to/Morrowind ./isowind.sh`, giving the folder with `Data Files` in it. The pixel art look needs
+Python 3.
+
+**Playing online:** keep to Morrowind, Tribunal and Bloodmoon, with no other mods on in the OpenMW launcher, because
+a server only lets in players whose game files match its own. Type the server's address under *Multiplayer* in
+`Isowind.exe` and press *Join*, or press *Host a server* to run one. `README.txt` in the package covers hosting,
+parties, portable characters and the controls in full.
+
+**If something goes wrong:** the game's log is `profiles\pixelart\openmw.log` (or `profiles\normal\openmw.log`).
+If saving fails, Windows Defender's *Controlled folder access* may be stopping `engine\openmw.exe` from writing to
+Documents: allow it under Windows Security > Ransomware protection.
 
 Building on Windows
 -------------------
@@ -53,6 +138,7 @@ the players stay, and only the ban list goes back to empty.
 |-------------------------|------------------------------------------------------------------------------------------------|
 | `-SkipDependencies`     | Doesn't check or re-extract the dependency downloads. Use it on every build after the first.  |
 | `-NoLto`                | No link-time optimisation: the final link takes a minute or two instead of ten to twenty. The game runs a little slower, so it is for working on the code, not for a release. |
+| `-NoMods`               | Packages without the bundled third-party mods, in `<root>\dist\nomods\Isowind` and `<root>\dist\nomods\Isowind.zip`: plain OpenMW with Isowind on top, as released on GitHub. Needs no GitHub CLI login. |
 | `-SkipLauncher`         | Doesn't build `Isowind.exe`.                                                                   |
 | `-SkipPackage`          | Doesn't run `make_package.ps1`.                                                                |
 | `-Clean`                | A fresh build folder instead of keeping the existing one.                                      |

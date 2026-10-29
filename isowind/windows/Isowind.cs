@@ -238,7 +238,8 @@ class LauncherForm : Form
             status.Text = "First time? Press Play to set up your Morrowind installation.";
     }
 
-    // Who made what Isowind is built from and ships with, and under which terms. The full texts are in licenses\.
+    // Who made what Isowind is built from and ships with, and under which terms. The full texts are in licenses\. The
+    // bundled mods are listed only when the package has them (make_package.ps1 -NoMods makes one without).
     const string Credits =
         "Isowind is a modified OpenMW with a multiplayer port of TES3MP. It needs your own copy of The Elder Scrolls III: " +
         "Morrowind (Bethesda Softworks); none of the game's files are included.\r\n\r\n" +
@@ -247,7 +248,9 @@ class LauncherForm : Form
         "GNU General Public License v3 (licenses\\GPL-3.0.txt). Isowind's changes are under the same license; " +
         "the source is in the source folder.\r\n\r\n" +
         "TES3MP - tes3mp.com - by David Cernat, Stanislav Zhukov and contributors. The multiplayer code in Isowind is " +
-        "ported from it, and the server runs its CoreScripts. GNU General Public License v3.\r\n\r\n" +
+        "ported from it, and the server runs its CoreScripts. GNU General Public License v3.\r\n\r\n";
+
+    const string ModCredits =
         "BUNDLED MODS\r\n" +
         "Rafael's Shader Pack - by Rafael, with Phal, Hrnchamd, Dexter and Wazabear. GNU General Public License v3 " +
         "(mods\\RafaelsShaderPack\\LICENSE). Includes SMAA by Jorge Jimenez, Jose I. Echevarria, Belen Masia, " +
@@ -271,7 +274,9 @@ class LauncherForm : Form
         "Pop000100, R-Zero, Remiros, revenorror, RubberMan, Sataniel, Stuporstar, vtastek and Wollibeebee. " +
         "Texture atlases for faster drawing (mods\\ProjectAtlas).\r\n\r\n" +
         "Expansion Delay 1.3 - by Half11. Tribunal's assassins and Bloodmoon's rumours wait until later " +
-        "(mods\\ExpansionDelay).\r\n\r\n" +
+        "(mods\\ExpansionDelay).\r\n\r\n";
+
+    const string LibraryCredits =
         "LIBRARIES (used by OpenMW and its launcher)\r\n" +
         "OpenSceneGraph (OpenSceneGraph Public License), Bullet Physics (zlib), MyGUI (MIT), SDL 2 and SDL_image " +
         "(zlib), OpenAL Soft (LGPL 2.1), FFmpeg (LGPL 2.1), LuaJIT (MIT), Qt 6 (LGPL 3, for the OpenMW launcher and " +
@@ -300,7 +305,7 @@ class LauncherForm : Form
             Multiline = true,
             ReadOnly = true,
             ScrollBars = ScrollBars.Vertical,
-            Text = Credits,
+            Text = Credits + (Directory.Exists(Path.Combine(root, "mods")) ? ModCredits : "") + LibraryCredits,
             Bounds = new Rectangle(16, 16, 528, 438),
             BackColor = Panel,
             ForeColor = Sand,
