@@ -41,7 +41,12 @@ resources
 /*.install
 /mods
 /mod
-/pages
+
+
+# GitHub Pages site files
+.nojekyll
+index.html
+isowind-screenshots/
 
 ## binaries
 /esmtool
