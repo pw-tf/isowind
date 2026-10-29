@@ -13,9 +13,6 @@ What it is
 * **A top-down camera.** You play from above: W is always up the screen, and you aim weapons and spells at the mouse
   cursor while your legs run the way you move. The mouse wheel zooms; F7 switches to Morrowind's third and first
   person views and back.
-* **Seeing yourself through walls.** Walls, roofs and trees between you and the camera open up in a soft circle
-  around you. Indoors, rooms are shown like a dollhouse: the near walls stop at waist height, and the ceiling and the
-  floor above are left out.
 * **Two looks.** *Pixel art* draws the world at low resolution, with chunky pixels, retro textures built from
   your own Morrowind files, banded light and hard shadows. *Normal* is Morrowind's usual graphics.
 * **Made for a mouse or a controller.** The menus switch to suit whichever you are using. A controller gets its own
