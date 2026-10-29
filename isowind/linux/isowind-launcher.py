@@ -285,7 +285,7 @@ CREDITS = (
     "Isowind is a modified OpenMW with a multiplayer port of TES3MP. It needs your own copy of The Elder Scrolls III: "
     "Morrowind (Bethesda Softworks); none of the game's files are included.\n\n"
     "ENGINE\n"
-    "OpenMW - openmw.org - by the OpenMW team and contributors (licenses/OpenMW-AUTHORS.md). "
+    "OpenMW - openmw.org - by the OpenMW team and contributors. "
     "GNU General Public License v3 (licenses/GPL-3.0.txt). Isowind's changes are under the same license; "
     "the source is in the source folder.\n\n"
     "TES3MP - tes3mp.com - by David Cernat, Stanislav Zhukov and contributors. The multiplayer code in Isowind is "

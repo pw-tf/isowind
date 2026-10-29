@@ -915,10 +915,8 @@ if (OPENMW_OSX_DEPLOYMENT AND APPLE)
     install_plugins_for_bundle("${APP_BUNDLE_NAME}" PLUGINS)
     install_plugins_for_bundle("${OPENCS_BUNDLE_NAME}" OPENCS_PLUGINS)
 
-    INSTALL(FILES "${OpenMW_SOURCE_DIR}/CHANGELOG.md" DESTINATION "/${INSTALLED_OPENMW_APP}/..")
     INSTALL(FILES "${OpenMW_SOURCE_DIR}/README.md" DESTINATION "/${INSTALLED_OPENMW_APP}/..")
     INSTALL(FILES "${OpenMW_SOURCE_DIR}/LICENSE" DESTINATION "/${INSTALLED_OPENMW_APP}/..")
-    INSTALL(FILES "${OpenMW_SOURCE_DIR}/AUTHORS.md" DESTINATION "/${INSTALLED_OPENMW_APP}/..")
 
     set(PLUGINS ${PLUGINS} "${INSTALLED_OPENMW_APP}/Contents/PlugIns/${QT_COCOA_PLUGIN_GROUP}/${QT_COCOA_PLUGIN_NAME}")
     set(PLUGINS ${PLUGINS} "${INSTALLED_OPENMW_APP}/Contents/PlugIns/${QT_QMACSTYLE_PLUGIN_GROUP}/${QT_QMACSTYLE_PLUGIN_NAME}")
@@ -988,10 +986,8 @@ elseif(NOT APPLE)
                                                                                                                   PATTERN "tests_output" EXCLUDE
                                                                                                                   PATTERN "try-compile")
         INSTALL(FILES "${INSTALL_SOURCE}/openmw.cfg.install" DESTINATION "." RENAME "openmw.cfg")
-        INSTALL(FILES "${OpenMW_SOURCE_DIR}/CHANGELOG.md" DESTINATION "." RENAME "CHANGELOG.txt")
         INSTALL(FILES "${OpenMW_SOURCE_DIR}/README.md" DESTINATION "." RENAME "README.txt")
         INSTALL(FILES "${OpenMW_SOURCE_DIR}/LICENSE" DESTINATION "." RENAME "LICENSE.txt")
-        INSTALL(FILES "${OpenMW_SOURCE_DIR}/AUTHORS.md" DESTINATION "." RENAME "AUTHORS.txt")
         INSTALL(FILES "${INSTALL_SOURCE}/defaults.bin" DESTINATION ".")
         INSTALL(FILES "${INSTALL_SOURCE}/gamecontrollerdb.txt" DESTINATION ".")
 

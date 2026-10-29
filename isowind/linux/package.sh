@@ -116,7 +116,6 @@ printf '%s\n' "$DATA_FILES" | while IFS= read -r f; do
 done
 cp "$I/tools/retro_textures.py" "$OUT/tools/"
 cp "$SRC/LICENSE" "$OUT/licenses/GPL-3.0.txt"
-cp "$SRC/AUTHORS.md" "$OUT/licenses/OpenMW-AUTHORS.md"
 cp "$I/README.txt" "$OUT/"
 cp "$I/linux/isowind.sh" "$I/linux/isowind-launcher.py" "$OUT/"
 chmod +x "$OUT/isowind.sh"

@@ -119,12 +119,11 @@ Copy-Item (Join-Path $isowind 'server\CoreScripts\data\requiredDataFiles.json') 
 if (Test-Path (Join-Path $server 'logs')) { Remove-Item -Recurse -Force (Join-Path $server 'logs') }
 Copy-Item (Join-Path $isowind 'server\tes3mp-server-default.cfg') $server -Force
 
-# License texts (Isowind.exe's Licenses window lists who made what): OpenMW's GPL and authors; the bundled mods carry
+# License texts (Isowind.exe's Licenses window lists who made what): OpenMW's GPL; the bundled mods carry
 # their own in mods\.
 $licenses = Join-Path $dist 'licenses'
 New-Item -ItemType Directory -Force $licenses | Out-Null
 Copy-Item (Join-Path $src 'LICENSE') (Join-Path $licenses 'GPL-3.0.txt') -Force
-Copy-Item (Join-Path $src 'AUTHORS.md') (Join-Path $licenses 'OpenMW-AUTHORS.md') -Force
 
 # Launcher (built by build.ps1 into MSVC2022_64\launcher, or beside the repository in launcher\) and readme.
 $launcherExe = @((Join-Path $src 'MSVC2022_64\launcher\Isowind.exe'), (Join-Path $root 'launcher\Isowind.exe')) |
