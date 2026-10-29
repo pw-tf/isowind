@@ -7,6 +7,8 @@ Morrowind, seen from above. Isowind is a modified [OpenMW](https://openmw.org) t
 Morrowind as a top-down, isometric game, with an optional pixel art look and online play with friends. It is the
 whole of Morrowind (Tribunal and Bloodmoon too), your own copy of it. Isowind brings none of the game's files.
 
+<p align="center"><img src="isowind/windows/dollhouse.png" alt="Isowind" width="380"></p>
+
 What it is
 ----------
 
