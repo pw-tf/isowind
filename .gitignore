@@ -41,6 +41,7 @@ resources
 /*.install
 /mods
 /mod
+/isowind-screenshots
 
 ## binaries
 /esmtool
