@@ -1,12 +1,16 @@
 #!/bin/sh
 # Assembles Isowind for Linux the way isowind/windows/make_package.ps1 does for Windows: the engine with the
-# libraries it needs, the mod, the bundled mods, pixel art, profiles, server, licenses, readme, and isowind.sh to
-# start it all.
+# libraries it needs, the mod, the bundled mods if any, pixel art, profiles, server, licenses, readme, and isowind.sh
+# to start it all.
 #
-#   package.sh BUILD_DIR OUT_DIR [BUNDLED_MODS_DIR]
+#   package.sh [--with-mods | --no-mods] BUILD_DIR OUT_DIR [BUNDLED_MODS_DIR]
 #
-# Without BUNDLED_MODS_DIR the package goes without the mods, made for OpenMW alone (isowind/tools/strip_mods.py, as
-# make_package.ps1 -NoMods does), as for a public release.
+# The bundled mods (third-party, kept out of git) go in when they are there: BUNDLED_MODS_DIR, or else
+# build-deps/bundled-mods in the repository. Without them the package is made for OpenMW alone
+# (isowind/tools/strip_mods.py, as make_package.ps1 does), as anyone building from the public repository gets.
+#   --with-mods  fetches them into that folder first if it isn't there, from the repository's private "bundled-mods"
+#                release (needs the GitHub CLI, logged in with access to it); every package after that has them
+#   --no-mods    leaves them out even when they are there, for a public release
 #
 # Needs linuxdeploy on PATH (it copies in every library that isn't part of the base system, so the folder runs on
 # other distributions too).
@@ -16,11 +20,16 @@
 # test characters. Those and the single-player saves (~/.local/share/openmw/saves) are backed up first, in
 # ~/.local/share/isowind/backups (the last five). A release is packaged into a new folder, as the CI does.
 set -e
+WANT_MODS=
+case $1 in
+    --with-mods) WANT_MODS=yes; shift ;;
+    --no-mods) WANT_MODS=no; shift ;;
+esac
 SRC=$(cd "$(dirname "$0")/../.." && pwd)
 I="$SRC/isowind"
 BUILD=$(cd "$1" && pwd)
 OUT=$2
-MODS=$3
+MODS=${3:-$SRC/build-deps/bundled-mods}
 DATA_HOME=${XDG_DATA_HOME:-$HOME/.local/share}
 
 mkdir -p "$OUT"
@@ -30,6 +39,23 @@ if [ -n "$(ls -A "$OUT")" ] && [ ! -f "$OUT/isowind.sh" ]; then
     echo "error: $OUT has files in it and isn't an Isowind package; give a new or empty folder" >&2
     exit 1
 fi
+
+# The bundled mods: fetched when asked for and missing, packaged when there
+if [ "$WANT_MODS" = yes ] && [ ! -d "$MODS" ]; then
+    if ! command -v gh >/dev/null 2>&1; then
+        echo "error: the bundled mods come from the repository's private release: install the GitHub CLI, run" \
+            "gh auth login, and package again; or put the mods in $MODS yourself" >&2
+        exit 1
+    fi
+    echo "Fetching the bundled mods (bundled-mods.zip from the repository's bundled-mods release)..."
+    FETCH=$(mktemp -d)
+    gh release download bundled-mods --repo pw-tf/isowind -p bundled-mods.zip -D "$FETCH"
+    mkdir -p "$MODS"
+    unzip -q "$FETCH/bundled-mods.zip" -d "$MODS"
+    rm -rf "$FETCH"
+fi
+if [ "$WANT_MODS" = no ] || [ ! -d "$MODS" ]; then MODS=; fi
+if [ -n "$MODS" ]; then echo "With the bundled mods ($MODS)"; else echo "Without the bundled mods"; fi
 
 # Backup of what testing made (not while there is nothing yet but the server's defaults)
 backup() {
@@ -95,7 +121,7 @@ cp "$I/README.txt" "$OUT/"
 cp "$I/linux/isowind.sh" "$I/linux/isowind-launcher.py" "$OUT/"
 chmod +x "$OUT/isowind.sh"
 
-if [ -n "$MODS" ] && [ -d "$MODS" ]; then
+if [ -n "$MODS" ]; then
     cp -r "$MODS" "$OUT/mods"
 else
     # Without the bundled mods (as for a public release): the profiles, the server's plugin list and the readme made

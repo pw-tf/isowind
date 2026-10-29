@@ -225,12 +225,13 @@ package: [linuxdeploy](https://github.com/linuxdeploy/linuxdeploy/releases) on t
 
     isowind/linux/package.sh build build-deps/Isowind
 
-That is the package without the bundled mods, as released. With access to their private release, the developers'
-package has them:
+The bundled mods work as on Windows. By default the package goes without them, as released. With access to their
+private release, fetch them once into `build-deps/bundled-mods`:
 
-    gh release download bundled-mods -p bundled-mods.zip -D build-deps
-    unzip -q build-deps/bundled-mods.zip -d build-deps/bundled-mods
-    isowind/linux/package.sh build build-deps/Isowind build-deps/bundled-mods
+    isowind/linux/package.sh --with-mods build build-deps/Isowind
+
+Every package after that has them, with no option needed. `--no-mods` leaves them out anyway, for a release; give it
+a new folder (`build-deps/Isowind-release`) so your usual package and its test characters stay as they are.
 
 **5. Play:** `build-deps/Isowind/isowind.sh` (or `isowind.sh gui` for the launcher window; `isowind.sh normal`,
 `isowind.sh join ADDRESS` and `isowind.sh host` are the others, and `--controller` or `--no-controller` among the
