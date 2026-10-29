@@ -337,3 +337,6 @@ Q / E and Z / C type as usual in a text box.
 Whether the menus are made for a controller is decided as the game starts: `Isowind.exe`'s **Controller** tick box,
 or on Linux what is plugged in, which `--controller` or `--no-controller` overrides (a controller that comes with a
 stream, as Moonlight's does, wants `--controller`).
+
+
+~ This mod was made in assistance with AI. ~
