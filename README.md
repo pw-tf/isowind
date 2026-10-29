@@ -3,9 +3,7 @@
 Isowind
 =======
 
-Morrowind, seen from above. Isowind is a modified [OpenMW](https://openmw.org) that plays The Elder Scrolls III:
-Morrowind as a top-down, isometric game, with an optional pixel art look and online play with friends. It is the
-whole of Morrowind (Tribunal and Bloodmoon too), your own copy of it. Isowind brings none of the game's files.
+Isowind is a [OpenMW](https://openmw.org) mod that allows you to play the whole Elder Scrolls III: Morrowind as a top-down, isometric game. It includes a satisfying pixel art look for retro vibes, akin to early Diablo games. Full online co-op/MMO capabilities, using your own copy of Morrowind.
 
 <p align="center"><img src="isowind/windows/dollhouse.png" alt="Isowind" width="380"></p>
 
