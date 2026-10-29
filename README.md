@@ -339,4 +339,4 @@ or on Linux what is plugged in, which `--controller` or `--no-controller` overri
 stream, as Moonlight's does, wants `--controller`).
 
 
-~ This mod was made in assistance with AI. ~
+~ This mod was made in collaboration with AI. ~
