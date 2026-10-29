@@ -85,10 +85,6 @@ namespace MWInput
                 evt.which = i;
                 static const int fakeDeviceID = 1;
                 ControllerManager::controllerAdded(fakeDeviceID, evt);
-                if (const char* name = SDL_GameControllerNameForIndex(i))
-                    Log(Debug::Info) << "Detected game controller: " << name;
-                else
-                    Log(Debug::Warning) << "Detected game controller without a name: " << SDL_GetError();
             }
             else
             {
@@ -300,6 +296,24 @@ namespace MWInput
     {
         mBindingsManager->controllerAdded(deviceID, arg);
         enableGyroSensor();
+
+        // Isowind: which pad, and how SDL reads it, for when a stick does the wrong thing (a streaming host's virtual
+        // pad whose axes aren't where the real pad's are that the mapping was made for)
+        SDL_GameController* cntrl = SDL_GameControllerFromInstanceID(SDL_JoystickGetDeviceInstanceID(arg.which));
+        if (cntrl == nullptr)
+        {
+            Log(Debug::Warning) << "Game controller not opened: " << SDL_GetError();
+            return;
+        }
+        char guid[33];
+        SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(SDL_GameControllerGetJoystick(cntrl)), guid, sizeof(guid));
+        const char* name = SDL_GameControllerName(cntrl);
+        Log(Debug::Info) << "Game controller: " << (name ? name : "(no name)") << ", guid " << guid;
+        if (char* mapping = SDL_GameControllerMapping(cntrl))
+        {
+            Log(Debug::Verbose) << "Game controller mapping: " << mapping;
+            SDL_free(mapping);
+        }
     }
 
     void ControllerManager::controllerRemoved(const SDL_ControllerDeviceEvent& arg)
