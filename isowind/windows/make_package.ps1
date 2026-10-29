@@ -25,7 +25,7 @@ $bundledMods = Join-Path $root 'bundled-mods'
 $withMods = -not $NoMods -and (Test-Path $bundledMods)
 if ($withMods) { "With the bundled mods ($bundledMods)" } else { 'Without the bundled mods' }
 # Isowind's own files (the mod, pixel art shader and palettes, profiles, server scripts, readme), shared with the
-# Linux and Android builds
+# Linux build
 $isowind = Join-Path $src 'isowind'
 
 function Mirror($from, $to, [string[]]$extra = @()) {
@@ -155,8 +155,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 & git -C $src rev-parse --verify --quiet "$tag^{commit}" | Out-Null
 if ($LASTEXITCODE -eq 0) {
-    & git -C $src add --intent-to-add -A -- . ':!MSVC2022_64' ':!deps' ':!android' ':!isowind' ':!.github'
-    & git -C $src diff $tag -- . ':!MSVC2022_64' ':!deps' ':!android' ':!isowind' ':!.github' | Set-Content -Encoding utf8 (Join-Path $source "isowind-$tag.patch")
+    & git -C $src add --intent-to-add -A -- . ':!MSVC2022_64' ':!deps' ':!isowind' ':!.github'
+    & git -C $src diff $tag -- . ':!MSVC2022_64' ':!deps' ':!isowind' ':!.github' | Set-Content -Encoding utf8 (Join-Path $source "isowind-$tag.patch")
     & git -C $src reset --quiet
 }
 else {

@@ -8,8 +8,7 @@ execute_process (
 
 # Isowind: a hash of the engine's source rather than of the commit. Multiplayer only lets the same version play
 # together (the hash is part of the connection password), and this is the same wherever that source is built: here,
-# from the snapshot commits pushed to GitHub, and from the Android build's export (android/buildscripts/CMakeLists.txt
-# computes it the same way). Only the engine's folders count, so changes to the Android app, CI or Isowind's data
+# and from the snapshot commits pushed to GitHub. Only the engine's folders count, so changes to CI or Isowind's data
 # files don't split players.
 execute_process (
     COMMAND ${GIT_EXECUTABLE} rev-parse HEAD:apps HEAD:components HEAD:files HEAD:extern HEAD:cmake HEAD:CMakeLists.txt
