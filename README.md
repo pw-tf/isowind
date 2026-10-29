@@ -98,8 +98,8 @@ You need, on the PATH:
 * CMake
 * Visual Studio 2022 with the "Desktop development with C++" workload (2026 works, with `-VsVersion 2026`)
 * Python 3 (python.org or the Microsoft Store), for the launcher's icon; Pillow is installed for you if it is missing
-* GitHub CLI, logged in (`winget install GitHub.cli`, then `gh auth login`), for the bundled mods: they come from
-  this repository's private `bundled-mods` release. Or put the mod folders in `<root>\bundled-mods` yourself.
+* Only for the bundled mods (see below): GitHub CLI, logged in (`winget install GitHub.cli`, then `gh auth login`)
+  with access to this repository's private `bundled-mods` release
 * 7-Zip, unless you are on Windows 11, whose own `tar.exe` extracts the dependency pack
 
 Clone the repository into a folder of its own. Everything that isn't source goes beside the repository, in its
@@ -108,7 +108,7 @@ parent folder (`<root>`):
     <root>\
         <repository>\             this clone; the engine builds in MSVC2022_64 inside it
         crabnet\                  cloned and built by the script
-        bundled-mods\             the third-party mods, fetched by the script
+        bundled-mods\             the third-party mods, if you have them (-WithMods fetches them)
         dist\Isowind\             the package, and dist\Isowind.zip beside it
         backups\                  test characters and saves, zipped before each packaging (the last five)
 
@@ -118,13 +118,24 @@ Then, in PowerShell, from the repository:
     .\isowind\windows\build.ps1
 
 The first run clones and builds CrabNet, downloads and unpacks the dependency pack, configures and builds the
-engine (the final link with link-time optimisation alone takes ten to twenty minutes), compiles `Isowind.exe`,
-fetches the bundled mods and packages. Later runs are incremental; after pulling changes:
+engine (the final link with link-time optimisation alone takes ten to twenty minutes), compiles `Isowind.exe`
+and packages. Later runs are incremental; after pulling changes:
 
     .\isowind\windows\build.ps1 -SkipDependencies
 
 The engine ends up in `MSVC2022_64\Release`, `Isowind.exe` in `MSVC2022_64\launcher`, and the package in
 `<root>\dist\Isowind` with `<root>\dist\Isowind.zip` beside it.
+
+**The bundled mods.** By default the package is plain OpenMW with Isowind on top, as released here. The developers'
+builds also carry a set of third-party mods (Rafael's Shader Pack, Weapon Sheathing, Questman, the Morrowind
+Optimization Patch and others), which aren't in git and can't all be passed on. With access to the repository's
+private `bundled-mods` release, fetch them once:
+
+    .\isowind\windows\build.ps1 -SkipDependencies -WithMods
+
+They go in `<root>\bundled-mods`, and every build after that packages them, with no switch needed. Packaging prints
+which kind it is making. To make a release from a machine that has them, add `-NoMods`: that package goes in
+`<root>\dist\nomods\Isowind` and `<root>\dist\nomods\Isowind.zip`, leaving your usual one alone.
 
 Rebuilding keeps the test characters. The server's players, cells and world (`dist\Isowind\server\CoreScripts\data`)
 and the host's `server\tes3mp-server.cfg` stay in the package folder; single-player saves are in
@@ -138,7 +149,8 @@ the players stay, and only the ban list goes back to empty.
 |-------------------------|------------------------------------------------------------------------------------------------|
 | `-SkipDependencies`     | Doesn't check or re-extract the dependency downloads. Use it on every build after the first.  |
 | `-NoLto`                | No link-time optimisation: the final link takes a minute or two instead of ten to twenty. The game runs a little slower, so it is for working on the code, not for a release. |
-| `-NoMods`               | Packages without the bundled third-party mods, in `<root>\dist\nomods\Isowind` and `<root>\dist\nomods\Isowind.zip`: plain OpenMW with Isowind on top, as released on GitHub. Needs no GitHub CLI login. |
+| `-WithMods`             | Fetches the bundled mods into `<root>\bundled-mods` if they aren't there yet (needs the GitHub CLI and access to the private release). Builds after that have them anyway. |
+| `-NoMods`               | Packages without the bundled mods even though `<root>\bundled-mods` is there, in `<root>\dist\nomods\Isowind` and `<root>\dist\nomods\Isowind.zip`: the public release. |
 | `-SkipLauncher`         | Doesn't build `Isowind.exe`.                                                                   |
 | `-SkipPackage`          | Doesn't run `make_package.ps1`.                                                                |
 | `-Clean`                | A fresh build folder instead of keeping the existing one.                                      |
@@ -147,7 +159,7 @@ the players stay, and only the ban list goes back to empty.
 
 The pieces, if you need one on its own:
 
-* `make_package.ps1` assembles `<root>\dist\Isowind` from `MSVC2022_64\Release`, the mod, the bundled mods, the
+* `make_package.ps1` assembles `<root>\dist\Isowind` from `MSVC2022_64\Release`, the mod, the bundled mods if any, the
   pixel art, profiles, server, licenses, `README.txt` and the GPL source patch against OpenMW's `openmw-0.51.0`
   tag (fetched if the clone lacks it), then zips it. It finds the repository from its own location.
 * `make_icon.py` draws the icon; `Isowind.cs` compiles with .NET Framework 4's `csc.exe`, which comes with Windows,
@@ -161,7 +173,8 @@ If something goes wrong:
 * **Windows Defender quarantines `openmw.exe`**: a fresh, unsigned binary can trip its heuristics. Restore it from
   Protection history, exclude `<root>` in Windows Security, and report the file to Microsoft as a false positive.
   The zip step fails while the file is quarantined.
-* **No bundled mods**: `gh auth login` and build again, or put the mods in `<root>\bundled-mods`.
+* **No bundled mods** when you expected them: `gh auth login` and build with `-WithMods`, or put the mods in
+  `<root>\bundled-mods` yourself.
 
 Building on Linux
 -----------------
@@ -178,7 +191,8 @@ source goes in `build-deps/` and `build/` inside the clone (git ignores both).
 To play you also want Python 3 with Tk for the launcher window (`python3-tk` / `tk`) and Pillow for the pixel art
 look (`python3-pil` / `python-pillow`; without it `isowind.sh` installs it into a private folder of its own). To
 package: [linuxdeploy](https://github.com/linuxdeploy/linuxdeploy/releases) on the PATH (its AppImage; set
-`APPIMAGE_EXTRACT_AND_RUN=1` if FUSE is missing), and the GitHub CLI logged in (`gh auth login`) for the bundled mods.
+`APPIMAGE_EXTRACT_AND_RUN=1` if FUSE is missing), and, only for the bundled mods, the GitHub CLI logged in
+(`gh auth login`) with access to their private release.
 
 **2. CrabNet**, the multiplayer's networking, at the commit the Windows build uses:
 
@@ -208,6 +222,11 @@ package: [linuxdeploy](https://github.com/linuxdeploy/linuxdeploy/releases) on t
 `build/openmw` and `build/tes3mp-server` are the game and the server.
 
 **4. The package**, laid out like the Windows one with `isowind.sh` in place of `Isowind.exe`:
+
+    isowind/linux/package.sh build build-deps/Isowind
+
+That is the package without the bundled mods, as released. With access to their private release, the developers'
+package has them:
 
     gh release download bundled-mods -p bundled-mods.zip -D build-deps
     unzip -q build-deps/bundled-mods.zip -d build-deps/bundled-mods

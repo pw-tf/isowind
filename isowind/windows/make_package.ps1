@@ -4,12 +4,14 @@
 # Packaging again keeps the test characters in dist\Isowind (the server's data) and backs them up in <root>\backups
 # first; the zip is always clean.
 #
-#   .\make_package.ps1           the package with the bundled mods: dist\Isowind and dist\Isowind.zip
-#   .\make_package.ps1 -NoMods   without them, for a public release (their licences don't all allow passing them on):
-#                                OpenMW's own look with Isowind's on top, the server requiring only Morrowind and its
-#                                expansions (isowind\tools\strip_mods.py, which needs Python 3). Into
-#                                dist\nomods\Isowind and dist\nomods\Isowind.zip, so the usual package and the test
-#                                characters in it stay as they are; bundled-mods isn't needed.
+#   .\make_package.ps1           dist\Isowind and dist\Isowind.zip, with the bundled mods if <root>\bundled-mods is there
+#                                (build.ps1 -WithMods fetches it once); without them otherwise, as anyone building it
+#                                from the public repository gets
+#   .\make_package.ps1 -NoMods   without them whatever is there, for a public release (their licences don't all allow
+#                                passing them on), into dist\nomods\Isowind and dist\nomods\Isowind.zip, so the usual
+#                                package and the test characters in it stay as they are.
+# Without the mods the package is OpenMW's own look with Isowind's on top, the server requiring only Morrowind and its
+# expansions (isowind\tools\strip_mods.py, which needs Python 3).
 
 param([switch]$NoMods)
 
@@ -19,6 +21,9 @@ $root = Split-Path -Parent $src
 $release = Join-Path $src 'MSVC2022_64\Release'
 $distRoot = if ($NoMods) { Join-Path $root 'dist\nomods' } else { Join-Path $root 'dist' }
 $dist = Join-Path $distRoot 'Isowind'
+$bundledMods = Join-Path $root 'bundled-mods'
+$withMods = -not $NoMods -and (Test-Path $bundledMods)
+if ($withMods) { "With the bundled mods ($bundledMods)" } else { 'Without the bundled mods' }
 # Isowind's own files (the mod, pixel art shader and palettes, profiles, server scripts, readme), shared with the
 # Linux and Android builds
 $isowind = Join-Path $src 'isowind'
@@ -88,7 +93,9 @@ foreach ($layout in 'openmw_layers.xml', 'openmw_settings_window.layout', 'openm
 Mirror (Join-Path $isowind 'mod') (Join-Path $dist 'mod')
 # Bundled mods (credited in Isowind.exe's Licenses and README.txt) with only the options Isowind uses, kept in
 # bundled-mods (mod\add-mods is where new ones are dropped to look at); the profiles list their data folders.
-if (-not $NoMods) { Mirror (Join-Path $root 'bundled-mods') (Join-Path $dist 'mods') }
+# (Without them, none left over from a package that had them: the launcher credits the mods it finds there)
+if ($withMods) { Mirror $bundledMods (Join-Path $dist 'mods') }
+elseif (Test-Path (Join-Path $dist 'mods')) { Remove-Item -Recurse -Force (Join-Path $dist 'mods') }
 # Mirrored, so textures built while testing the package (Bethesda-derived) never end up in it.
 Mirror (Join-Path $isowind 'pixelart') (Join-Path $dist 'pixelart')
 
@@ -127,7 +134,7 @@ Copy-Item $launcherExe $dist -Force
 Copy-Item (Join-Path $isowind 'README.txt') $dist -Force
 
 # Without the bundled mods: the profiles, the server's plugin list and the readme made for OpenMW alone
-if ($NoMods) {
+if (-not $withMods) {
     $python = (Get-Command py -ErrorAction SilentlyContinue), (Get-Command python -ErrorAction SilentlyContinue) |
         Where-Object { $_ } | Select-Object -First 1
     if (-not $python) { throw 'Python 3 is needed for the package without the mods (strip_mods.py): install it from python.org' }
@@ -191,7 +198,7 @@ $archive = [IO.Compression.ZipFile]::Open($zip, 'Create')
 try {
     $items = 'engine', 'licenses', 'mod', 'mods', 'pixelart', 'profiles\pixelart', 'profiles\normal',
         'server\CoreScripts', 'server\tes3mp-server-default.cfg', 'source', 'Isowind.exe', 'README.txt'
-    if ($NoMods) { $items = $items | Where-Object { $_ -ne 'mods' } }
+    if (-not $withMods) { $items = $items | Where-Object { $_ -ne 'mods' } }
     foreach ($item in $items) {
         $path = Join-Path $dist $item
         $files = if (Test-Path $path -PathType Container) { Get-ChildItem $path -Recurse -File } else { Get-Item $path }
@@ -205,7 +212,7 @@ try {
         $entry = 'Isowind/server/' + $file.Substring('isowind/server/'.Length)
         $from = Join-Path $src $file
         # (the plugin list as strip_mods.py made it, without the mods)
-        if ($NoMods -and $file -like '*/requiredDataFiles.json') { $from = Join-Path $serverData 'requiredDataFiles.json' }
+        if (-not $withMods -and $file -like '*/requiredDataFiles.json') { $from = Join-Path $serverData 'requiredDataFiles.json' }
         [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $from, $entry, 'Optimal') | Out-Null
     }
 } finally { $archive.Dispose() }

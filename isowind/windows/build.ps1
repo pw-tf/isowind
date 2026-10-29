@@ -4,8 +4,9 @@
 # Everything is in the repository (isowind\windows: this script, Isowind.cs, logo.png and make_icon.py for the
 # launcher, make_package.ps1), and the rest goes beside the repository, in the folder it is checked out into (<root>):
 #   <root>\crabnet\          the multiplayer networking library, cloned and built here
-#   <root>\bundled-mods\     the third-party mods (make_package.ps1 wants them); fetched from this repository's
-#                            "bundled-mods" release (bundled-mods.zip, as the Linux CI does) when the folder is missing
+#   <root>\bundled-mods\     the third-party mods, packaged when the folder is there (otherwise the package goes
+#                            without them, as for a public release); -WithMods fetches it from this repository's
+#                            private "bundled-mods" release (bundled-mods.zip, as the Linux CI does)
 #   <root>\dist\             the package. Rebuilding keeps what testing it made (the server's players and world,
 #                            the host's settings); the zip never has them
 #   <root>\backups\          those and the single-player saves (Documents\My Games\OpenMW\saves), zipped by
@@ -22,8 +23,10 @@
 #   .\build.ps1 -SkipDependencies  don't check or re-extract OpenMW's dependency downloads (faster once they're there)
 #   .\build.ps1 -SkipLauncher      no Isowind.exe
 #   .\build.ps1 -SkipPackage       no dist\Isowind.zip
-#   .\build.ps1 -NoMods            the package without the bundled mods, for a public release: dist\nomods\Isowind.zip
-#                                  (bundled-mods isn't fetched; see make_package.ps1)
+#   .\build.ps1 -WithMods          fetches the bundled mods into <root>\bundled-mods if they aren't there yet (needs
+#                                  access to the repository's private release); every build after that has them
+#   .\build.ps1 -NoMods            the package without the bundled mods even when they are there, for a public
+#                                  release: dist\nomods\Isowind.zip (see make_package.ps1)
 #   .\build.ps1 -NoLto             no link-time optimisation: the final link takes a minute or two instead of ten to
 #                                  twenty (the game runs a little slower; for working on it, not for a release)
 #   .\build.ps1 -Configuration Debug -VsVersion 2026
@@ -36,6 +39,7 @@ param(
     [switch]$SkipDependencies,
     [switch]$SkipLauncher,
     [switch]$SkipPackage,
+    [switch]$WithMods,
     [switch]$NoMods,
     [switch]$NoLto
 )
@@ -181,12 +185,10 @@ if (-not $SkipPackage) {
     if (-not (Test-Path $package)) { Write-Warning "No ${package}: nothing packaged" }
     elseif ($Configuration -ne 'Release') { Write-Warning "make_package.ps1 packages $buildDir\Release; this was a $Configuration build, so it isn't run" }
     else {
-        # The bundled mods are third-party and kept out of git: the "bundled-mods" release holds them, as for the Linux CI
+        # The bundled mods are third-party and kept out of git: the "bundled-mods" release holds them, as for the Linux
+        # CI. Packaged when <root>\bundled-mods is there; fetched only when asked for
         $mods = Join-Path $root 'bundled-mods'
-        if ($NoMods) {
-            & $package -NoMods
-        }
-        elseif (-not (Test-Path $mods)) {
+        if ($WithMods -and -not $NoMods -and -not (Test-Path $mods)) {
             $zip = Join-Path $root 'bundled-mods.zip'
             Write-Host "Fetching the bundled mods (bundled-mods.zip from the repository's bundled-mods release)..."
             # (the repository is private, so this needs GitHub's CLI, logged in: gh auth login)
@@ -198,7 +200,7 @@ if (-not $SkipPackage) {
             Expand-Archive -Path $zip -DestinationPath $mods -Force
             Remove-Item $zip -Force
         }
-        if (-not $NoMods) { & $package }
+        if ($NoMods) { & $package -NoMods } else { & $package }
     }
 }
 
