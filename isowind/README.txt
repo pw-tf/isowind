@@ -28,9 +28,10 @@ On Linux, unpack the folder and use isowind.sh instead of Isowind.exe, from a te
    ./isowind.sh new             start a new character
    ./isowind.sh host            run a server in that terminal (it asks its settings first)
    ./isowind.sh gui             a launcher window like Isowind.exe (also what a file manager opens)
-   The first time it finds Morrowind in Steam's usual places and sets up OpenMW for it; otherwise run it as
-   MORROWIND=/path/to/Morrowind ./isowind.sh (the folder with "Data Files" in it). The pixel art look
-   needs Python 3; it fetches Pillow for itself if your system doesn't have it.
+   The first time it finds Morrowind in your Steam libraries (other drives and a Steam Deck's SD card
+   too) and sets up OpenMW for it; otherwise run it as MORROWIND=/path/to/Morrowind ./isowind.sh (the
+   folder with "Data Files" in it). The pixel art look needs Python 3; it fetches Pillow for itself if
+   your system doesn't have it.
 
 Your saves are shared with any normal OpenMW you have.
 
