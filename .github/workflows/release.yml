@@ -1,0 +1,152 @@
+name: Release
+
+# A release, made when a branch named for one is merged into main: alpha-v1.0.1a makes "Alpha v1.0.1a" (tag
+# alpha-v1.0.1a), beta-v2.0 makes "Beta v2.0". The name is alpha or beta, then the version, with or without a "-" or
+# "_" between and a v before it, in any case (AlphaV1.0.2 does too). The release is drafted, the Windows zip and the
+# Linux package are built from the merge and put on it, and it is published, making its tag, once both are there with
+# the same multiplayer version hash. Until then it is a draft only the repository's writers see; if a build fails, run
+# this by hand with the same version to try again.
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The release, as its branch is named (e.g. alpha-v1.0.1a)
+        required: true
+      ref:
+        description: "The commit or branch to build (blank: main as it is now)"
+        required: false
+        default: ''
+
+jobs:
+  prepare:
+    # Merged (not only closed), from one of this repository's branches, named alpha... or beta... (checked properly
+    # below; these comparisons ignore case)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       (startsWith(github.head_ref, 'alpha') || startsWith(github.head_ref, 'beta')))
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      title: ${{ steps.version.outputs.title }}
+      ref: ${{ steps.version.outputs.ref }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      # The release's tag and title from the branch's name; the commit both builds are made from
+      - name: Version
+        id: version
+        env:
+          BRANCH: ${{ inputs.version || github.head_ref }}
+          REF: ${{ inputs.ref || github.event.pull_request.merge_commit_sha || github.sha }}
+        run: |
+          shopt -s nocasematch
+          if [[ ! $BRANCH =~ ^(alpha|beta)[-_]?v?([0-9]+(\.[0-9]+)*[a-z0-9]*)$ ]]; then
+            if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+              echo "::error::$BRANCH isn't a release's name: alpha or beta, then the version, e.g. alpha-v1.0.1a"
+              exit 1
+            fi
+            echo "::notice::$BRANCH isn't named for a release (e.g. alpha-v1.0.1a), so none is made"
+            exit 0
+          fi
+          STAGE=${BASH_REMATCH[1],,}
+          VERSION=${BASH_REMATCH[2],,}
+          # (a branch given by hand is taken as it is now, so both builds have the same commit)
+          SHA=$(gh api "repos/$GH_REPO/commits/$REF" --jq .sha)
+          echo "Release ${STAGE^} v$VERSION (tag $STAGE-v$VERSION) from $SHA"
+          {
+            echo "tag=$STAGE-v$VERSION"
+            echo "title=${STAGE^} v$VERSION"
+            echo "ref=$SHA"
+          } >> "$GITHUB_OUTPUT"
+
+      # A draft to put the builds on: a new one, or the one an earlier try left, pointed at this commit
+      - name: Draft
+        if: steps.version.outputs.tag != ''
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          TITLE: ${{ steps.version.outputs.title }}
+          REF: ${{ steps.version.outputs.ref }}
+        run: |
+          DRAFT=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null || true)
+          if [ "$DRAFT" = false ]; then
+            echo "::error::$TITLE is already released: name the branch for a new version"
+            exit 1
+          fi
+          if [ -z "$DRAFT" ] && gh api "repos/$GH_REPO/git/ref/tags/$TAG" > /dev/null 2>&1; then
+            echo "::error::there is already a tag $TAG without a release: delete it or name the branch for a new version"
+            exit 1
+          fi
+          if [ "$DRAFT" = true ]; then
+            gh release edit "$TAG" --target "$REF" --title "$TITLE"
+          else
+            gh release create "$TAG" --draft --target "$REF" --title "$TITLE" --notes "Being built from $REF."
+          fi
+
+  linux:
+    needs: prepare
+    if: needs.prepare.outputs.tag != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/linux.yml
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+      ref: ${{ needs.prepare.outputs.ref }}
+      # (publish compares the two builds; a zip on the draft may be an earlier try's)
+      match_windows: false
+
+  windows:
+    needs: prepare
+    if: needs.prepare.outputs.tag != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/windows.yml
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+      ref: ${{ needs.prepare.outputs.ref }}
+
+  publish:
+    needs: [prepare, linux, windows]
+    if: needs.prepare.outputs.tag != ''
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      TITLE: ${{ needs.prepare.outputs.title }}
+      REF: ${{ needs.prepare.outputs.ref }}
+      LINUX_HASH: ${{ needs.linux.outputs.hash }}
+      WINDOWS_HASH: ${{ needs.windows.outputs.hash }}
+      GLIBC: ${{ needs.linux.outputs.glibc }}
+    steps:
+      # Windows and Linux players only play together with the same hash; built from one commit, they have it
+      - name: Publish
+        run: |
+          if [ -z "$LINUX_HASH" ] || [ "$LINUX_HASH" != "$WINDOWS_HASH" ]; then
+            echo "::error::the builds' version hashes differ (Linux ${LINUX_HASH:-none}, Windows ${WINDOWS_HASH:-none})"
+            exit 1
+          fi
+          README="$GITHUB_SERVER_URL/$GH_REPO/blob/$REF/README.md"
+          {
+            echo "Isowind $TITLE."
+            echo
+            echo "- **Windows:** \`Isowind.zip\`. Unzip the whole folder somewhere you can write to and run \`Isowind.exe\`."
+            echo "- **Linux** (64-bit${GLIBC:+, glibc $GLIBC or newer}): \`isowind-linux-x86_64.tar.gz\`. Unpack it and"
+            echo "  run \`./isowind.sh gui\` in the \`Isowind\` folder."
+            echo
+            echo "You need your own Morrowind, Game of the Year edition; the [dependencies]($README#dependencies) list the"
+            echo "rest, and [first time setup]($README#first-time-setup) the steps."
+            echo
+            echo "Players can only join a server running the same release (multiplayer version \`${LINUX_HASH:0:10}\`)."
+          } > "$RUNNER_TEMP/notes.md"
+          gh release edit "$TAG" --draft=false --notes-file "$RUNNER_TEMP/notes.md"
+          echo "Published $TITLE: $GITHUB_SERVER_URL/$GH_REPO/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
