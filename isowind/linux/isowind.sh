@@ -183,6 +183,9 @@ play() {
     # Xbox controllers through the kernel's driver, not SDL's own: SDL's skips one it can't open (a Bluetooth one,
     # whose hidraw only root reads) when it has another with the same ids (Sunshine's virtual one, left after a stream)
     export SDL_JOYSTICK_HIDAPI_XBOX=${SDL_JOYSTICK_HIDAPI_XBOX:-0}
+    # OpenSceneGraph's plugins (images, fonts, models) from the package's osgPlugins folder, before any the system has:
+    # another OSG's plugins load that OSG too, and the engine gets no image readers
+    export OSG_LIBRARY_PATH="$ROOT/engine/usr/lib${OSG_LIBRARY_PATH:+:$OSG_LIBRARY_PATH}"
     # shellcheck disable=SC2086
     exec "$ENGINE/openmw" --config "$ROOT/profiles/$LOOK" $CONNECT $SKIP_MENU ${SAVE:+"--load-savegame=$SAVE"}         ${CHARACTER:+"--character=$CHARACTER"} ${SERVER_CHARACTER:+"--server-character=$SERVER_CHARACTER"}
 }

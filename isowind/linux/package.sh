@@ -87,8 +87,30 @@ if [ -d "$OUT/server/CoreScripts" ]; then
     find "$OUT/server/CoreScripts" -mindepth 1 -maxdepth 1 ! -name data -exec rm -rf {} +
 fi
 
-# Engine: engine/usr/bin with its config, settings defaults and resources beside it, libraries in engine/usr/lib
-linuxdeploy --appdir "$OUT/engine" -e "$BUILD/openmw" -e "$BUILD/tes3mp-server" -e "$BUILD/openmw-iniimporter"
+# OpenSceneGraph's plugins the engine reads its images, fonts and models with (USED_OSG_PLUGINS in CMakeLists.txt).
+# OSG loads them at run time, so linuxdeploy doesn't see them: they come from beside the libosgDB the engine runs
+# with, as CMake finds them, into engine/usr/lib/osgPlugins-<version>, where isowind.sh points OSG. Without them OSG
+# would look in the build machine's folder for them, and on another distribution find none, or its own OSG's, which
+# load that OSG beside the bundled one and give the engine no image readers
+OSGDB=$(ldd "$BUILD/openmw" | awk '/libosgDB\.so/ { print $3; exit }')
+OSG_PLUGINS=
+for d in "${OSGDB%/*}"/osgPlugins-*; do if [ -d "$d" ]; then OSG_PLUGINS=$d; break; fi; done
+[ -n "$OSG_PLUGINS" ] || { echo "error: no osgPlugins folder beside $OSGDB" >&2; exit 1; }
+mkdir -p "$OUT/engine/usr/lib/${OSG_PLUGINS##*/}"
+for plugin in $(sed -n '/^set(USED_OSG_PLUGINS/,/)/p' "$SRC/CMakeLists.txt" | grep -o 'osgdb_[a-z_]*'); do
+    # (one whose libraries this machine hasn't, such as Collada's for osgdb_dae on Arch, can't load here either)
+    if ldd "$OSG_PLUGINS/$plugin.so" | grep -q 'not found'; then
+        echo "warning: $plugin left out, as this machine hasn't all its libraries:" \
+            "$(ldd "$OSG_PLUGINS/$plugin.so" | awk '/not found/ { printf "%s ", $1 }')" >&2
+        continue
+    fi
+    cp "$OSG_PLUGINS/$plugin.so" "$OUT/engine/usr/lib/${OSG_PLUGINS##*/}/"
+done
+
+# Engine: engine/usr/bin with its config, settings defaults and resources beside it, libraries in engine/usr/lib (the
+# plugins' too)
+linuxdeploy --appdir "$OUT/engine" -e "$BUILD/openmw" -e "$BUILD/tes3mp-server" -e "$BUILD/openmw-iniimporter" \
+    --deploy-deps-only "$OUT/engine/usr/lib/${OSG_PLUGINS##*/}"
 cp -r "$BUILD/resources" "$BUILD/openmw.cfg" "$BUILD/defaults.bin" "$BUILD/gamecontrollerdb.txt" "$OUT/engine/usr/bin/"
 
 cp -r "$I/mod" "$I/pixelart" "$OUT/"
