@@ -378,4 +378,4 @@ stream, as Moonlight's does, wants `--controller`).
 
 <br>
 
-<p align="center"> ~ This mod was made in collaboration with AI. ~ </p>  
+<p align="center"> ~ This mod was made with AI and tested by humans. ~ </p>  
