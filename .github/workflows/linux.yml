@@ -72,8 +72,9 @@ jobs:
       VERSION_HASH: ${{ inputs.version_hash }}
       ATTACH: ${{ inputs.attach }}
       MATCH_WINDOWS: ${{ inputs.match_windows }}
-      # The multiplayer's networking (TES3MP's CrabNet), at the commit the Windows build uses
-      CRABNET_COMMIT: 19e6619
+      # The multiplayer's networking (TES3MP's CrabNet), at the commit the Windows build uses (quoted: unquoted, YAML
+      # reads 19e6619 as a number, 19 x 10^6619)
+      CRABNET_COMMIT: '19e6619'
     steps:
       - uses: actions/checkout@v4
         with:
