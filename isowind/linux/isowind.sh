@@ -15,8 +15,9 @@
 #
 # The menus are made for a controller while one is used, and Morrowind's own while the mouse is: the game picks.
 #
-# The first time, it finds Morrowind (Steam's usual places; otherwise run it as MORROWIND=/path/to/Morrowind
-# ./isowind.sh, the folder with "Data Files" and Morrowind.ini) and sets up OpenMW for it, like OpenMW's wizard.
+# The first time, it finds Morrowind (in Steam's libraries, those on other drives and a Steam Deck's SD card too;
+# otherwise run it as MORROWIND=/path/to/Morrowind ./isowind.sh, the folder with "Data Files" and Morrowind.ini) and
+# sets up OpenMW for it, like OpenMW's wizard.
 # The pixel art look builds its textures from your Morrowind files the first time (needs Python 3 with Pillow).
 set -e
 ROOT=$(cd "$(dirname "$0")" && pwd)
@@ -28,15 +29,34 @@ TEXTURES_MARKER="$ROOT/pixelart/textures/isowind-generated.txt"
 
 die() { echo "Isowind: $*" >&2; exit 1; }
 
+# Steam's libraries, one a line: each Steam's own (native, Flatpak), then the others its libraryfolders.vdf lists, on
+# other drives or a Steam Deck's SD card
+steam_libraries() {
+    for steam in "$HOME/.steam/steam" "$HOME/.local/share/Steam" \
+        "$HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam"; do
+        echo "$steam"
+        for vdf in "$steam/steamapps/libraryfolders.vdf" "$steam/config/libraryfolders.vdf"; do
+            # Lines like  "path"  "/run/media/mmcblk0p1"  (a backslash in a path is doubled)
+            if [ -f "$vdf" ]; then
+                sed -n 's/^[[:space:]]*"path"[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p' "$vdf" | sed 's/\\\\/\\/g'
+            fi
+        done
+    done
+}
+
 setup_morrowind() {
     grep -qix 'content=Morrowind.esm' "$CFG" 2>/dev/null && return
     MW=""
-    for d in "$MORROWIND" \
-        "$HOME/.steam/steam/steamapps/common/Morrowind" \
-        "$HOME/.local/share/Steam/steamapps/common/Morrowind" \
-        "$HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common/Morrowind"; do
-        if [ -n "$d" ] && [ -f "$d/Data Files/Morrowind.esm" ]; then MW=$d; break; fi
-    done
+    if [ -n "$MORROWIND" ] && [ -f "$MORROWIND/Data Files/Morrowind.esm" ]; then
+        MW=$MORROWIND
+    else
+        MW=$(steam_libraries | while IFS= read -r lib; do
+            if [ -f "$lib/steamapps/common/Morrowind/Data Files/Morrowind.esm" ]; then
+                echo "$lib/steamapps/common/Morrowind"
+                break
+            fi
+        done)
+    fi
     [ -n "$MW" ] || die "can't find Morrowind. Run again as: MORROWIND=/path/to/Morrowind $0
 (the folder that has 'Data Files' and Morrowind.ini in it)"
     echo "Setting up OpenMW for Morrowind in $MW"

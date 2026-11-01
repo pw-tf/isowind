@@ -40,11 +40,50 @@ Isowind is a fork of OpenMW 0.51, with these parts:
 * **The launcher** (`Isowind.exe`, or `isowind.sh` on Linux) picks the look and the character, joins or hosts
   servers, and runs the engine with the right profile.
 
+Dependencies
+------------
+
+**To play on Windows**
+
+* 64-bit Windows 10 or 11.
+* Morrowind, the Game of the Year edition (with Tribunal and Bloodmoon), from Steam or GOG. It doesn't need to have
+  been run, or to have mods installed.
+* The [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) (2015-2022, x64), which
+  the engine is built with. Most PCs have it already, as many games install it; if the game says `MSVCP140.dll` or
+  `VCRUNTIME140.dll` is missing, install it.
+* .NET Framework 4, for `Isowind.exe`. Windows 10 and 11 come with it.
+* Graphics drivers with OpenGL, as for any OpenMW.
+
+**To play on Linux**
+
+* 64-bit Linux, about as new as Ubuntu 24.04 or newer: the package is built there, and each release's notes give the
+  oldest glibc it runs on. The package carries the engine's own libraries (OpenSceneGraph, MyGUI, Bullet, SDL, Boost
+  and the rest) and uses the system's C and C++ runtimes, graphics, X11 and font libraries, which every desktop
+  distribution has.
+* Morrowind, the Game of the Year edition, from Steam or GOG. A Steam copy is found by itself, in any of your Steam
+  libraries; a GOG one is pointed to once.
+* Python 3, for the pixel art look. If Pillow isn't installed, `isowind.sh` fetches it into the package's own
+  folder, which on Debian and Ubuntu needs `python3-venv`.
+* Python's Tk, for the launcher window (`python3-tk` on Debian and Ubuntu, `tk` on Arch and Fedora). The terminal
+  commands (`./isowind.sh`, `./isowind.sh join ADDRESS` and the rest) work without it.
+* Graphics drivers with OpenGL (Mesa, or your graphics card maker's).
+
+**To play online**
+
+* Morrowind, Tribunal and Bloodmoon, with no other mods on: a server only lets in players whose game files match
+  its own.
+* The same Isowind release as the server. Windows and Linux players of one release play together; players on
+  different releases can't.
+* To host, UDP port 25565 (or the port you choose) forwarded to your computer by your router.
+
+**To build it** yourself, see [Building on Windows](#building-on-windows) and
+[Building on Linux](#building-on-linux), which list what each needs.
+
 First time setup
 ----------------
 
-**You need** Morrowind (the Game of the Year edition, from Steam or GOG) installed, and 64-bit Windows 10 or 11 or
-64-bit Linux (the Steam Deck works too). Morrowind doesn't need to be run first, or have mods installed.
+**You need** your own Morrowind and a 64-bit Windows or Linux PC; [Dependencies](#dependencies) has the full list.
+Morrowind doesn't need to be run first, or have mods installed.
 
 1. **Download** `Isowind.zip` from the [Releases](https://github.com/pw-tf/isowind/releases) page and unzip the whole folder somewhere you can
    write to, such as your Desktop or `D:\Games\Isowind` (not Program Files).
@@ -69,10 +108,12 @@ First time setup
 You can open the OpenMW launcher again at any time with the *OpenMW Launcher* button in `Isowind.exe`, to change
 the Morrowind folder, mods or other options. Your saves are shared with any normal OpenMW you have.
 
-**On Linux**, unpack the folder and run `./isowind.sh` from a terminal (or `./isowind.sh gui` for a launcher
-window). It finds Morrowind in Steam's usual places and sets OpenMW up by itself. If it can't, run it as
-`MORROWIND=/path/to/Morrowind ./isowind.sh`, giving the folder with `Data Files` in it. The pixel art look needs
-Python 3.
+**On Linux**, download `isowind-linux-x86_64.tar.gz` from the same page instead, unpack it
+(`tar -xzf isowind-linux-x86_64.tar.gz`) and run `./isowind.sh` in the `Isowind` folder from a terminal (or
+`./isowind.sh gui` for a launcher window). It is built on Ubuntu 24.04, so it wants a distribution about as new or
+newer. It finds Morrowind in your Steam libraries, those on other drives and a Steam Deck's SD card too, and
+sets OpenMW up by itself. If it can't, run it as `MORROWIND=/path/to/Morrowind ./isowind.sh`, giving the folder
+with `Data Files` in it. The pixel art look needs Python 3.
 
 **Playing online:** keep to Morrowind, Tribunal and Bloodmoon, with no other mods on in the OpenMW launcher, because
 a server only lets in players whose game files match its own. Type the server's address under *Multiplayer* in
@@ -87,7 +128,8 @@ Building on Windows
 -------------------
 
 `isowind\windows\build.ps1` does the whole chain: CrabNet (the multiplayer networking), OpenMW's dependency
-pack, the engine, `Isowind.exe` and the package.
+pack, the engine, `Isowind.exe` and the package. A release's zip is built the same way, by
+`.github/workflows/windows.yml` (see [Releases](#releases)).
 
 You need, on the PATH:
 
@@ -158,8 +200,9 @@ If something goes wrong:
 Building on Linux
 -----------------
 
-The same steps as `.github/workflows/linux.yml`, which builds every push on Ubuntu 24.04. Everything that isn't
-source goes in `build-deps/` and `build/` inside the clone (git ignores both).
+The same steps as `.github/workflows/linux.yml`, which makes a release's Linux package on Ubuntu 24.04 (see
+[Releases](#releases)). Everything that isn't source goes in `build-deps/` and `build/` inside the clone (git ignores
+both).
 
 **1. The libraries and tools.**
 
@@ -205,8 +248,8 @@ package: [linuxdeploy](https://github.com/linuxdeploy/linuxdeploy/releases) on t
 
 **5. Play:** `build-deps/Isowind/isowind.sh` (or `isowind.sh gui` for the launcher window; `isowind.sh normal`,
 `isowind.sh join ADDRESS` and `isowind.sh host` are the others, and `--controller` or `--no-controller` among the
-arguments says whether the menus are made for a controller). The first time it looks for Morrowind in Steam's usual
-places; otherwise run it as `MORROWIND=/path/to/Morrowind build-deps/Isowind/isowind.sh`, the folder with
+arguments says whether the menus are made for a controller). The first time it looks for Morrowind in Steam's
+libraries; otherwise run it as `MORROWIND=/path/to/Morrowind build-deps/Isowind/isowind.sh`, the folder with
 `Data Files` and `Morrowind.ini`.
 
 After changes, `cmake --build build -j$(nproc)` and `package.sh` again. Packaging into the same folder again keeps its
@@ -220,6 +263,33 @@ packaging; the server's `CoreScripts` are a copy, though, and must be refreshed 
 engine's folders (`apps`, `components`, `files`, `extern`, `cmake`, `CMakeLists.txt`) as committed, taken each time
 the build runs, so build again after committing or pulling engine changes, even when the code on disk was already
 built. Isowind's mod and server scripts don't count.
+
+Releases
+--------
+
+A release is made by merging a branch named for it into `main`: `alpha-v1.0.1a` makes *Alpha v1.0.1a*, and
+`beta-v2.0` makes *Beta v2.0*. The name is `alpha` or `beta`, then the version (git branch names can't have spaces).
+Open a pull request from the branch and merge it, and `.github/workflows/release.yml`:
+
+1. drafts the release, with a tag named like the branch (`alpha-v1.0.1a`);
+2. builds the Windows zip (`windows.yml`: `build.ps1 -NoMods` on Windows Server 2022, which takes a few hours) and the
+   Linux package (`linux.yml`, on Ubuntu 24.04) from the merge, and puts them on it;
+3. checks that both have the same multiplayer version hash, and publishes it, with notes on what each needs.
+
+Both packages are without the bundled mods and have the `source` folder. Until it is published, the release is a
+draft that only the repository's writers can see. If a build fails, fix it and run the workflow again by hand with
+the same version: *Actions > Release > Run workflow*, or `gh workflow run release.yml -f version=alpha-v1.0.1a`
+(add `-f ref=COMMIT` to build something other than `main` as it is). A version that is already out is refused, so
+the next one needs a new branch. Pull requests from other branches make no release.
+
+A release made before this can get a missing build by running `linux.yml` or `windows.yml` by hand with its tag.
+Alpha v1.0's Windows zip was built before the tag's last engine change was committed, so it has an older version
+hash, and its Linux package has to be given that hash (line 2 of the zip's `engine/resources/version`) to play with
+it:
+
+    gh workflow run linux.yml -f tag=alpha -f version_hash=f121921aec71faa8d63c3a6739b97f9d36048f68
+
+Untick *attach* (`-f attach=false`) to try a build first: the package is then the run's artifact, for a week.
 
 Controls
 --------

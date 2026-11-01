@@ -1,0 +1,103 @@
+name: Windows
+
+# The Windows zip for a release, Isowind.zip as isowind/windows/build.ps1 -NoMods makes it, put on the release.
+# release.yml runs it for every release; by hand (Actions > Windows > Run workflow, or gh workflow run windows.yml
+# -f tag=TAG) it builds the release's tag, or another commit given as ref, whichever branch it is run from.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release's tag
+        required: true
+      ref:
+        description: "The commit, branch or tag to build (blank: the release's tag)"
+        required: false
+        default: ''
+      attach:
+        description: Put the zip on the release (unticked, it is this run's artifact for a week)
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+      ref:
+        type: string
+        default: ''
+      attach:
+        type: boolean
+        default: true
+    outputs:
+      hash:
+        description: The multiplayer version hash it was built with
+        value: ${{ jobs.build.outputs.hash }}
+
+jobs:
+  build:
+    # (Visual Studio 2022, which build.ps1 builds with by default)
+    runs-on: windows-2022
+    # The whole engine with link-time optimisation and no compiler cache: a few hours on a hosted runner
+    timeout-minutes: 360
+    # A newer run for the same release replaces one still going
+    concurrency:
+      group: windows-${{ inputs.tag }}
+      cancel-in-progress: true
+    # (to put the zip on the release)
+    permissions:
+      contents: write
+    outputs:
+      hash: ${{ steps.hash.outputs.hash }}
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || format('refs/tags/{0}', inputs.tag) }}
+          persist-credentials: false
+
+      # (the dependency packs and the build are large: if the build runs out of room, this says where there was some)
+      - name: Disk space
+        run: Get-PSDrive -PSProvider FileSystem | Format-Table Name, @{ n = 'Free (GB)'; e = { [math]::Round($_.Free / 1GB) } }
+
+      # CrabNet, OpenMW's dependencies, the engine, Isowind.exe and the package without the bundled mods, as a release
+      # is made by hand. What isn't source goes beside the repository: crabnet, and the package in dist\nomods
+      - name: Build
+        run: ./isowind/windows/build.ps1 -NoMods
+
+      - name: Disk space after
+        if: always()
+        run: Get-PSDrive -PSProvider FileSystem | Format-Table Name, @{ n = 'Free (GB)'; e = { [math]::Round($_.Free / 1GB) } }
+
+      # A server lets in only players with its own hash, so release.yml checks the Linux build has the same
+      - name: Check version hash
+        id: hash
+        run: |
+          $dist = Join-Path (Split-Path -Parent $env:GITHUB_WORKSPACE) 'dist\nomods'
+          $hash = (Get-Content (Join-Path $dist 'Isowind\engine\resources\version'))[1].Trim()
+          Write-Host "Version hash: $hash"
+          foreach ($exe in 'openmw.exe', 'tes3mp-server.exe') {
+              $text = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Join-Path $dist "Isowind\engine\$exe")))
+              if (-not $text.Contains($hash)) { throw "$exe wasn't built with $hash" }
+          }
+          "hash=$hash" >> $env:GITHUB_OUTPUT
+          "zip=$(Join-Path $dist 'Isowind.zip')" >> $env:GITHUB_OUTPUT
+          "Multiplayer version hash: ``$hash``" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Attach to the release
+        if: inputs.attach
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ZIP: ${{ steps.hash.outputs.zip }}
+        run: gh release upload $env:TAG $env:ZIP --clobber
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !inputs.attach }}
+        with:
+          name: isowind-windows
+          path: ${{ steps.hash.outputs.zip }}
+          retention-days: 7

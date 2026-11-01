@@ -554,7 +554,7 @@ class Launcher(tk.Tk, Styled):
         character = self.remember_pick()
         self.launch(['join', address] + ([character['save']] if character else []))
 
-    # The Morrowind folder, for when it isn't where isowind.sh looks (Steam's usual places)
+    # The Morrowind folder, for when it isn't where isowind.sh looks (Steam's libraries)
     def on_morrowind_folder(self):
         folder = filedialog.askdirectory(parent=self, title='The folder Morrowind is installed in (with "Data Files")',
                                          initialdir=read_file(MORROWIND_FILE) or os.path.expanduser('~'))
