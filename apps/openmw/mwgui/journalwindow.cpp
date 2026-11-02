@@ -59,6 +59,9 @@ namespace
         bool mOptionsMode;
         bool mTopicsMode;
         bool mAllQuests;
+        // Isowind: the journal is a page of the inventory screen too: whether it is the page shown (since the screen
+        // opened)
+        bool mPageShown = false;
 
         template <typename T>
         T* getWidget(std::string_view name)
@@ -263,7 +266,10 @@ namespace
             if (Settings::gui().mControllerMenus)
                 setControllerFocusedQuest(0);
 
-            MWBase::Environment::get().getWindowManager()->setKeyFocusWidget(getWidget<MyGUI::Widget>(CloseBTN));
+            // (Isowind: not as the inventory screen's page, which may not be the one shown)
+            MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
+            if (winMgr->getMode() == MWGui::GM_Journal)
+                winMgr->setKeyFocusWidget(getWidget<MyGUI::Widget>(CloseBTN));
         }
 
         void onClose() override
@@ -277,9 +283,36 @@ namespace
                 mStates.pop();
 
             mTopicIndexBook.reset();
+            mPageShown = false;
         }
 
         void setVisible(bool newValue) override { WindowBase::setVisible(newValue); }
+
+        // Isowind: as the inventory screen's page. The book is on a layer of its own (JournalBooks), a screen of 600 x
+        // 520 scaled up to fit the real one, so not placed as the other pages are (in the real screen's units):
+        // centred on its layer it sits clear of the tab bar and the controller's legend at any size. A page not shown
+        // waits far below. Turned to, it opens with the book's sound.
+        void setInventoryPage(bool shown) override
+        {
+            if (shown)
+                center();
+            else
+                mMainWidget->setPosition(mMainWidget->getLeft(), 100000);
+            MWBase::WindowManager* winMgr = MWBase::Environment::get().getWindowManager();
+            if (shown && !mPageShown)
+                winMgr->playSound(ESM::RefId::stringRefId("book open"));
+            mPageShown = shown;
+        }
+
+        // Isowind: the keyboard's Z / C turn its pages (as the controller's triggers do, through its bumpers)
+        bool stepTab(int delta) override
+        {
+            if (delta > 0)
+                notifyNextPage(getWidget<MyGUI::Widget>(NextPageBTN));
+            else
+                notifyPrevPage(getWidget<MyGUI::Widget>(PrevPageBTN));
+            return true;
+        }
 
         void setBookMode()
         {

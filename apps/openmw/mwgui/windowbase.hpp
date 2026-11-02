@@ -88,6 +88,7 @@ namespace MWGui
 
         virtual std::string_view getWindowIdForLua() const { return {}; }
         void setDisabledByLua(bool disabled) { mDisabledByLua = disabled; }
+        bool isDisabledByLua() const { return mDisabledByLua; }
 
         static void clampWindowCoordinates(MyGUI::Window* window);
 

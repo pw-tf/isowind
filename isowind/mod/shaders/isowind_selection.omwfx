@@ -10,6 +10,30 @@ uniform_vec4 uSelectionColor {
     description = "Ring colour (rgb) and strength (a).";
 }
 
+uniform_vec4 uMoveMarker {
+    default = vec4(0.0, 0.0, 0.0, 0.0);
+    static = false;
+    description = "Where click to move is going (xyz) and half the length of the red X there (w, 0 = none).";
+}
+
+uniform_vec4 uMoveMarkerAxes {
+    default = vec4(1.0, 0.0, 0.0, 0.0);
+    static = false;
+    description = "The screen's right across the ground (xy), which the X's arms cross diagonally, its strength (z), and how far its splash has got (w, 1 = done).";
+}
+
+uniform_vec4 uAimLine {
+    default = vec4(0.0, 0.0, 0.0, 0.0);
+    static = false;
+    description = "The bow's aim line on the screen: from (xy) to (zw), 0 to 1 from the bottom left; none when the same.";
+}
+
+uniform_vec4 uAimLineStyle {
+    default = vec4(0.0, 0.0, 0.0, 0.0);
+    static = false;
+    description = "The aim line's strength (x), and whether it ends in a small ring (y, 1 = a ring).";
+}
+
 uniform_vec4 uParty {
     size = 8;
     static = false;
@@ -53,6 +77,70 @@ fragment ring {
         return max(line, fill) * ground;
     }
 
+    // The red X where click to move is going, painted on the ground like the rings: two arms, each `width` wide,
+    // crossing on the screen's diagonals (uMoveMarkerAxes.xy is the screen's right across the ground)
+    const float MARKER_WIDTH = 5.0;   // world units
+    const float MARKER_OUTLINE = 3.0;
+    const vec3 MARKER_COLOR = vec3(0.9, 0.08, 0.05);
+    const vec3 MARKER_OUTLINE_COLOR = vec3(0.2, 0.02, 0.01);
+
+    float markerAmount(vec3 world, float width)
+    {
+        vec2 local = world.xy - uMoveMarker.xy;
+        vec2 right = uMoveMarkerAxes.xy;
+        float u = dot(local, right);
+        float v = dot(local, vec2(-right.y, right.x));
+        float a = abs(u - v) * 0.70710678;   // distance from one arm...
+        float b = abs(u + v) * 0.70710678;   // ...and from the other
+        float halfLength = uMoveMarker.w + width * 0.5;
+        float armA = (1.0 - smoothstep(width * 0.5, width, a)) * (1.0 - smoothstep(halfLength - 2.0, halfLength, b));
+        float armB = (1.0 - smoothstep(width * 0.5, width, b)) * (1.0 - smoothstep(halfLength - 2.0, halfLength, a));
+        float ground = 1.0 - smoothstep(GROUND_RANGE * 0.5, GROUND_RANGE, abs(world.z - uMoveMarker.z));
+        return max(armA, armB) * ground;
+    }
+
+    // The X's splash as it lands (uMoveMarkerAxes.w: how far it has got, 0 to 1): a ripple spreading out and thinning,
+    // and drops flung out past it, shrinking, all fading as they go
+    const float SPLASH_RADIUS = 46.0; // world units
+    const int SPLASH_DROPS = 7;
+
+    float splashAmount(vec3 world, float progress)
+    {
+        vec2 local = world.xy - uMoveMarker.xy;
+        float fade = 1.0 - progress;
+        float radius = SPLASH_RADIUS * (1.0 - fade * fade); // quick at first, slowing
+        float width = mix(6.0, 1.0, progress);
+        float ripple = 1.0 - smoothstep(width * 0.5, width, abs(length(local) - radius));
+        vec2 right = uMoveMarkerAxes.xy;
+        vec2 up = vec2(-right.y, right.x);
+        float dropSize = mix(5.0, 0.5, progress);
+        float drops = 0.0;
+        for (int i = 0; i < SPLASH_DROPS; ++i)
+        {
+            // Unevenly round, and not all as far: a splash, not a pattern
+            float angle = (float(i) + 0.35 * sin(float(i) * 2.7)) * 6.2831853 / float(SPLASH_DROPS);
+            float reach = radius * (1.25 + 0.25 * sin(float(i) * 1.9));
+            vec2 drop = (right * cos(angle) + up * sin(angle)) * reach;
+            drops = max(drops, 1.0 - smoothstep(dropSize * 0.5, dropSize, length(local - drop)));
+        }
+        float ground = 1.0 - smoothstep(GROUND_RANGE * 0.5, GROUND_RANGE, abs(world.z - uMoveMarker.z));
+        return max(ripple, drops) * fade * ground;
+    }
+
+    // The bow's aim line (uAimLine, on the screen): its distance in pixels from this one
+    const float AIM_LINE_WIDTH = 1.2;   // pixels at 1080 lines
+    const float AIM_LINE_OUTLINE = 1.0;
+    const float AIM_END_RING = 5.0;     // the ring at its end: its radius, pixels at 1080 lines
+    const vec3 AIM_LINE_COLOR = vec3(0.95, 0.88, 0.62);
+    const vec3 AIM_LINE_OUTLINE_COLOR = vec3(0.1, 0.07, 0.03);
+
+    float segmentDistance(vec2 pixel, vec2 a, vec2 b)
+    {
+        vec2 ab = b - a;
+        float t = clamp(dot(pixel - a, ab) / max(dot(ab, ab), 0.0001), 0.0, 1.0);
+        return length(pixel - (a + ab * t));
+    }
+
     // Distance in pixels outside a triangle pointing along +x, its tip at x = tip and its base at x = tip - size
     float triangleDistance(float along, float side, float tip, float size, float halfWidth)
     {
@@ -81,6 +169,15 @@ fragment ring {
                 scene.rgb = mix(scene.rgb, PARTY_COLOR, ringAmount(world, uParty[i]) * 0.85);
         }
 
+        if (uMoveMarker.w > 0.0)
+        {
+            if (uMoveMarkerAxes.w < 1.0)
+                scene.rgb = mix(scene.rgb, MARKER_COLOR, splashAmount(world, uMoveMarkerAxes.w) * 0.85);
+            scene.rgb = mix(scene.rgb, MARKER_OUTLINE_COLOR,
+                markerAmount(world, MARKER_WIDTH + MARKER_OUTLINE * 2.0) * uMoveMarkerAxes.z * 0.8);
+            scene.rgb = mix(scene.rgb, MARKER_COLOR, markerAmount(world, MARKER_WIDTH) * uMoveMarkerAxes.z);
+        }
+
         if (uSelection.w > 0.0)
             scene.rgb = mix(scene.rgb, uSelectionColor.rgb, ringAmount(world, uSelection) * uSelectionColor.a);
 
@@ -98,12 +195,36 @@ fragment ring {
             }
         }
 
+        if (uAimLineStyle.x > 0.0)
+        {
+            vec2 from = uAimLine.xy * omw.resolution;
+            vec2 to = uAimLine.zw * omw.resolution;
+            float width = AIM_LINE_WIDTH * scale * 0.5;
+            float dist;
+            if (uAimLineStyle.y > 0.0)
+            {
+                // A small ring at the end, the line stopping at its edge
+                float radius = AIM_END_RING * scale;
+                vec2 along = to - from;
+                float span = length(along);
+                vec2 lineEnd = span > radius ? to - along / span * radius : from;
+                dist = min(segmentDistance(pixel, from, lineEnd), abs(length(pixel - to) - radius));
+            }
+            else
+                dist = segmentDistance(pixel, from, to);
+            float outline = 1.0 - smoothstep(width + AIM_LINE_OUTLINE * scale - 0.5,
+                width + AIM_LINE_OUTLINE * scale + 0.5, dist);
+            float line = 1.0 - smoothstep(width - 0.5, width + 0.5, dist);
+            scene.rgb = mix(scene.rgb, AIM_LINE_OUTLINE_COLOR, outline * uAimLineStyle.x * 0.5);
+            scene.rgb = mix(scene.rgb, AIM_LINE_COLOR, line * uAimLineStyle.x);
+        }
+
         omw_FragColor = scene;
     }
 }
 
 technique {
-    description = "Selection ring under the creature under the cursor, party rings and arrows to players off the screen (Isowind top-down mode).";
+    description = "Selection ring under the creature under the cursor, the red X where click to move is going, party rings, arrows to players off the screen and the bow's aim line (Isowind top-down mode).";
     version = "1.0";
     author = "Isowind";
     passes = ring;
