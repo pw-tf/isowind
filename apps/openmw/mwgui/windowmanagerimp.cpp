@@ -367,7 +367,10 @@ namespace MWGui
         constexpr VFS::Path::NormalizedView menubookOptionsOverTexture("textures/tx_menubook_options_over.dds");
         const bool questList = mResourceSystem->getVFS()->exists(menubookOptionsOverTexture);
         auto journal = JournalWindow::create(JournalViewModel::create(), questList, mEncoding);
+        mJournal = journal.get();
         mGuiModeStates[GM_Journal] = GuiModeState(journal.get());
+        // Isowind: and the inventory screen's last page (Map, Inventory, Magic, Stats, Journal)
+        mGuiModeStates[GM_Inventory].mWindows.push_back(journal.get());
         mWindows.push_back(std::move(journal));
 
         mMessageBoxManager = std::make_unique<MessageBoxManager>(
@@ -732,6 +735,9 @@ namespace MWGui
             mInventoryWindow->setVisible(eff & GW_Inventory);
             mSpellWindow->setVisible(eff & GW_Magic);
             mStatsWindow->setVisible(eff & GW_Stats);
+            // Isowind: the journal too, once it can be had (made again only when it opens: that reads the journal)
+            if (isJournalInventoryPage() != mJournal->isVisible())
+                mJournal->setVisible(isJournalInventoryPage());
             // Isowind: they are pages (one opened just now goes below the screen, or is the page shown)
             layoutInventoryPages();
         }
@@ -1042,6 +1048,11 @@ namespace MWGui
 
         if (winCount > 1)
             playSound(ESM::RefId::stringRefId("Menu Size"));
+    }
+
+    bool WindowManager::isJournalInventoryPage() const
+    {
+        return mJournal && (mAllowed & GW_Magic) != 0 && !mJournal->isDisabledByLua(); // (as getJournalAllowed)
     }
 
     void WindowManager::layoutInventoryPages()
@@ -1501,6 +1512,31 @@ namespace MWGui
     {
         if (mode == GM_Inventory && mAllowed == GW_None)
             return;
+
+        // Isowind: the journal is the inventory screen's last page, wherever it is opened from (J, the controller's
+        // Back held, scripts); opened again from that page it closes the screen, as J closes the journal
+        if (mode == GM_Journal && isJournalInventoryPage())
+        {
+            const size_t page = mGuiModeStates[GM_Inventory].mWindows.size() - 1;
+            if (!mGuiModes.empty() && mGuiModes.back() == GM_Inventory)
+            {
+                if (mActiveControllerWindows[GM_Inventory] == page)
+                    popGuiMode();
+                else
+                {
+                    setActiveControllerWindow(GM_Inventory, page);
+                    // (Lua asked for the journal on top: it is told the inventory screen is still what is open)
+                    MWBase::Environment::get().getLuaManager()->uiModeChanged(MWWorld::Ptr());
+                }
+                return;
+            }
+            // The inventory screen opens on the page after the one before this (see below): this one
+            mActiveControllerWindows[GM_Inventory] = page;
+            mode = GM_Inventory;
+        }
+        // Isowind: the journal on its own (a Lua window in its place): back from below the screen, where a page waits
+        else if (mode == GM_Journal)
+            mJournal->center();
 
         // The first menu to open opens as made for what was used last
         if (mGuiModes.empty())
@@ -3025,6 +3061,9 @@ namespace MWGui
                 res.push_back(mSpellWindow->getWindowIdForLua());
             if (mAllowed & GW_Stats)
                 res.push_back(mStatsWindow->getWindowIdForLua());
+            // Isowind: the journal is a page here too (so setMode('Interface', { windows = {} }) hides it as well)
+            if (mAllowed & GW_Magic)
+                res.push_back(mJournal->getWindowIdForLua());
         }
         else
         {

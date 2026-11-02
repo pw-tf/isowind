@@ -37,7 +37,8 @@ I.Settings.registerGroup {
     },
 }
 
--- Two bindings, so a key and a controller button can both switch the view (one button each)
+-- Two bindings, so a key and a controller button can both switch the view (one button each). How the mouse moves the
+-- character is asked the first time the game is played (topdown.lua), and can be changed here.
 I.Settings.registerGroup {
     key = 'Settings/Isowind/Controls',
     page = 'Isowind',
@@ -45,6 +46,29 @@ I.Settings.registerGroup {
     name = 'settings_controls',
     permanentStorage = true,
     settings = {
+        {
+            key = 'MoveMode',
+            renderer = 'select',
+            name = 'move_mode',
+            description = 'move_mode_desc',
+            default = 'move_wasd',
+            argument = { l10n = 'Isowind', items = { 'move_wasd', 'move_click' } },
+        },
+        {
+            key = 'MoveButton',
+            renderer = 'select',
+            name = 'move_button',
+            description = 'move_button_desc',
+            default = 'move_button_right',
+            argument = { l10n = 'Isowind', items = { 'move_button_right', 'move_button_left' } },
+        },
+        {
+            key = 'CameraRotation',
+            renderer = 'checkbox',
+            name = 'camera_rotation',
+            description = 'camera_rotation_desc',
+            default = false,
+        },
         {
             key = 'SwitchView',
             renderer = 'inputBinding',

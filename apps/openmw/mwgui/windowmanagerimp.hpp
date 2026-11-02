@@ -477,6 +477,7 @@ namespace MWGui
         SettingsWindow* mSettingsWindow;
         ConfirmationDialog* mConfirmationDialog;
         SpellWindow* mSpellWindow;
+        JournalWindow* mJournal = nullptr;
         QuickKeysMenu* mQuickKeysMenu;
         LoadingScreen* mLoadingScreen;
         WaitDialog* mWaitDialog;
@@ -555,6 +556,9 @@ namespace MWGui
         bool hasActiveControllerWindow() const;
         void layoutInventoryPages();
         void updateInventoryTabs();
+        /// Isowind: the journal is the inventory screen's last page, unless it can't be had yet (character creation)
+        /// or a Lua script has put a window of its own in its place
+        bool isJournalInventoryPage() const;
 
         std::unique_ptr<SDLUtil::SDLCursorManager> mCursorManager;
 

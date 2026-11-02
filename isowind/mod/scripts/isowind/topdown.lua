@@ -14,6 +14,19 @@
 --                   bindable to a controller button, in Options -> Scripts -> Isowind); with an attack held (an
 --                   arrow drawn) the view still switches, and the attack starts again in the new view
 --
+-- Or click to move, asked the first time the game is played (and in Options -> Scripts -> Isowind): right click runs to
+-- the spot on the ground, a red X splashing onto it (held, the spot follows the cursor); on a person or a thing walks
+-- right up to it and uses it. It never attacks. Left click does as above; the power attack is then on a controller's
+-- left trigger only. Shift held, the character stands still (instead of walking): aiming, attacking, not moving. WASD
+-- still moves, and takes over from a click. (clicktomove.lua; the left button can do the moving instead, attacks and
+-- all.)
+--
+-- A bow, crossbow or thrown weapon drawn, or a spell cast at a target ready: a thin line draws out a few metres from the
+-- character the way they aim, a small ring at its end (updateAimLine).
+--
+-- Camera rotation, off unless turned on there: the middle mouse button held and the mouse moved turns the view, with
+-- click to move the left and right arrow keys too, and on a controller the D-pad left and right held.
+--
 -- With a controller (it takes over as soon as a stick or button is used, the mouse as soon as it moves):
 --   left stick      move                     right stick     aim / pick what X uses
 --   A               jump                     B               ready weapon
@@ -21,8 +34,8 @@
 --   right trigger   attack / cast            left trigger    power attack
 --   bumpers         previous / next quick key
 --   D-pad up / down zoom (hold to keep zooming), within the view; in menus they move through the options
---   D-pad left      not assigned
---   Start           menu                     Back            inventory (hold: journal)
+--   D-pad left / right  turn the view, held (with camera rotation on)
+--   Start           menu                     Back            inventory (hold: the journal, its last page)
 --   left stick in   sneak                    right stick in  rest
 --   in water, A held swims up and the left stick held in dives (the Jump and Sneak bindings)
 -- There is no cursor then: what the right stick points at (or else what is nearest in front) gets the ring and the
@@ -42,7 +55,8 @@
 -- view at that distance; closer than FIRST_PERSON_BELOW, first person. Zooming stays within the view's range and the
 -- switch view trigger (F7) moves between them, each keeping its own zoom. Zooming and the first / third person switch
 -- are taken from the built-in camera script for good (claimCamera).
--- The view is a fixed isometric angle: turned 45 degrees, looking down at the classic isometric 35.26 degrees.
+-- The view is an isometric angle: turned 45 degrees (unless turned with camera rotation), looking down at the classic
+-- isometric 35.26 degrees.
 -- The camera slides in toward the player rather than go underground on slopes, and creatures (and hurt or hostile
 -- people) get health bars (healthbars.lua). In multiplayer, party members (MMO) get a green ring, and other players
 -- off the screen an arrow at its edge pointing their way: party members in MMO mode, everyone in co-op.
@@ -63,6 +77,8 @@ local util = require('openmw.util')
 local I = require('openmw.interfaces')
 
 local healthbars = require('scripts.isowind.healthbars')
+local clickToMove = require('scripts.isowind.clicktomove')
+local movePrompt = require('scripts.isowind.moveprompt')
 
 local Actor = types.Actor
 local Player = types.Player
@@ -79,6 +95,7 @@ end
 
 local controlSettings = storage.playerSection('SettingsOMWControls')
 local ownSettings = storage.playerSection('IsowindTopDown')
+local isowindControls = storage.playerSection('Settings/Isowind/Controls') -- MoveMode, CameraRotation (settings.lua)
 
 -- Tuning ---------------------------------------------------------------------------------------------------------
 local VIEW_YAW = math.rad(45)       -- the view is turned 45 degrees, so the world's grid runs diagonally
@@ -116,6 +133,15 @@ local SIGN_RANGE = 500              -- signs this close to the player show their
 local SIGN_REFRESH = 0.25           -- how often to look for signs nearby (seconds)
 local SIGN_LABELS = 8               -- at most this many sign names at once (the nearest)
 local SIGN_TEXT_SIZE = 16
+local ROTATE_MOUSE_SPEED = 0.006    -- camera rotation per pixel the mouse moves with the middle button held (radians)
+local ROTATE_KEY_SPEED = math.rad(90) -- ...and per second with an arrow key or the D-pad held
+local MARKER_SIZE = 18              -- click to move's red X where the character is going: half its length (world units)
+local MARKER_SPLASH = 0.5           -- seconds its splash takes when clicked (it bounces into place in the first part)
+local MARKER_FADE = 0.4             -- seconds it fades over once there
+local AIM_LINE_LENGTH = 250         -- the aim line reaches this far out (a few metres)...
+local AIM_DRAW_TIME = 0.5           -- ...drawing out over this long
+local AIM_LINE_OPACITY = 0.5
+local AIM_LINE_HEIGHT = 100         -- the shot leaves from this high (the chest, as updateFacing aims from)
 --------------------------------------------------------------------------------------------------------------------
 
 local active = false                -- whether the top-down view's overrides are currently applied
@@ -137,6 +163,8 @@ local aimLocked = false             -- hovered is the hostile creature the contr
 local backPressedAt, journalOpened = nil, false
 local dpadHeld = 0                  -- how long D-pad up / down has been held; nil while a hold begun in a menu lasts
 local pendingMode = nil             -- the first / third person camera mode asked for, until the camera is in it
+local rotating = false              -- the middle mouse button is turning the view (the cursor stays where it is)
+local marker = { point = nil, alpha = 0, pop = 1 } -- click to move's red X (showMarker)
 
 -- Defined further down
 local nearestUsable, setRingVisible, hideSignLabels
@@ -234,6 +262,7 @@ local function release()
     self.controls.sideMovement = 0
     self.controls.yawChange = 0
     self.controls.pitchChange = 0
+    clickToMove.cancel()
     setUiVisible(false)
     setRingVisible(false)
     hideSignLabels()
@@ -331,6 +360,7 @@ local function worldToScreen(pos)
 end
 
 local function updateCursor()
+    if rotating then return end -- the mouse turns the view instead
     local screen = ui.screenSize()
     cursor = v2(
         util.clamp(cursor.x + input.getMouseMoveX() * CURSOR_SPEED / screen.x, 0, 1),
@@ -350,6 +380,35 @@ local function updateZoom()
     -- Zoom3rdPerson is 10 per wheel notch (scripts/omw/input/actionbindings.lua).
     local notches = input.getNumberActionValue('Zoom3rdPerson') / 10
     if notches ~= 0 then zoomBy(math.exp(-notches * ZOOM_STEP)) end
+end
+
+local function held(pressed)
+    return pressed and 1 or 0
+end
+
+-- Turning the view, once camera rotation is on (Options -> Scripts -> Isowind): the middle mouse button held and the
+-- mouse moved, with click to move the left and right arrow keys too, and on a controller the D-pad left and right.
+-- Everything screen-relative (WASD, the sticks, the cursor) goes by viewYaw, and so turns with it.
+local function updateRotation(dt)
+    rotating = false
+    if not isowindControls:get('CameraRotation') then
+        viewYaw = VIEW_YAW
+        return
+    end
+    local turn = 0
+    if input.isMouseButtonPressed(2) then
+        rotating = true
+        turn = turn + input.getMouseMoveX() * ROTATE_MOUSE_SPEED
+    end
+    if isowindControls:get('MoveMode') == 'move_click' then
+        local K = input.KEY
+        turn = turn + (held(input.isKeyPressed(K.RightArrow)) - held(input.isKeyPressed(K.LeftArrow)))
+            * ROTATE_KEY_SPEED * dt
+    end
+    local B = input.CONTROLLER_BUTTON
+    turn = turn + (held(input.isControllerButtonPressed(B.DPadRight)) - held(input.isControllerButtonPressed(B.DPadLeft)))
+        * ROTATE_KEY_SPEED * dt
+    viewYaw = wrapAngle(viewYaw + turn)
 end
 
 local function segmentDistance(p, a, b)
@@ -378,6 +437,12 @@ local function castThroughCutaway(from, dir)
         start = result.hitPos + dir * 2
     end
     return { hit = false }
+end
+
+-- Where on the ground the cursor points, for click to move (clicktomove.lua's ground: never on a tree or rooftop in the
+-- way)
+local function groundUnderCursor()
+    return clickToMove.ground(view.position, cursorDirection())
 end
 
 -- What is under the cursor, and the point the character should face.
@@ -470,9 +535,45 @@ local function hidesRing()
     local shader = getRingShader()
     if shader and shader:isEnabled() then
         shader:setVector4('uSelection', util.vector4(0, 0, 0, 0))
+        shader:setVector4('uMoveMarker', util.vector4(0, 0, 0, 0))
+        shader:setVector4('uAimLineStyle', util.vector4(0, 0, 0, 0))
         shader:setVector4Array('uParty', noMarks)
         shader:setVector4Array('uArrows', noMarks)
     end
+end
+
+-- The red X on the ground where click to move is going (shaders/isowind_selection.omwfx): it splashes down when clicked
+-- (a ripple and drops spread out as it bounces into place), follows the cursor while the button is held, and fades
+-- once the character is there (or stops going).
+local function showMarker(point)
+    marker.point = point
+    marker.alpha = 1
+    marker.pop = 0
+end
+
+local function updateMoveMarker(dt)
+    local shader = getRingShader()
+    if not shader then return end
+    local going = clickToMove.groundTarget()
+    if going then
+        marker.point, marker.alpha = going, 1
+    else
+        marker.alpha = math.max(0, marker.alpha - dt / MARKER_FADE)
+    end
+    marker.pop = math.min(1, marker.pop + dt / MARKER_SPLASH)
+    if not marker.point or marker.alpha <= 0 then
+        shader:setVector4('uMoveMarker', util.vector4(0, 0, 0, 0))
+        return
+    end
+    local p = marker.point
+    -- Bouncing into place in the splash's first part: from nothing, past its size and back
+    local t = math.min(1, marker.pop * 1.6)
+    local size = MARKER_SIZE * math.max(0.05, 1 - (1 - t) ^ 3 * math.cos(t * 3 * math.pi))
+    shader:setVector4('uMoveMarker', util.vector4(p.x, p.y, p.z, size))
+    -- Its arms cross on the screen's diagonals: the screen's right across the ground, how strongly it shows, and how far
+    -- the splash has got (1: done)
+    shader:setVector4('uMoveMarkerAxes',
+        util.vector4(math.cos(viewYaw), -math.sin(viewYaw), marker.alpha, marker.pop))
 end
 
 local function weaponReach()
@@ -486,6 +587,45 @@ local function weaponReach()
         return core.getGMST('fCombatDistance') * record.reach
     end
     return core.getGMST('fCombatDistance') -- hand-to-hand
+end
+
+-- The aim line: a thin line drawing out a few metres from the character the way they aim, a small ring at its end,
+-- while a bow, crossbow or thrown weapon is drawn (the left button; the right one where it power attacks, not where it
+-- moves; a click to move attack; a controller's triggers) and while a spell cast at a target is ready. It goes the way
+-- the character faces, from the chest updateFacing aims from, down or up to what the cursor (or the right stick) is
+-- on: on the cursor once the character has turned to it, showing it while they haven't yet.
+-- rightAttacks: the right button power attacks (it doesn't move: clickMoveOn).
+local aimDrawn = 0                  -- seconds the line has been drawing out
+local function updateAimLine(dt, rightAttacks)
+    local shader = getRingShader()
+    if not shader then return end
+    local stance = Actor.getStance(self)
+    local drawing = stance == Actor.STANCE.Weapon and weaponReach() >= RANGED_REACH
+        and (input.getBooleanActionValue('Use') or (rightAttacks and input.isMouseButtonPressed(3))
+            or clickToMove.attacking() or input.getAxisValue(input.CONTROLLER_AXIS.TriggerLeft) >= 0.6)
+    if not (drawing or clickToMove.targetSpellReady()) then
+        aimDrawn = 0
+        shader:setVector4('uAimLineStyle', util.vector4(0, 0, 0, 0))
+        return
+    end
+    aimDrawn = aimDrawn + dt
+    local yaw = self.rotation:getYaw()
+    local from = self.position + v3(0, 0, AIM_LINE_HEIGHT)
+    local dir = v3(math.sin(yaw), math.cos(yaw), 0)
+    if aimPoint then
+        local d = aimPoint - from
+        local across = math.sqrt(d.x * d.x + d.y * d.y)
+        if across > 1 then dir = v3(dir.x * across, dir.y * across, d.z):normalize() end
+    end
+    local length = AIM_LINE_LENGTH * math.min(1, aimDrawn / AIM_DRAW_TIME)
+    local x0, y0, depth0 = viewCoordinates(from)
+    local x1, y1, depth1 = viewCoordinates(from + dir * length)
+    if depth0 < 1 or depth1 < 1 then
+        shader:setVector4('uAimLineStyle', util.vector4(0, 0, 0, 0))
+        return
+    end
+    shader:setVector4('uAimLine', util.vector4((x0 + 1) / 2, (y0 + 1) / 2, (x1 + 1) / 2, (y1 + 1) / 2))
+    shader:setVector4('uAimLineStyle', util.vector4(AIM_LINE_OPACITY, 1, 0, 0))
 end
 
 local function updateRing()
@@ -748,14 +888,15 @@ end
 
 -- With a weapon or spell ready the character always aims at the cursor; the engine (twin-stick movement in
 -- character.cpp) turns their legs to run the way they move while the upper body keeps aiming. Otherwise they face
--- the way they walk.
-local function updateFacing(dt, dx, dy)
-    local aiming = Actor.getStance(self) ~= Actor.STANCE.Nothing and aimPoint
+-- the way they walk. aimAt, given, says otherwise: a point to aim at, or false to face the way walked (click to move).
+local function updateFacing(dt, dx, dy, aimAt)
+    local aiming = aimAt
+    if aiming == nil then aiming = Actor.getStance(self) ~= Actor.STANCE.Nothing and aimPoint end
     self.controls.yawChange = 0
 
     if aiming then
         -- Dead zone: with the cursor right on the character, tiny cursor moves would swing the aim wildly.
-        local d = aimPoint - self.position
+        local d = aiming - self.position
         if d.x * d.x + d.y * d.y > AIM_DEAD_ZONE * AIM_DEAD_ZONE then
             turnTowards(math.atan2(d.x, d.y), dt)
         end
@@ -766,7 +907,7 @@ local function updateFacing(dt, dx, dy)
     -- When aiming, pitch toward the target so arrows and spells go where the cursor points.
     local pitch = 0
     if aiming then
-        local fromChest = aimPoint - (self.position + v3(0, 0, 100))
+        local fromChest = aiming - (self.position + v3(0, 0, 100))
         local horizontal = math.sqrt(fromChest.x * fromChest.x + fromChest.y * fromChest.y)
         pitch = util.clamp(-math.atan2(fromChest.z, horizontal), math.rad(-60), math.rad(60))
     end
@@ -786,11 +927,13 @@ local function powerAttackType()
     return best
 end
 
-local function updatePowerAttack()
+-- rightMoves: click to move has the right button (then it doesn't power attack).
+local function updatePowerAttack(rightMoves)
     -- Runs after the built-in controls (scripts/omw/input/playercontrols.lua), which set use from the left button
     -- and release the attack again once neither button is held.
     local leftTrigger = input.getAxisValue(input.CONTROLLER_AXIS.TriggerLeft) >= 0.6
-    if Actor.getStance(self) == Actor.STANCE.Weapon and (input.isMouseButtonPressed(3) or leftTrigger) then
+    local rightButton = input.isMouseButtonPressed(3) and not rightMoves
+    if Actor.getStance(self) == Actor.STANCE.Weapon and (rightButton or leftTrigger) then
         self.controls.use = powerAttackType()
     end
 end
@@ -1013,6 +1156,12 @@ local function switchView(wanted)
     end
 end
 
+-- Click to move (clicktomove.lua): chosen in Options -> Scripts -> Isowind (or the first time: moveprompt.lua), and only
+-- with the mouse
+local function clickMoveOn()
+    return isowindControls:get('MoveMode') == 'move_click' and not gamepad
+end
+
 local function onFrame(dt)
     claimCamera()
     updateDevice()
@@ -1029,13 +1178,17 @@ local function onFrame(dt)
         return
     end
     apply()
+    -- (asked of the mouse and keyboard only: with a controller, its own controls, and WASD stays chosen until then)
+    movePrompt.update(controlsAllowed() and not gamepad and not input._isControllerMenusEnabled())
 
     if not controlsAllowed() then
-        -- Menus, dialogue, paused: keep the camera, stop driving the character.
+        -- Menus, dialogue, paused: keep the camera, stop driving the character (and drop where it was going).
         self.controls.movement = 0
         self.controls.sideMovement = 0
         self.controls.yawChange = 0
         self.controls.pitchChange = 0
+        clickToMove.cancel()
+        marker.alpha = 0
         if not core.isWorldPaused() or I.UI.getMode() then updateCamera(dt) end
         setUiVisible(false)
         hidesRing()
@@ -1044,6 +1197,7 @@ local function onFrame(dt)
         return
     end
 
+    updateRotation(dt)
     updateCursor()
     updateCamera(dt)
     if gamepad then updateGamepadPick() else updatePick() end
@@ -1054,9 +1208,21 @@ local function onFrame(dt)
     updateParty()
     healthbars.update(worldToScreen, hovered) -- (the one the cursor or the right stick is on already has the label)
     local dx, dy = wantedDirection()
-    updateFacing(dt, dx, dy)
+    local aimAt = nil
+    -- Click to move: Shift held, the character stands where they are (and aims, with a weapon or spell ready)
+    if clickMoveOn() and input.isShiftPressed() then
+        dx, dy = 0, 0
+        clickToMove.cancel()
+    end
+    if clickToMove.going() and (dx * dx + dy * dy > 0.01 or gamepad) then clickToMove.cancel() end -- WASD or a stick
+    local ox, oy, orderAim = clickToMove.update(dt, groundUnderCursor)
+    if ox then dx, dy, aimAt = ox, oy, orderAim end
+    updateFacing(dt, dx, dy, aimAt)
     updateMovement(dx, dy)
-    updatePowerAttack()
+    updatePowerAttack(clickMoveOn() and clickToMove.button() == 3)
+    clickToMove.updateAttack(dt, clickMoveOn())
+    updateMoveMarker(dt)
+    updateAimLine(dt, not (clickMoveOn() and clickToMove.button() == 3))
     jumpRequested = false
     updateSignLabels(dt) -- last: should it fail, the character still moves
 end
@@ -1064,6 +1230,16 @@ end
 local function activate(object)
     core.sendGlobalEvent('Isowind_Activate', { object = object, actor = self.object })
 end
+
+clickToMove.init {
+    weaponReach = weaponReach,
+    RANGED_REACH = RANGED_REACH,
+    isHostile = isHostile,
+    lockToolReady = lockToolReady,
+    withinReachHeight = withinReachHeight,
+    activate = activate,
+    ACTIVATE_SLACK = ACTIVATE_SLACK,
+}
 
 local function activateHovered()
     if not hovered then return false end
@@ -1128,8 +1304,14 @@ nearestUsable = function(direction, locksOnly)
 end
 
 local function onMouseButtonPress(button)
-    if not (active and button == 1 and controlsAllowed()) then return end
-    if Actor.getStance(self) ~= Actor.STANCE.Nothing then return end
+    if not (active and controlsAllowed()) then return end
+    if clickMoveOn() and button == clickToMove.button() then
+        local spot = clickToMove.click(hovered, groundUnderCursor, button)
+        if spot then showMarker(spot) end
+        return
+    end
+    -- The left button, as without click to move (when the right one moves)
+    if button ~= 1 or Actor.getStance(self) ~= Actor.STANCE.Nothing then return end
     activateHovered()
 end
 
@@ -1189,6 +1371,7 @@ local lastFrameError = nil
 local function onFrameSafe(dt)
     local ok, err = pcall(onFrame, dt)
     if not ok then
+        pcall(clickToMove.cancel) -- (the character mustn't keep running somewhere)
         pcall(hidesRing)
         pcall(hideSignLabels)
         pcall(healthbars.clear)
@@ -1208,12 +1391,15 @@ return {
         onTeleported = function()
             camera.instantTransition()
             signRefreshIn = 0 -- the signs found before are in another cell now
+            clickToMove.cancel() -- and where the character was going
+            marker.alpha = 0
         end,
         onSave = function()
             return {
                 distance = targetDistance,
                 topDownDistance = lastTopDownDistance,
                 thirdDistance = lastThirdDistance,
+                viewYaw = viewYaw,
             }
         end,
         onLoad = function(data)
@@ -1221,6 +1407,7 @@ return {
             targetDistance = data.distance or targetDistance
             lastTopDownDistance = data.topDownDistance or lastTopDownDistance
             lastThirdDistance = data.thirdDistance or lastThirdDistance
+            viewYaw = data.viewYaw or viewYaw
             -- A save from before the zoom chose the view, made in the normal view
             if data.enabled == false and targetDistance >= TOPDOWN_FROM then
                 targetDistance = THIRD_PERSON_DISTANCE

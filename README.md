@@ -316,19 +316,40 @@ The defaults; Options > Controls rebinds them (and Options > Scripts > Isowind t
 | F1                 | Morrowind's quick key menu                                                                      |
 | Mouse wheel        | Zoom, within the view you are in                                                                |
 | F7                 | Switch view: top-down, then third person, then first person                                     |
+| Middle mouse held  | With camera rotation on (Options > Scripts > Isowind): move the mouse to turn the view           |
 | Tab                | Inventory                                                                                       |
-| J                  | Journal                                                                                         |
+| J                  | Journal (the inventory screen's last page)                                                      |
 | T                  | Rest                                                                                            |
 | Esc                | Menu                                                                                            |
 | F5 / F9            | Quick save / quick load                                                                         |
 | F11 / F12          | Hide the HUD / screenshot                                                                       |
 | `` ` ``            | Console (the key left of 1)                                                                     |
 
+**Click to move** (asked the first time you play; Options > Scripts > Isowind changes it)
+
+| Key                | What it does                                                                                    |
+|--------------------|-------------------------------------------------------------------------------------------------|
+| Right click        | On the ground: run there (a red X splashes onto the spot). Hold it to keep steering toward the cursor. Stairs can be clicked from any side |
+| Right click        | On a person or a thing: walk right up to it and use it (talk, pick up, open)                    |
+| Left click         | As without click to move: attack / cast where you stand, otherwise use what is under the cursor. The power attack is then on a controller's left trigger only |
+| Shift              | Stand still while held (instead of walking): you keep aiming and attacking, but no click (or WASD) moves you |
+
+Options > Scripts > Isowind can put click to move on the left button instead: then a left click on a hostile creature
+with a weapon or spell ready walks into range and attacks (hold to keep attacking; bows, thrown weapons and target
+spells stop short, with a clear shot), Shift + left click attacks where you stand, and right click power attacks as
+usual.
+
+Drawing a bow or crossbow (or readying a throw), or having a spell cast at a target ready, draws a thin line a few
+metres out from your character the way they aim, a small ring at its end. With click to move, right click only moves
+and uses things: it never attacks.
+| Left / right arrow | With camera rotation on: turn the view                                                          |
+| W A S D            | Still move, and take over from a click                                                          |
+
 **Keyboard and mouse, in the menus**
 
 | Key                | What it does                                                                                    |
 |--------------------|-------------------------------------------------------------------------------------------------|
-| Q / E              | Previous / next page of the inventory screen (Map, Inventory, Magic, Stats), or tab in Options  |
+| Q / E              | Previous / next page of the inventory screen (Map, Inventory, Magic, Stats, Journal), or tab in Options. Z / C turn the journal's pages |
 | Z / C              | Previous / next tab inside a window: the kinds of item in the inventory or a shop, a chest's containers opened together, the local or world map, in Options the Video tab's (Detail Level, Water, Lights) and the Controls tab's mouse and keyboard / controller. With a chest or shop open, the window under the pointer |
 | Click a tab        | That page. The HUD's bars, weapon, spell and minimap go to theirs too                           |
 | 1 - 0              | Over an item, spell or enchanted item: puts it on that quick key                                |
@@ -353,10 +374,9 @@ Q / E and Z / C type as usual in a text box.
 | Left trigger       | Power attack                                                                                    |
 | Bumpers            | Previous / next quick key                                                                       |
 | D-pad up / down    | Zoom (hold to keep going)                                                                       |
-| D-pad right        | Quest log                                                                                       |
-| D-pad left         | Nothing for now                                                                                 |
+| D-pad left / right | With camera rotation on (Options > Scripts > Isowind): turn the view, held                      |
 | Start              | Menu                                                                                            |
-| Back               | Inventory (hold: journal)                                                                       |
+| Back               | Inventory (hold: journal, the inventory screen's last page)                                     |
 | Left stick in      | Sneak. In water, hold it in to dive                                                             |
 | Right stick in     | Rest                                                                                            |
 

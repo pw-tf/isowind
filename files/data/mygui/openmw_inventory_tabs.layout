@@ -48,6 +48,13 @@
                 <Property key="TextShadow" value="true"/>
                 <Property key="TextShadowColour" value="0 0 0"/>
             </Widget>
+            <!-- Isowind: the journal is a page too -->
+            <Widget type="Button" skin="SandTextButton" align="Center" position="0 0 100 48" name="TabJournal">
+                <Property key="Caption" value="#{sJournal}"/>
+                <Property key="TextAlign" value="Center"/>
+                <Property key="TextShadow" value="true"/>
+                <Property key="TextShadowColour" value="0 0 0"/>
+            </Widget>
             <Widget type="AutoSizedTextBox" skin="SandText" align="Center" name="KeyNextText">
                 <Property key="Caption" value="E"/>
                 <Property key="TextShadow" value="true"/>

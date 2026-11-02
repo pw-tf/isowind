@@ -17,7 +17,8 @@ namespace MWGui
         : WindowBase("openmw_inventory_tabs.layout")
     {
         MyGUI::Button* tab;
-        constexpr std::string_view kTabIds[] = { "TabMap", "TabInventory", "TabSpells", "TabStats" };
+        // (in the order of the inventory screen's pages, WindowManager's mGuiModeStates[GM_Inventory])
+        constexpr std::string_view kTabIds[] = { "TabMap", "TabInventory", "TabSpells", "TabStats", "TabJournal" };
 
         for (const std::string_view id : kTabIds)
         {
